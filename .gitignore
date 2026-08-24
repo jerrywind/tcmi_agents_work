@@ -1,11 +1,11 @@
 # python
-__pycache__/
+*__pycache__/
 *.pyc
-.venv/
+*.venv/
 backend/uploads/
 
 # node / taro
-node_modules/
+frontend/node_modules/
 frontend/dist/
 frontend/.temp/
 frontend/.swc/
