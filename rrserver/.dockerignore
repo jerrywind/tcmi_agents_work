@@ -1,0 +1,12 @@
+# 不让庞大的构建产物/临时文件进入 docker 构建上下文
+# 注意：target/release/rrserver 不在此排除，因为 Dockerfile 需要 COPY 该预编译
+# 的 Linux 二进制（由 WSL2 内的 cargo build --release 生成，规避容器内编译的网络问题）。
+.git
+*.txt
+chk.txt
+t_res.txt
+# 排除其他 target 内容（仅保留 release/rrserver 二进制，减小 context 体积）
+target/*
+!target/release/
+target/release/*
+!target/release/rrserver

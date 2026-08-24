@@ -1,0 +1,62 @@
+# 后端服务（独立的 docker compose，不依赖仓库根编排）。
+#
+# 默认（无 profile）: 仅启动 backend
+#   docker compose up --build
+#
+# 启用可选 Redis（多 worker / 多实例共享会话态，需把 TCM_STORE 设为 redis）:
+#   docker compose --profile redis up --build
+#
+# 启用可选 PostgreSQL（将来把 MemoryStore 替换为持久化存储；接口已预留）:
+#   docker compose --profile pg up --build
+#
+# 接入本地大模型（llm_server / Qwen3-VL 视觉）:
+#   docker compose -f docker-compose.yml -f docker-compose.llm.yml --profile llm up --build
+#   并另在 llm_server/ 单独启动模型服务、加入同一网络（见各 README）。
+#
+# 前端另在 frontend/ 启动（其 nginx 反代 /api -> backend:8000，需 backend 可达）。
+
+services:
+  backend:
+    build: .
+    image: tcm-backend:local
+    ports:
+      # 宿主机端口固定在 22000-22200 业务端口区间
+      - "22000:8000"
+    environment:
+      TCM_HOST: "0.0.0.0"
+      TCM_PORT: "8000"
+      TCM_STORE: "${TCM_STORE:-memory}"
+      TCM_REDIS_URL: "${TCM_REDIS_URL:-redis://redis:6379/0}"
+      TCM_LLM_API_KEY: "${TCM_LLM_API_KEY:-}"
+      TCM_LLM_BASE_URL: "${TCM_LLM_BASE_URL:-}"
+      TCM_LLM_TEXT_MODEL: "${TCM_LLM_TEXT_MODEL:-}"
+      TCM_LLM_VISION_MODEL: "${TCM_LLM_VISION_MODEL:-}"
+      TCM_CORS_ORIGINS: "${TCM_CORS_ORIGINS:-*}"
+    volumes:
+      - uploads:/app/uploads          # 舌象/面相/患处图片持久化
+    restart: unless-stopped
+
+  # —— 可选：Redis（会话共享，支持 gunicorn 多 worker）——
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    profiles:
+      - redis
+
+  # —— 可选：PostgreSQL（持久化存储占位，待替换 MemoryStore 时启用）——
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: tcm
+  #     POSTGRES_PASSWORD: tcm
+  #     POSTGRES_DB: tcm
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
+  #   profiles:
+  #     - pg
+
+volumes:
+  uploads:
+  redis-data:
+  # pg-data:

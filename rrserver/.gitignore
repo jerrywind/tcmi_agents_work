@@ -1,0 +1,17 @@
+# Rust 构建产物
+/target/
+
+# 运行/测试产生的临时与调试文件
+*.timestamp
+chk.txt
+t_*.txt
+t_res*.txt
+
+# 本地环境变量（若存在）
+.env
+
+# dryrun 联调 harness 的运行期产物（由 dryrun.ps1 / 手动运行产生）
+dryrun/*.log
+dryrun/*.log.err
+dryrun/*.pid
+

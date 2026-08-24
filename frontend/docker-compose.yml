@@ -1,0 +1,15 @@
+# 前端服务（独立的 docker compose，不依赖仓库根编排）。
+#
+# 启动：docker compose up --build （默认映射 8080:80）
+#
+# 前端经 nginx 反代 /api -> backend:8000，需 backend 可达：
+#   另在 backend/ 启动并加入同一 docker 网络，或将 frontend/nginx.conf 的
+#   upstream 改为宿主可达地址（如 host.docker.internal:8000）。
+
+services:
+  frontend:
+    build: .
+    image: tcm-frontend:local
+    ports:
+      - "8080:80"
+    restart: unless-stopped

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "tcm-consult-stdio": {
+      "command": "python",
+      "args": ["-m", "app.mcp.server"],
+      "cwd": "backend",
+      "env": {}
+    },
+    "tcm-consult-http": {
+      "url": "http://127.0.0.1:8000/mcp",
+      "transport": "streamable-http"
+    },
+    "tcm-consult-standalone": {
+      "url": "http://127.0.0.1:8001/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}

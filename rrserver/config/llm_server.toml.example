@@ -1,0 +1,42 @@
+# llm_server 部署包装配置
+# 运行：rrserver llm-server --config config/llm_server.toml
+# 也可用 --server / --name / --token 在命令行覆盖下方 rrclient 凭据。
+
+# ───────── 模型服务后端 ─────────
+# 两种形态（二选一）：
+
+# 1) static：接入一个【已经运行】的本地模型服务（本包装器不启动新进程）
+# [backend]
+# mode = "static"
+# url  = "http://127.0.0.1:8080"
+
+# 2) command：由本包装器启动并监管模型服务进程
+[backend]
+mode = "command"
+program = "vllm"
+args = ["serve", "--model", "Qwen/Qwen2.5-7B-Instruct", "--port", "8080"]
+# 进程环境变量（可选）
+env = []
+# 工作目录（可选）
+# cwd = "/models"
+# 健康检查探针：返回 2xx 视为就绪（本例为 vLLM 的 /health）
+health_url = "http://127.0.0.1:8080/health"
+# 隧道应转发的模型服务基址；缺省时从 health_url 推导（scheme://authority）
+listen_url = "http://127.0.0.1:8080"
+# 健康探针超时（秒，默认 120）
+health_timeout_secs = 300
+
+# ───────── 注册到云端 rrserver ─────────
+# 须与云端 config 的 [[tunnels]] 中对应 name/token 一致
+[rrclient]
+server_base = "https://rr.example.com/rr"
+name = "home"
+token = "change-me-strong-token"
+
+# ───────── 可选：包装器 info 端点 ─────────
+# 启动后暴露 http://0.0.0.0:8081/healthz 与 /v1/models，便于容器探活与模型发现
+# info_port = 8081
+# [[models]]
+# id = "Qwen2.5-7B-Instruct"
+# display_name = "通义千问 2.5 7B"
+# context_length = 32768

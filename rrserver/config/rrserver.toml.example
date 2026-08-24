@@ -1,0 +1,28 @@
+# 云服务器端 rrserver 配置示例（保存为 config/rrserver.toml 后由 docker-compose 挂载）
+
+# 监听地址：仅对内网 nginx 暴露即可（docker 内部网络）
+listen = "127.0.0.1:8080"
+
+# 外部可达的 WebSocket 基址：家庭端注册后会得到 {external_ws_base}/ws/<name>?token=...
+# 须与 nginx 暴露的 https 域名一致，且路径前缀与 location /rr/ 对应
+external_ws_base = "wss://rr.example.com/rr"
+
+# 允许的隧道：家庭端用对应的 name + token 注册。可配多个。
+[[tunnels]]
+name = "home"
+token = "change-me-strong-token"
+
+# ───────── 可选：技能闸门 ─────────
+# 配置 [[skills]] 后启用。带 `X-Skill: <name>` 头的请求会先做
+# 「冷却 / 资源 / 状态」前置校验，校验通过才转发；失败返回对应状态码：
+#   冷却中    -> 429 Too Many Requests
+#   资源不足  -> 402 Payment Required
+#   状态不符  -> 409 Conflict
+#   未知技能  -> 400 Bad Request
+# 所有技能共享同一个全局预算，每次放行的请求按各自 cost 扣减。
+# skill_budget = 1000000
+# [[skills]]
+# name = "premium"
+# cooldown_secs = 5      # 两次放行之间的最小间隔（秒）
+# cost = 10              # 每次放行消耗的资源点数
+# required_state = "idle" # 可选：目标状态需等于此值才放行（缺省则不检查状态）

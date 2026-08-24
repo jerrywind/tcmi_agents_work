@@ -1,0 +1,11 @@
+# rrserver 云端中继服务器本地联调配置。
+#
+# external_ws_base：仅用于构造家庭端应连接的 ws_url。本地联调时直连本机，
+# 故指向本机 ws 地址；生产部署由 nginx 剥离 /rr 前缀，这里会写成
+# wss://rr.example.com/rr。
+external_ws_base = "ws://127.0.0.1:18080"
+
+# 隧道清单（name + token 须与家庭端 --name/--token 一致）
+[[tunnels]]
+name = "home"
+token = "secret"

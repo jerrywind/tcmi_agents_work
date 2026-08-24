@@ -1,0 +1,75 @@
+# =============================================================
+# Sub-Agent 路由配置：切换某个诊断子项的实现，只需改这里的 impl
+# impl 取值 = 该 capability 下已注册的实现名（见 app/agents/*.py 中 impl_name）
+# 每个 capability 还可以指定独立的模型与参数（options 透传给实现）
+# =============================================================
+routing:
+  diagnosis.inspection:        # 望诊（舌象/面相/患处图像）
+    impl: rule                 # rule | llm_vision | mcp（mcp=路由到远程 MCP Server）
+    model: vision-default
+    options: {}
+    # 远程化示例（impl 改为 mcp 后生效）：
+    # options:
+    #   server: vision_farm    # mcp.clients 中的连接名
+    #   tool: agent_inspection # 可选，默认按 capability 推断
+  diagnosis.listening:         # 闻诊（文本中的声/味线索）
+    impl: rule
+    options: {}
+  diagnosis.inquiry:           # 问诊（下一个最优问题）
+    impl: rule                 # rule | llm
+    model: text-default
+    options:
+      max_options: 6
+  diagnosis.palpation:         # 切诊（脉率/自述脉感）
+    impl: rule
+    options: {}
+  diagnosis.differentiation:   # 辨证（候选证候+置信度）
+    impl: rule                 # rule | llm
+    model: text-default
+    options: {}
+  diagnosis.safety:            # 安全（红旗症状）
+    impl: rule
+    options: {}
+  treatment.plan:              # 诊疗方案（开方/针灸/西医检查/调护）
+    impl: rule                 # rule | llm
+    model: text-default
+    options:
+      max_questions: 2         # 个性化追问最多条数（必要且最少）
+
+# LLM Provider 配置（openai 兼容协议）。未配置 api_key 时自动降级为 mock。
+llm:
+  base_url: https://api.openai.com/v1
+  api_key_env: TCM_LLM_API_KEY     # 从环境变量读取，避免明文
+  timeout: 60
+  models:                          # 逻辑模型名 -> 实际模型 id 的映射
+    text-default: gpt-4o-mini
+    vision-default: gpt-4o
+
+# =============================================================
+# MCP：本项目既是 MCP Server（对外暴露中医能力），也是 MCP Client（接入外部工具）
+# 详见 docs/mcp.md
+# =============================================================
+mcp:
+  server:
+    enabled: true                  # 是否在 FastAPI 挂载 MCP 端点
+    mount_path: /mcp               # Streamable HTTP 挂载路径
+    expose_session_tools: true     # 会话级工具（完整问诊流程）
+    expose_agent_tools: true       # Agent 级工具（望/闻/问/切/辨证/治法/安全 单项能力）
+  clients: []                      # 启动时自动连接的外部 MCP Server，示例：
+    # - name: vision_farm
+    #   transport: http            # http | sse | stdio
+    #   url: http://localhost:9001/mcp
+    #   enabled: true
+    # - name: local_tools
+    #   transport: stdio
+    #   command: python
+    #   args: ["-m", "some_mcp_server"]
+    #   enabled: true
+  call_timeout: 30                 # 单次远程工具调用超时（秒）
+
+loop:
+  max_rounds: 8                    # 最大提问轮数
+  single_conf: 0.55                # 单诊断置信度阈值
+  single_gap: 0.15                 # Top1 与 Top2 差距阈值
+  dual_conf: 0.42                  # 双诊断（兼证）阈值
+  min_evidences: 5                 # 出结论前最少证据数

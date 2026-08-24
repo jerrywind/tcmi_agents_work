@@ -1,0 +1,185 @@
+name: Test
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+
+# 同一分支/PR 的多次推送只保留最新一次运行，避免资源浪费
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: 后端单元/集成
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run pytest (unit + integration, exclude E2E)
+        # 覆盖率强制门禁：单元/集成合集须 ≥ 90%（实测约 96%），否则阻断合并
+        run: python -m pytest -q --cov=app --cov-report=term-missing --cov-fail-under=90 --ignore=tests/e2e
+
+  e2e:
+    name: 后端端到端 (E2E)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run pytest E2E (live uvicorn server + httpx)
+        run: python -m pytest -q -m e2e --cov=app --cov-report=term-missing
+
+  e2e-docker:
+    name: 端到端 (Docker 容器化后端)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build & start backend container
+        # compose 已下沉到 backend/，从 backend 目录运行
+        working-directory: backend
+        run: docker compose up -d --build backend
+      - name: Wait for backend (container)
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/health && break
+            sleep 1
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test deps (conftest imports app.main)
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run pytest E2E against container (E2E_BASE_URL)
+        # 复用全部 E2E 用例，直连容器化后端，验证真实可部署镜像
+        working-directory: backend
+        run: E2E_BASE_URL=http://127.0.0.1:8000 python -m pytest -q -m e2e --cov=app --cov-report=term-missing
+      - name: Tear down
+        if: always()
+        working-directory: backend
+        run: docker compose down -v
+
+  frontend:
+    name: 前端单元
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install deps
+        run: npm install
+      - name: Run vitest (unit + contract; contract skips when backend absent)
+        run: npm run test
+
+  contract:
+    name: 前端↔后端契约测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install frontend deps
+        run: npm install
+      - name: Install backend deps
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Start backend
+        working-directory: backend
+        run: nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/uvicorn.log 2>&1 &
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/health && break
+            sleep 1
+          done
+      - name: Run vitest contract test (against live backend)
+        run: npx vitest run src/services/api.contract.test.ts
+
+  rrserver-dryrun:
+    name: rrserver 隧道↔后端↔llm 集成联调 (dry-run)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rrserver/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rrserver/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # 集成联调的前置步骤：先构建出 rrserver 可执行文件
+      - name: Build rrserver (release)
+        working-directory: rrserver
+        run: cargo build --release --locked
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # dryrun 客户端复用 backend 真实的 OpenAICompatProvider，仅需最小依赖
+      # （httpx + PyYAML + pydantic）；不装整份 backend/requirements.txt，
+      # 因其含 uvicorn[standard] -> uvloop，在 Windows runner 上无法安装。
+      - name: Install Python deps (dry-run client)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r rrserver/dryrun/requirements.txt
+
+      # 接在 cargo build 之后：拉起 mock/server/client 隧道，跑真实 backend 经隧道调用
+      - name: Run integration dry-run (build -> dryrun.ps1)
+        working-directory: rrserver/dryrun
+        run: pwsh -ExecutionPolicy Bypass -File dryrun.ps1

@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "中医智能问诊 Agent API",
+    "description": "中医问诊诊断 Agent 的 REST API 集合。\n\n注意：\n- 创建档案后，把返回的 id 填到集合变量 `cid` 再继续后续调用。\n- 未配置 LLM Key 时系统自动降级 mock，全流程仍可演示。\n- 也可直接访问服务根路径的 /openapi.json 获取自动生成的 OpenAPI 文档。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000", "type": "string" },
+    { "key": "cid", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "系统",
+      "item": [
+        {
+          "name": "健康检查",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/health",
+            "description": "返回 {\"ok\": true}"
+          }
+        },
+        {
+          "name": "查看 Sub-Agent 路由",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/system/agents",
+            "description": "查看每个 capability 当前用的实现(impl)与模型(model)，便于运维切换。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "问诊会话",
+      "item": [
+        {
+          "name": "1. 新建问诊档案",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/consultations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient\": {\n    \"region\": \"广州\",\n    \"height_cm\": 172,\n    \"weight_kg\": 78,\n    \"age\": 34,\n    \"gender\": \"男\"\n  },\n  \"complaint\": \"最近总觉得身体沉重，口苦口臭，大便粘马桶，没什么胃口\",\n  \"self_report\": { \"heart_rate\": 76 }\n}"
+            },
+            "description": "返回 {\"id\": \"cons_xxx\", \"status\": \"created\"}，将 id 填到变量 cid。"
+          }
+        },
+        {
+          "name": "2. 上传舌象/面相/患处照片",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/consultations/{{cid}}/images",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "type", "value": "tongue", "type": "text", "description": "tongue | face | lesion" },
+                { "key": "file", "type": "file", "src": "", "description": "选择本地图片" }
+              ]
+            },
+            "description": "可选步骤；type 取值 tongue/face/lesion。"
+          }
+        },
+        {
+          "name": "3. 启动诊断",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/consultations/{{cid}}/start",
+            "description": "返回 StateResp：status=waiting_answer 且带 question。"
+          }
+        },
+        {
+          "name": "4. 回答（辨证追问 / 方案个性化追问）",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/consultations/{{cid}}/answer",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question_id\": \"q_xxx\",\n  \"value\": \"可煎药\",\n  \"text\": \"\"\n}"
+            },
+            "description": "question_id 取自当前 question.id；value 通常为选项 label，自由输入放 text。\n状态会依次经历 waiting_answer / treatment_qa，最终 finished。"
+          }
+        },
+        {
+          "name": "5. 拉取状态/消息流",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/consultations/{{cid}}",
+            "description": "返回 StateResp（status / round / question / hypotheses / messages / report）。"
+          }
+        },
+        {
+          "name": "6. 诊断报告",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/consultations/{{cid}}/report",
+            "description": "返回 Report：syndromes(证候) + reasoning(依据) + advice(建议) + treatments(诊疗方案)。"
+          }
+        },
+        {
+          "name": "7. 调用轨迹(trace)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/consultations/{{cid}}/trace",
+            "description": "查看每轮由哪个 impl/model 处理、耗时多少，便于排查与成本统计。"
+          }
+        }
+      ]
+    }
+  ]
+}

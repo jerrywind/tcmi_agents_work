@@ -1,0 +1,20 @@
+# backend 接入本地大模型时的环境变量覆盖，仅在与 backend/docker-compose.yml
+# 一起加载时生效。本文件不含模型服务，模型服务在 llm_server/ 单独启动。
+#
+# 用法（在 backend/ 目录）:
+#   docker compose -f docker-compose.yml -f docker-compose.llm.yml --profile llm up --build
+#
+# 默认（不加载本文件）backend 仍为离线 rule 实现，无需任何模型权重。
+# 需将 llm_server/ 与 llm_vision 加入同一 docker 网络，backend 才能解析
+# http://llm_server:8000 与 http://llm_vision:8000。
+
+services:
+  backend:
+    environment:
+      TCM_LLM_BASE_URL: "http://llm_server:8000/v1"
+      TCM_LLM_API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
+      TCM_LLM_TEXT_MODEL: "qwen3.6-9B"
+      TCM_LLM_VISION_MODEL: "Qwen3-VL-8B"
+      TCM_LLM_VISION_BASE_URL: "http://llm_vision:8000/v1"
+      TCM_RAG_BASE_URL: "http://llm_server:8080"
+      TCM_ROUTING_FILE: "/app/routing.llm.yaml"

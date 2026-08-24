@@ -1,0 +1,26 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+backend/uploads/
+
+# node / taro
+node_modules/
+frontend/dist/
+frontend/.temp/
+frontend/.swc/
+
+# misc
+.DS_Store
+*.log
+*.err
+.env
+
+# test / coverage artifacts
+htmlcov/
+.coverage
+coverage/
+lcov.info
+.vitest/
+install.*
+*.docker-cargo/
