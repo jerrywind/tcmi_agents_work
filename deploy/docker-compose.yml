@@ -1,66 +1,82 @@
-# 顶层部署编排：nginx（统一反代 / TLS） + 后端服务（backend / rrserver）。
+# 顶层部署编排：nginx（统一反代 / TLS 终止） + harness（诊断后端） + rrserver（云端中继）。
 #
 # 设计原则：
 #   - 所有 nginx 配置集中在 ./nginx/（前端入口 frontend.conf、rrserver 反代 rrserver.conf），
 #     后端服务容器本身【不含任何 nginx】。
 #   - 前端静态产物由 nginx 直接 bind mount 托管（../frontend/dist），无需独立前端容器。
-#   - 后端（backend / rrserver）各自仍可在子目录单独 `docker compose up` 用于开发；
-#     生产统一由本文件编排，所有服务加入同一 bridge 网络 tcm-net。
+#   - harness 与 rrserver 只加入内部网络 tcm-net，不暴露宿主机端口，统一由 nginx 代理。
 #
 # 启动：docker compose -f deploy/docker-compose.yml up -d --build
-#   前置：先在 frontend/ 执行 `npm run build:h5` 产出 dist/（由 nginx 挂载）。
-#   证书：deploy/certs/{fullchain.pem,privkey.pem}（缺失会导致 nginx 反复重启）。
+#
+# 前置条件（缺一不可，否则会构建失败或服务起不来）：
+#   1) 先编译 Linux release 二进制（容器内无法 cargo build，网络会损坏 crates.io 下载）：
+#        pwsh scripts/build-release.ps1
+#      等价于 wsl -e bash -c 'cd /mnt/d/labs/windblue_tech/tcm_work/server && cargo build --release'
+#   2) 前端静态产物：cd frontend && npm run build:h5（产出 dist/，由 nginx 挂载）
+#   3) TLS 证书：deploy/certs/{fullchain.pem,privkey.pem}（缺失会导致 nginx 反复重启）
+#   4) 生产务必修改 server/rrserver/config/rrserver.toml 的 token 与 external_ws_base
 
 networks:
   tcm-net:
     driver: bridge
 
 services:
-  # ── 统一的 nginx 入口（反代 + TLS 终止）──
+  # ── 统一的 nginx 入口（静态托管 + 反代 + TLS 终止）──
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
       - "80:80"        # HTTP -> HTTPS 跳转 + ACME 验证
       - "443:443"      # rrserver 对外入口（/rr/...）
-      - "8080:8080"    # 前端入口（静态 + /api、/uploads 反代）
+      - "8080:8080"    # 前端入口（静态 + /api 反代到 harness）
     volumes:
       - ./nginx:/etc/nginx/conf.d:ro
       - ./certs:/etc/nginx/certs:ro
       - ./certbot:/var/www/certbot:ro
       - ../frontend/dist:/usr/share/nginx/html:ro
     depends_on:
-      - harness
-      - rrserver
+      harness:
+        condition: service_healthy
+      rrserver:
+        condition: service_healthy
     networks:
       - tcm-net
 
-  # ── 后端：harness（Rust 诊断编排，仅容器内部网络，不暴露宿主机端口）──
-  # harness 是 backend 的 Rust 重写（流程与 YAML 资源分离），监听 0.0.0.0:8011。
+  # ── 诊断后端：harness（Rust），仅内部网络，监听 0.0.0.0:8011 ──
   harness:
-    build: ../server/harness
+    # 上下文必须是 workspace 根：release 产物在 server/target/release/，
+    # 而不是 server/harness/target/（子 crate 无独立 target）。
+    build:
+      context: ../server
+      dockerfile: harness/Dockerfile
     image: tcm-harness:local
     restart: unless-stopped
     environment:
-      # harness 读 HARNESS_* 前缀（不是 TCM_*）：直连宿主机 LM Studio 用 host.docker.internal
+      # harness 读 HARNESS_* 前缀（不是 TCM_*）
       HARNESS_LLM_BASE_URL: "${HARNESS_LLM_BASE_URL:-http://host.docker.internal:11223/v1}"
       HARNESS_LLM_API_KEY: "${HARNESS_LLM_API_KEY:-}"
       HARNESS_MODEL: "${HARNESS_MODEL:-google/gemma-4-12b-qat}"
+      # 资源目录：与镜像内 /data/resources 一致（镜像已打包，挂载可免重建修改）
       HARNESS_RESOURCES_DIR: "/data/resources"
       TZ: "Asia/Shanghai"
-    # 可改的 YAML 资源：挂载后无需重新构建镜像即可调整证候/方剂/问诊等数据
+    # Linux 上 host.docker.internal 不会自动解析，必须显式映射到宿主机网关，
+    # 否则容器内连不上宿主机的 LM Studio（Windows/Mac 的 Docker Desktop 自带该解析）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
+      # 可改的 YAML 资源：挂载后无需重建镜像即可调整证候/方剂/问诊等数据
       - ../server/harness/resources:/data/resources:ro
-      - ./certs:/etc/ssl/certs/certs:ro
     networks:
       - tcm-net
 
-  # ── 后端：rrserver 云端中继（仅容器内部网络，由 nginx 经 /rr 暴露）──
+  # ── rrserver 云端中继，仅内部网络，由 nginx 经 /rr 暴露 ──
   rrserver:
-    build: ../server/rrserver
+    build:
+      context: ../server
+      dockerfile: rrserver/Dockerfile
     image: tcm-rrserver:local
     restart: unless-stopped
-    # 容器内监听 0.0.0.0:8080，供同网络下的 nginx 访问（127.0.0.1 时 nginx 无法连通）。
+    # 容器内监听 0.0.0.0:8080，供同网络下的 nginx 访问（127.0.0.1 时跨容器无法连通）。
     command: ["server", "--listen", "0.0.0.0:8080", "--config", "/etc/rrserver.toml"]
     volumes:
       - ../server/rrserver/config/rrserver.toml:/etc/rrserver.toml:ro

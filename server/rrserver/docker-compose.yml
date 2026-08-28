@@ -8,7 +8,12 @@
 # 本文件仍可用于单独启动 rrserver（开发 / 调试），但需自行解决对外暴露与 TLS。
 services:
   rrserver:
-    build: .
+    # 上下文必须是 workspace 根（server/）：release 产物在 server/target/release/，
+    # 子 crate 没有独立 target/。上下文裁剪见 server/.dockerignore。
+    build:
+      context: ..
+      dockerfile: rrserver/Dockerfile
+    image: tcm-rrserver:local
     restart: unless-stopped
     # 容器内监听 0.0.0.0:8080，供同网络下的 nginx 访问（默认 127.0.0.1 仅本容器回环，nginx 无法连通）。
     # 镜像本身以非 root 用户（uid 10001）运行。
@@ -22,7 +27,10 @@ services:
   # 家庭端隧道客户端：主动把本地 llm 注册到云端（无需开放任何端口）。
   # --local 指向宿主上的模型服务（用 host.docker.internal 访问宿主网络）。
   client:
-    build: .
+    build:
+      context: ..
+      dockerfile: rrserver/Dockerfile
+    image: tcm-rrserver:local
     restart: unless-stopped
     profiles: ["optional"]
     command:
@@ -41,7 +49,10 @@ services:
   # 模型部署包装：拉起本地模型服务并注册到云端隧道（deploy + 注册一键完成）。
   # 需先准备 config/llm_server.toml（参考 config/llm_server.toml.example）。
   llm-server:
-    build: .
+    build:
+      context: ..
+      dockerfile: rrserver/Dockerfile
+    image: tcm-rrserver:local
     restart: unless-stopped
     profiles: ["optional"]
     command: ["llm-server", "--config", "/etc/llm_server.toml"]

@@ -77,6 +77,24 @@ docker compose -f deploy/docker-compose.yml up -d --build   # nginx + harness + 
 > 容器镜像打包的是 **WSL2 预编译二进制**（容器内 `cargo build` 会因网络损坏 crates.io
 > 下载而失败）；详见 `server/harness/Dockerfile`。
 
+#### 构建前置：先编译 release 二进制
+
+```powershell
+# 推荐：在 WSL 原生目录编译（快，约 90s），完成后自动拷回 server/target/release/
+powershell -NoProfile -File scripts\build-release.ps1
+# 磁盘空间不足时可改为就地编译（明显更慢）：... -InPlace
+```
+
+> **为什么构建上下文必须是 `server/`（workspace 根）**
+> harness 与 rrserver 同属一个 Cargo workspace，`cargo build --release` 的产物统一落在
+> **`server/target/release/`**，子 crate 没有独立 `target/`。因此 compose 里写的是
+> `context: ../server` + `dockerfile: harness/Dockerfile`，Dockerfile 内则 COPY
+> `target/release/harness`。若把上下文设成 `server/harness`，COPY 会因找不到文件而失败。
+>
+> 由于 `server/target/` 常达 **数 GB**，上下文裁剪由 `server/.dockerignore` 负责
+> （白名单策略：只放行两个二进制、YAML 资源与两个 Dockerfile）。
+> 生效时构建上下文约 **20 MB**；若该文件被误删，每次构建都会传输整个 target。
+
 ### 3.3 关键配置项
 
 配置优先级（低→高）：`resources/config.yaml` → 环境变量 `HARNESS_*` → 命令行参数。
@@ -155,6 +173,12 @@ rrserver client --server https://rr.windblue.tech \
 ```
 配置要点（`rrserver.toml`）：`external_ws_base`（对外 WS 基址）、`[[tunnels]]`（`name`/`token`）；
 client 经 `/api/register` 用 token 换取 `ws_url` 并建立隧道。
+
+> **配置文件**：镜像内已内置一份默认配置（由 `rrserver.toml.example` 生成，且
+> **示例 token 被清空**），因此 `docker run tcm-rrserver:local` 不带挂载也能启动。
+> 生产必须由 compose 挂载真实配置覆盖（`deploy/docker-compose.yml` 已配）：
+> `../server/rrserver/config/rrserver.toml:/etc/rrserver.toml:ro`，
+> 并把 `token` 与 `external_ws_base` 改成实际值。
 
 ### 5.2.1 把 harness 经隧道暴露（无需额外家庭端进程）
 

@@ -61,12 +61,23 @@
 ### 2.1 仅后端（harness，Rust）
 ```bash
 cd server
-cargo build --release                 # 构建 harness + rrserver
+cargo build --release                 # 构建 harness + rrserver（Windows 开发用）
 # 运行 harness（cwd 需为 server/harness，resources/ 为相对路径）
-cd harness && ../target/release/harness --listen 0.0.0.0:8011
+cd harness && ../target/release/harness.exe --listen 0.0.0.0:8011
 # 只读端点验证：http://localhost:8011/health 、/agents 、/skills
 # 可改的数据均在 resources/*.yaml，改完重启或调用 POST /reload
 ```
+
+### 2.1.1 Docker 部署（先编译 Linux 二进制）
+```powershell
+# Docker 构建容器内无法 cargo build（网络会损坏 crates.io 下载），必须先预编译：
+powershell -NoProfile -File scripts\build-release.ps1     # WSL2 编译，约 90s，产物拷回 server/target/release/
+cd frontend && npm run build:h5                            # 静态产物（nginx 挂载）
+docker compose -f deploy/docker-compose.yml up -d --build  # nginx + harness + rrserver
+```
+> 构建上下文必须是 workspace 根 `server/`（产物在 `server/target/release/`，子 crate 无独立
+> `target/`），上下文裁剪由 `server/.dockerignore` 负责（否则会传输数 GB 的 target）。
+> 详见 [`docs/deployment.md`](./docs/deployment.md) 第 3 节。
 
 ### 2.2 接入真实 LLM（LM Studio）
 ```bash
