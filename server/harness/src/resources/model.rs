@@ -1,0 +1,146 @@
+//! 资源数据模型（对应 backend `knowledge/*.py` 中的常量与 `app/agents/*` 的提示词）
+//!
+//! 所有结构体均从 `resources/*.yaml` 反序列化得到。
+//! 设计原则：
+//! - 字段 key 用稳定英文 slug（如 `tongue_body`），便于程序索引；
+//! - 字段值为中文文案，中医专业人士可直接修改；
+//! - 每个文件顶部有中文注释说明用途。
+
+use serde::Deserialize;
+
+/// 整个资源包：加载后常驻内存
+#[derive(Debug, Clone, Default)]
+pub struct ResourceBundle {
+    pub syndromes: Vec<Syndrome>,
+    pub questions: Vec<QuestionItem>,
+    pub keyword_evidence: Vec<KeywordEvidence>,
+    pub red_flags: Vec<RedFlag>,
+    pub transformations: Vec<Transformation>,
+    pub formulas: Vec<Formula>,
+    pub cares: Vec<CarePlan>,
+    pub prompts: PromptBundle,
+    pub routing: Routing,
+}
+
+// ------------------------- 证候库 -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct Syndrome {
+    pub slug: String,            // 英文 slug，如 wind_cold_attack_lung
+    pub name: String,            // 中文名，如 风寒袭肺证
+    #[serde(default)]
+    pub meridian: Option<String>, // 涉及经络/脏腑
+    #[serde(default)]
+    pub symptoms: Vec<String>,    // 典型症状
+    #[serde(default)]
+    pub tongue: Option<String>,   // 舌象
+    #[serde(default)]
+    pub pulse: Option<String>,   // 脉象
+    #[serde(default)]
+    pub pathogenesis: Option<String>, // 病机
+}
+
+// ------------------------- 问诊问题库 -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct QuestionItem {
+    pub slug: String,            // 英文 slug，如 fever
+    pub prompt: String,          // 向医生提问的中文文案
+    #[serde(default)]
+    pub category: Option<String>, // 分组：寒热/汗出/头身/二便...
+    #[serde(default)]
+    pub evidence_keys: Vec<String>, // 命中后关联的证据 key
+    #[serde(default)]
+    pub priority: u8,            // 优先级（越小越先问）
+}
+
+// ------------------------- 关键词证据映射 -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct KeywordEvidence {
+    pub slug: String,            // 证据 key，如 wind_cold
+    pub label: String,           // 中文标签，如 风寒
+    #[serde(default)]
+    pub keywords: Vec<String>,   // 触发关键词
+    #[serde(default)]
+    pub syndromes: Vec<String>,  // 指向的证候 slug
+    #[serde(default)]
+    pub note: Option<String>,    // 说明
+}
+
+// ------------------------- 红色警戒（安全门） -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct RedFlag {
+    pub slug: String,            // 英文 slug，如 chest_pain
+    pub label: String,           // 中文标签，如 胸痛
+    #[serde(default)]
+    pub keywords: Vec<String>,   // 触发关键词
+    #[serde(default)]
+    pub advice: String,          // 给用户的警示文案
+    #[serde(default)]
+    pub severity: String,        // low | medium | high | critical
+}
+
+// ------------------------- 传变（疾病发展） -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct Transformation {
+    pub slug: String,            // 英文 slug
+    pub from: String,            // 来源证候 slug
+    pub to: String,              // 目标证候 slug
+    pub label: String,           // 中文描述
+    #[serde(default)]
+    pub probability: Option<String>, // 概率/条件说明
+}
+
+// ------------------------- 方剂库 -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct Formula {
+    pub slug: String,            // 英文 slug，如 ma_xing_gan_shi
+    pub name: String,            // 中文名，如 麻杏甘石汤
+    #[serde(default)]
+    pub for_syndromes: Vec<String>, // 适用证候 slug
+    #[serde(default)]
+    pub composition: Vec<String>,   // 组成（药名）
+    #[serde(default)]
+    pub usage: Option<String>,      // 用法
+    #[serde(default)]
+    pub caution: Option<String>,    // 禁忌/注意
+}
+
+// ------------------------- 调护方案 -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct CarePlan {
+    pub slug: String,            // 英文 slug，如 wind_cold_care
+    pub label: String,           // 中文标签
+    #[serde(default)]
+    pub for_syndromes: Vec<String>, // 适用证候 slug
+    #[serde(default)]
+    pub items: Vec<String>,      // 调护条目（饮食/起居/情志）
+}
+
+// ------------------------- 提示词包 -------------------------
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct PromptBundle {
+    #[serde(default)]
+    pub system: String,          // 总系统提示
+    #[serde(default)]
+    pub inspection: String,
+    #[serde(default)]
+    pub listening: String,
+    #[serde(default)]
+    pub inquiry: String,
+    #[serde(default)]
+    pub palpation: String,
+    #[serde(default)]
+    pub differentiation: String,
+    #[serde(default)]
+    pub safety: String,
+    #[serde(default)]
+    pub treatment: String,
+}
+
+// ------------------------- 路由（当前激活的 agent） -------------------------
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Routing {
+    #[serde(default)]
+    pub active: Vec<String>,     // 激活的 capability slug 列表，按问诊顺序
+    #[serde(default)]
+    pub default: Option<String>, // 默认入口 capability
+}

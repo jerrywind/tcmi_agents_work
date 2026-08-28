@@ -2,7 +2,7 @@
 
 > 将 [`plan.md`](./plan.md) 的里程碑拆解为可追踪的 issue 清单。
 > 状态约定：🔲 待办 / 🔧 进行中 / ✅ 已完成 / 🚫 阻塞。
-> 最后更新：2026-08-05
+> 最后更新：2026-08-25
 
 ## 阶段一：质量与一致性加固（M1）
 
@@ -13,6 +13,7 @@
 | T1.3 | 前端 `pages/skills` 在 `rule` 与 `llm` 模式下联调 | 新增 `tests/test_skill_routing_modes.py`，4 用例覆盖两种路由下列表/装载/卸载/错误分支，全部通过 | ✅ 已完成（2026-08-05） |
 | T1.4 | `/api/consultations/{id}/trace` 增加 Token 用量与降级原因标注 | trace 每条含 `tokens`/`degraded`/`degraded_reason`；新增 `tests/test_trace_observability.py`（rule 无降级+llm 无 Key 运行时降级两类场景），全部通过 | ✅ 已完成（2026-08-05） |
 | T1.5 | 补充 `tcm-safety` 红旗分级与就诊科室映射判定单测 | 新增 `tests/test_safety_redflag.py`：urgent/warning 分级、科室映射、模糊匹配、未命中兜底、经注册表运行、安全 Agent 多红旗扫描，共 11 用例全部通过 | ✅ 已完成（2026-08-05） |
+| T1.6 | 全链路 E2E（前端→后端→rrserver→llm_server） | 新增 `tcm_work/e2e_tests/`：pytest 三层 + 前端 vitest，一键 `run_full_chain_e2e.ps1`；无真实 LLM 可跑通（mock/stub），缺失产物自动 skip；配套 [`e2e.md`](./e2e.md) | ✅ 已完成（2026-08-25） |
 
 ## 阶段二：诊疗能力深化（M2）
 
@@ -38,7 +39,16 @@
 | # | 任务 | 验收 | 状态 |
 |---|---|---|---|
 | T4.1 | `rrserver` 生产化：真实 TLS、强 token/随机 name、外部告警 | 经公网隧道稳定可用 | 🔲 待办 |
-| T4.2 | 多隧道/多模型：文本 + 视觉分隧道路由 | backend 按 capability 自动选路 | 🔲 待办 |
+| T4.2 | 多隧道/多模型：文本 + 视觉分隧道路由 | harness 按 capability 自动选路 | 🔲 待办 |
+| T4.3 | harness 隧道生产化：`--tunnel-*` 的重连/鉴权/观测加固 | 断线自动重连、密钥不落日志 | 🔲 待办 |
+
+## 阶段五：前端契约对齐（新增）
+
+| # | 任务 | 验收 | 状态 |
+|---|---|---|---|
+| T5.1 | `frontend/src/services/api.ts` 改为 harness 无状态契约（`/chat`、`/agents`、`/skills`） | 前端可跑通一次完整问诊 | 🔲 待办 |
+| T5.2 | 前端自行维护多轮 `messages`（harness 无会话存储） | 多轮问答上下文正确 | 🔲 待办 |
+| T5.3 | 启用前端 e2e（`run_full_chain_e2e.ps1 -WithFrontend`） | 前端契约 e2e 绿灯 | 🔲 待办（依赖 T5.1/T5.2） |
 
 ## 依赖关系
 
@@ -81,7 +91,8 @@ trace：单文件运行通过、全量顺序下失败）。**真正的根因不�
     `config.settings.routing`/`llm` 与 API Key 相关环境变量；另设 autouse fixture 浅
     拷贝还原全局 `skill_registry` 的 `_skills`/`_tools`，防止 skills 残留。
   - `test_store.py` 的 `isinstance` 断言改为同模块类型名比较，规避类身份不一致。
-- **验证**：`cd backend && python -m pytest` 全量约 184 用例已全部通过。
+- **验证（现行）**：`cd server && cargo test`（harness 案例回归 + rrserver 约 100 项）已全部通过。
+  原 `cd backend && python -m pytest`（约 184 用例）随 backend 归档至 `_useless/backend/`。
 
-> 运行全量测试：`cd backend && python -m pytest`。`pytest.ini` 的 `addopts` 已含
-> `--import-mode=importlib`（避免 `prepend` 模式下的解析歧义）。
+> 运行后端测试：`cd server && cargo test`；案例回归：`cargo test -p harness --test cases`。
+> 全链路 e2e：`cd e2e_tests && .\run_full_chain_e2e.ps1`。

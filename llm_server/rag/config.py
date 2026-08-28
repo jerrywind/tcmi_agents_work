@@ -15,13 +15,14 @@ from pathlib import Path
 
 @dataclass
 class RAGConfig:
-    # ---- 向量/模型服务端点（复用 llm_server 的 OpenAI 兼容 API）----
+    # ---- 向量/模型服务端点（复用 llm_server 网关的 OpenAI 兼容 API）----
+    # 本地单独跑 RAG 时，将下面两个 base_url 改为 http://localhost:8000/v1
     embed_base_url: str = "http://llm_server:8000/v1"
     embed_api_key: str = "sk-noauth"
-    embed_model: str = "text-embedding-default"      # 文本 Embedding 模型名
-    vision_base_url: str = "http://llm_vision:8000/v1"
+    embed_model: str = "text-embedding-default"      # 文本 Embedding 模型名（需 LM Studio 加载 embedding 模型）
+    vision_base_url: str = "http://llm_server:8000/v1"
     vision_api_key: str = "sk-noauth"
-    vision_model: str = "Qwen3-VL-8B"                # 图像 caption 用的视觉模型
+    vision_model: str = "google/gemma-4-12b-qat"     # 图像 caption 用的多模态模型（走网关透传 LM Studio）
 
     # ---- 检索参数 ----
     top_k: int = 5

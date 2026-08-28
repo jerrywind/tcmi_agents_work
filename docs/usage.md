@@ -23,134 +23,138 @@
    - 证候结论（1~2 条）、辨证依据链（支持/矛盾证据）、调理建议、诊疗方案、免责声明，支持查看与分享。
 
 5. **技能管理**（`pages/skills`，可选）
-   - 列出当前已装载的 SKILL 技能及其工具清单（如 `tcm-kb`、`tcm-rag` 等）。
-   - 可按名称装载 `skills/` 目录下的技能，或卸载已装载技能，无需重启后端服务。
-   - 适合在扩展中医知识库 / 接入自有 RAG 后，动态启用新能力。详见 [`SKILL 工具集`](./skills.md)。
+   - 列出当前可用技能及其归属（`GET /skills`）：`tcm-kb`、`tcm-diet`、`tcm-rag` 等共 9 个。
+   - harness 的技能为**内置注册**（Rust 编译期装配），不支持运行时按名装载/卸载
+     （区别于原 backend 的 `skills/` 目录热装载）；新增技能需改 `skills/builtin.rs` 后重新构建。
+   - 扩展知识库请优先改 `resources/*.yaml`，或用 `HARNESS_RAG_ENDPOINT` 接入自有 RAG。
+     详见 [`SKILL 工具集`](./skills.md)。
 
 ## 2. REST API 接入（接入方）
 
-Base URL（开发）：`http://localhost:8000/api`
+Base URL（开发）：`http://localhost:8011`
+（生产经 nginx 时为 `https://<域名>/api`，nginx 会剥离 `/api` 前缀后转发）
 
-### 2.1 新建档案
+> **与原 backend 的重要差异**：harness 是**无状态**服务，不保存问诊会话，
+> 没有 `cons_xxx` 会话 id、没有 `start/answer/report/trace` 等会话端点、也不提供
+> 图片上传与 `/uploads` 静态目录（图片以 base64 / URL 随请求传入）。
+> 多轮问诊由**调用方**（前端）维护 `messages` 数组，每次带上完整对话历史。
+
+### 2.1 健康检查
 ```bash
-curl -X POST http://localhost:8000/api/consultations \
+curl http://localhost:8011/health          # -> ok
+```
+
+### 2.2 列出能力（Sub-Agent）
+```bash
+curl http://localhost:8011/agents
+# -> {"capabilities":["inspection","listening","inquiry","palpation",
+#     "differentiation","safety","treatment"],
+#     "names":["望诊","闻诊","问诊","切诊","辨证","安全门","治疗"]}
+```
+
+### 2.3 完整诊断流程（推荐）
+```bash
+curl -X POST http://localhost:8011/chat \
   -H 'Content-Type: application/json' \
   -d '{
-    "patient": {"region":"广州","height_cm":172,"weight_kg":78,"age":34,"gender":"男"},
-    "complaint": "口苦口臭、大便粘滞不爽、肢体困重",
-    "self_report": {"heart_rate": 76}
+    "messages": [
+      {"role":"user","content":"口苦口臭、大便粘滞不爽、肢体困重，舌红苔黄腻"}
+    ],
+    "payload": {"gender":"男","age":34,"region":"广州"}
   }'
-# -> { "id": "cons_xxx", "status": "created" }
+# -> {"steps":[{"capability":"inspection","text":"..."}, ...],
+#     "summary":"## 望诊\n...\n\n## 辨证\n..."}
 ```
+按 `resources/routing.yaml` 的 `active` 顺序依次调用各 Sub-Agent（望→闻→问→切→辨证→安全门→治疗），
+返回每一步的输出 `steps` 与汇总文本 `summary`。
 
-### 2.2 上传舌象/面相/患处照片
+### 2.4 单步调用某个 Sub-Agent
 ```bash
-curl -X POST http://localhost:8000/api/consultations/cons_xxx/images \
-  -F 'type=tongue' \
-  -F 'file=@tongue.jpg'
-# type 取值：tongue | face | lesion
-# -> { "id": "img_xxx", "url": "/uploads/cons_xxx_xxxx.jpg" }
-```
-
-### 2.3 启动诊断
-```bash
-curl -X POST http://localhost:8000/api/consultations/cons_xxx/start
-# -> StateResp: status=waiting_answer, question={...}
-```
-
-### 2.4 回答（辨证追问 或 方案个性化追问）
-```bash
-curl -X POST http://localhost:8000/api/consultations/cons_xxx/answer \
+curl -X POST http://localhost:8011/agents \
   -H 'Content-Type: application/json' \
-  -d '{"question_id":"q_xxx","value":"可煎药"}'
-# 返回 StateResp：可能继续 waiting_answer / treatment_qa，或 finished
+  -d '{
+    "capability": "differentiation",
+    "messages": [{"role":"user","content":"口苦口臭、肢体困重、舌红苔黄腻"}],
+    "payload": {}
+  }'
+# -> {"capability":"differentiation","content":"..."}
 ```
+`capability` 取值：`inspection` | `listening` | `inquiry` | `palpation` |
+`differentiation` | `safety` | `treatment`。
 
-### 2.5 拉取状态 / 报告 / 调用轨迹
+### 2.5 技能（SKILL）
 ```bash
-curl http://localhost:8000/api/consultations/cons_xxx           # 当前状态与消息流
-curl http://localhost:8000/api/consultations/cons_xxx/report    # 诊断+诊疗方案报告
-curl http://localhost:8000/api/consultations/cons_xxx/trace     # 各 Sub-Agent 调用明细
-curl http://localhost:8000/api/system/agents                    # 当前路由（谁在用哪个实现/模型）
+curl http://localhost:8011/skills           # 列出 9 个技能及归属（owner）
+curl -X POST http://localhost:8011/skills \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"tcm-kb","arguments":{"q":"脾胃湿热 常用方"}}'
+# -> {"result": ...}
 ```
+内置技能：`tcm-vision`(望诊)、`tcm-auscultation`(闻诊)、`tcm-inquiry`(问诊)、
+`tcm-palpation`(切诊)、`tcm-reference`(辨证)、`tcm-safety`(安全门)、
+`tcm-kb`、`tcm-diet`、`tcm-rag`(全局)。详见 [`SKILL 工具集`](./skills.md)。
 
-### 2.6 快速接入：Postman / OpenAPI
-
-- **Postman 集合**：`docs/tcm-agent.postman_collection.json`，已包含全部端点与示例请求、变量 `baseUrl`/`cid`，导入 Postman 即可联调。
-- **OpenAPI**：服务启动后自动生成，访问 `http://<host>:8000/openapi.json`，Swagger UI 在 `/docs`、Redoc 在 `/redoc`。
-
-### 2.6.x 技能管理接口（SKILL）
+### 2.6 热重载 YAML 资源
 ```bash
-curl http://localhost:8000/api/skills                      # 列出已装载技能与工具
-curl -X POST http://localhost:8000/api/skills/load \
-  -H 'Content-Type: application/json' -d '{"name":"tcm-kb"}'  # 按名装载
-curl -X POST http://localhost:8000/api/skills/unload \
-  -H 'Content-Type: application/json' -d '{"name":"tcm-kb"}'  # 卸载
-# 也支持按路径装载：{"path":"/abs/path/to/skill"}
+curl -X POST http://localhost:8011/reload   # -> {"ok":true}
 ```
+需 `resources/config.yaml` 中 `hot_reload: true`。改完证候/方剂/问诊等 YAML 后调用即可，
+无需重启（详见 [`deployment.md`](./deployment.md) 3.4）。
 
-### 2.6.y MCP 接口（对外暴露能力 / 接入外部工具）
-```bash
-curl http://localhost:8000/api/mcp/status                  # 挂载状态、外部连接、各能力实现
-curl http://localhost:8000/api/mcp/tools                   # 本 MCP Server 的全部工具及 schema
-
-# 运行时接入一个外部 MCP Server（其工具变为 mcp__weather__*）
-curl -X POST http://localhost:8000/api/mcp/clients -H 'Content-Type: application/json' \
-  -d '{"name":"weather","transport":"http","url":"http://localhost:9001/mcp"}'
-curl -X DELETE http://localhost:8000/api/mcp/clients/weather   # 断开并卸载
-```
-MCP 客户端（Claude Desktop / Cursor 等）可直接连接 `http://localhost:8000/mcp`
-（Streamable HTTP），或用 stdio：`cd backend && python -m app.mcp.server`。
-详见 [`MCP 集成`](./mcp.md)。
-> 完整契约与错误码见 [`SKILL 工具集`](./skills.md) 第 4 节。
-
-### 2.7 字段速览（响应）
-- `StateResp.status`：`created | running | waiting_answer | planning | treatment_qa | finished | referred`
-- `report.syndromes[]`：证候（1~2 条）+ 置信度 + 支持/矛盾证据
-- `report.treatments[]`：诊疗方案（`category`/`title`/`detail`/`rationale`/`note`/`priority`）
-- `report.red_flag`：非 null 时表示触发红旗告警（建议立即就医）
+### 2.7 字段速览
+- `Message`：`{"role":"user"|"assistant"|"system", "content":"..."}`
+- `/chat` 响应：`steps[]`（每步 `capability` + `text`）、`summary`（汇总 Markdown）
+- 错误：任一接口失败返回 `{"error":"..."}`（HTTP 状态码仍为 200，需检查 `error` 字段）
+- 安全门：`safety` 步骤会给出红旗告警提示（建议立即就医）
 
 ## 3. 切换 / 启用真实 LLM
 
-编辑 `backend/app/routing.yaml`（或指向 `routing.llm.yaml` 一键切换）：
+harness 的所有 Sub-Agent 统一走 LLM（无 rule/mock 切换开关）。配置优先级：
+`resources/config.yaml` → 环境变量 `HARNESS_*` → 命令行参数。
+
+### 3.1 用 LM Studio（最直接，无需权重/Docker）
+
+LM Studio 加载 `google/gemma-4-12b-qat`（文本与视觉共用同一原生多模态端点），
+开启本地服务器（默认 `http://localhost:11223/v1`），然后：
+
+```powershell
+# PowerShell（前缀是 HARNESS_，不是 TCM_）
+$env:HARNESS_LLM_BASE_URL="http://localhost:11223/v1"
+$env:HARNESS_LLM_API_KEY="<LM Studio → Developer → Server Settings 中的 API Key>"
+$env:HARNESS_MODEL="google/gemma-4-12b-qat"
+cd server/harness && ../target/debug/harness --listen 127.0.0.1:8011
+```
+
+等价于编辑 `server/harness/resources/config.yaml`：
+```yaml
+llm_base_url: "http://localhost:11223/v1"
+llm_api_key: ""                  # LM Studio 开启校验时填写
+model: "google/gemma-4-12b-qat"
+llm_timeout_secs: 120
+```
+
+### 3.2 经 llm_server 网关（可选）
+
+```powershell
+cd llm_server && python -m app.main          # 网关 :8000
+$env:HARNESS_LLM_BASE_URL="http://localhost:8000/v1"
+```
+经网关可使用 prompt 优化、tool calling、MCP 与 agent 循环等中间层能力，
+详见 [`llm_server.md`](./llm_server.md)。
+
+> **无 LLM 时**：`/health`、`/agents`、`/skills` 仍可用，`/chat` 与 `POST /agents` 会返回错误
+> （harness 未提供 MockProvider）。确定性逻辑可离线验证：
+> `cd server && cargo test -p harness --test cases`。
+> 若 LM Studio 开启了 API Key 校验，必须填 `HARNESS_LLM_API_KEY`。
+
+### 3.3 调整诊断流程顺序（不走 LLM 的纯编排改动）
+
+编辑 `server/harness/resources/routing.yaml` 的 `active` 列表即可增删诊断步骤
+（如去掉 `palpation` 跳过切诊），改完 `POST /reload` 生效：
 
 ```yaml
-routing:
-  diagnosis.inspection:        { impl: llm_vision, model: vision-default }  # 望诊多模态分析
-  diagnosis.differentiation:  { impl: llm, model: text-default }           # 大模型辨证
-  diagnosis.inquiry:          { impl: llm, model: text-default }           # 大模型提问
-  treatment.plan:             { impl: llm, model: text-default }           # 大模型生成综合方案
-llm:
-  base_url: ""                 # 由 TCM_LLM_BASE_URL 注入（文本端点）
-  api_key_env: TCM_LLM_API_KEY
-  models:
-    text-default: qwen3.6-9B          # 文本问诊（听/问/切/辨证/安全/施治）
-    vision-default: Qwen3-VL-8B       # 望诊视觉模型（原生多模态）
+active: [inspection, listening, inquiry, palpation, differentiation, safety, treatment]
 ```
-> 顶层键为 `routing`（非 `routes`）。启用全部 LLM 实现最简：`TCM_ROUTING_FILE` 指向
-> `routing.llm.yaml`（compose 的 `llm` profile 已设好）。无模型可用时所有 LLM 实现会自动
-> 降级为 rule/mock，保证系统可用。
-设置环境变量 `TCM_LLM_API_KEY` 后重启后端即可。未配置时自动降级 mock，全流程仍可演示。
-
-### 3.1 本地开发最简易：用 LM Studio（无需权重/Docker）
-
-LM Studio 加载任意多模态模型（如 `google/gemma-4-12b-qat`，文本与视觉共用同一端点），
-开启本地服务器（默认 `http://localhost:11223/v1`），然后设置：
-
-```bash
-# PowerShell
-$env:TCM_LLM_BASE_URL="http://localhost:11223/v1"
-$env:TCM_LLM_API_KEY="<LM Studio → Developer → Server Settings 中的 API Key>"
-$env:TCM_LLM_TEXT_MODEL="google/gemma-4-12b-qat"
-$env:TCM_LLM_VISION_MODEL="google/gemma-4-12b-qat"
-$env:TCM_LLM_API="responses"          # 使用 LM Studio Responses API (/v1/responses)
-$env:TCM_ROUTING_FILE="app/routing.llm.yaml"
-```
-
-> 视觉与文本复用同一端点即可（gemma-4 为原生多模态）。`routing.llm.yaml` 默认 `api: responses`，
-> 即通过 LM Studio 的 **Responses API** 调用；若需回退到传统 Chat Completions，设 `TCM_LLM_API=chat`
-> 或把 `routing.llm.yaml` 的 `llm.api` 改为 `chat`。若 LM Studio 开启了 API Key 校验，需填入对应
-> Key（Developer → Server Settings → API Key）；关闭校验则任意非空值均可。
 
 ## 4. 常见问题
 

@@ -1,0 +1,57 @@
+# 调护方案（可改）
+# 每条：slug(英文索引) / label(中文标签) / for_syndromes(适用证候 slug) / items(调护条目)
+
+- slug: wind_cold_care
+  label: 风寒感冒调护
+  for_syndromes: ["wind_cold_attack_lung"]
+  items:
+    - 注意保暖，避风寒，多饮温水
+    - 宜食辛温解表之品：葱姜汤、紫苏粥
+    - 注意休息，汗出后及时擦干更衣
+    - 忌生冷瓜果、油腻黏滑
+
+- slug: wind_heat_care
+  label: 风热感冒调护
+  for_syndromes: ["wind_heat_attack_lung"]
+  items:
+    - 保持空气流通，衣着宜宽松
+    - 宜食清凉生津：梨汤、菊花茶、绿豆汤
+    - 多补充水分，忌辛辣燥热
+    - 咽痛可用淡盐水漱口
+
+- slug: damp_spleen_care
+  label: 脾虚湿困调护
+  for_syndromes: ["dampness_encumbering_spleen"]
+  items:
+    - 饮食清淡，少食生冷甜腻
+    - 宜食健脾祛湿：山药、薏米、陈皮、茯苓
+    - 适度运动，避免久坐久卧
+    - 腹部保暖，可顺时针摩腹
+
+- slug: liver_care
+  label: 肝郁调护
+  for_syndromes: ["liver_qi_stagnation"]
+  items:
+    - 调畅情志，避免恼怒抑郁
+    - 宜食疏肝理气：玫瑰花茶、陈皮、佛手
+    - 规律作息，适当户外活动
+    - 可配合按揉太冲、期门穴
+
+- slug: qi_yin_care
+  label: 气阴两虚调护
+  for_syndromes: ["qi_and_yin_deficiency"]
+  items:
+    - 劳逸结合，避免过劳耗气
+    - 宜食益气养阴：西洋参、太子参、百合、银耳
+    - 保证睡眠，午后小憩
+    - 忌剧烈运动与大汗
+
+- slug: spleen_stomach_damp_heat_care
+  label: 脾胃湿热调护
+  for_syndromes: ["spleen_stomach_damp_heat"]
+  items:
+    - 饮食清淡，忌辛辣油腻、酒酪甜腻
+    - 宜食清热利湿：赤小豆、薏米、冬瓜、苦瓜、绿豆
+    - 规律三餐，忌暴饮暴食、过饱
+    - 保持大便通畅，避免久坐
+    - 可配合按揉阴陵泉、足三里穴

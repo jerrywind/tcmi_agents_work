@@ -1,65 +1,33 @@
-# 本地大模型服务（独立的 docker compose，不依赖仓库根编排）。
-# 基于 llama.cpp，默认 文本模型 qwen3.6-9B + 视觉模型 Qwen3-VL。
+# llm_server v2 —— LM Studio 网关 + Agent 中间层。
+# 模型推理由宿主机 LM Studio 提供（默认 http://localhost:11223/v1）；
+# 容器通过 host.docker.internal 访问宿主机上的 LM Studio。
 #
-# 默认（无 profile）: 仅启动 llm_server（含内置 RAG 服务 8080）
-#   docker compose up --build
+# 启动：
+#   cd llm_server && docker compose up --build
+# 与 backend 联调（backend 的 TCM_LLM_BASE_URL 指向本服务）：
+#   $env:TCM_LLM_BASE_URL = "http://localhost:8000/v1"   （本地）
+#   $env:TCM_LLM_BASE_URL = "http://llm_server:8000/v1"  （同一 docker 网络）
 #
-# 视觉服务（Qwen3-VL）在 vision profile 下启动：
-#   docker compose --profile vision up --build
-#
-# 需在 llm_server/models 放好权重（文本 GGUF + 视觉 GGUF，见 README）。
-# 与 backend 联调：另在 backend/ 启动并加入同一网络（见各 README）。
+# 可选：通过 MCP_CLIENTS 接入外部 MCP Server（JSON 数组）：
+#   $env:MCP_CLIENTS = '[{"name":"kb","url":"http://host:port/mcp","headers":{"Authorization":"Bearer xxx"}}]'
 
 services:
-  # —— 文本模型：qwen3.6-9B（听/问/切/辨证/安全/施治）+ 内置 RAG 服务(8080) ——
   llm_server:
     build: .
     image: tcm-llm-server:local
     ports:
-      - "22010:8000"           # 文本模型：宿主机 22010 -> 容器 8000（业务端口区间 22000-22200）
-      - "22011:8080"           # RAG 服务：宿主机 22011 -> 容器 8080
+      - "22010:8000"           # 宿主机 22010 -> 容器 8000（业务端口区间 22000-22200）
     environment:
-      MODEL_PATH: "/models/qwen3.6-9B.gguf"
-      MMPROJ_PATH: "/models/mmproj.gguf"   # 可选：纯文本模型可留空/不挂载
+      LMSTUDIO_BASE_URL: "http://host.docker.internal:11223/v1"
+      LMSTUDIO_API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
+      DEFAULT_MODEL: "google/gemma-4-12b-qat"
       LLM_HOST: "0.0.0.0"
       LLM_PORT: "8000"
-      CTX_SIZE: "8192"
-      GPU_LAYERS: "${LLM_GPU_LAYERS:-0}"
-      API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
-      # RAG 服务配置：复用本服务 Embedding（文本）与 llm_vision（图像 caption）
-      RAG_EMBED_BASE_URL: "http://localhost:8000/v1"
-      RAG_EMBED_API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
-      RAG_EMBED_MODEL: "text-embedding-default"
-      RAG_VISION_BASE_URL: "http://llm_vision:8000/v1"
-      RAG_VISION_API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
-      RAG_VISION_MODEL: "Qwen3-VL-8B"
-      RAG_DATA_DIR: "/data/rag"
-      RAG_PORT: "8080"
-    volumes:
-      - ./models:/models   # 挂载权重目录（GGUF + 可选 mmproj）
-      - rag-data:/data/rag # RAG 索引持久化
-      - ./corpus:/corpus   # 可选：预置图文/文本语料（RAG_CORPUS_DIR）
+      ENABLE_PROMPT_OPTIMIZE: "true"
+      PROMPT_MAX_CHARS: "12000"
+      AGENT_MAX_ROUNDS: "8"
+      ENABLE_MCP: "true"
+      MCP_CLIENTS: "${MCP_CLIENTS:-[]}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # 让容器能访问宿主机上的 LM Studio
     restart: unless-stopped
-
-  # —— 视觉模型：Qwen3-VL（望诊图文理解，原生多模态，无需 mmproj）——
-  llm_vision:
-    build: .
-    image: tcm-llm-vision:local
-    profiles:
-      - vision
-    ports:
-      - "22012:8000"           # 视觉模型：宿主机 22012 -> 容器 8000
-    environment:
-      MODEL_PATH: "/models/qwen3-vl.gguf"
-      MMPROJ_PATH: "/models/mmproj-vl.gguf"   # 可选：Qwen3-VL 通常内嵌视觉编码器
-      LLM_HOST: "0.0.0.0"
-      LLM_PORT: "8000"
-      CTX_SIZE: "8192"
-      GPU_LAYERS: "${LLM_GPU_LAYERS:-0}"
-      API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
-    volumes:
-      - ./models:/models   # 与文本服务共享权重目录（只需放入 qwen3-vl.gguf）
-    restart: unless-stopped
-
-volumes:
-  rag-data:

@@ -1,0 +1,52 @@
+# 方剂库（可改）
+# 每条：slug(英文索引) / name(中文名) / for_syndromes(适用证候 slug) /
+#       composition(组成) / usage(用法) / caution(禁忌注意)
+
+- slug: ma_xing_gan_shi
+  name: 麻杏甘石汤
+  for_syndromes: ["wind_heat_attack_lung"]
+  composition: ["麻黄", "杏仁", "甘草", "石膏"]
+  usage: 水煎服，辛凉宣泄、清肺平喘
+  caution: 风寒咳嗽无汗者不宜
+
+- slug: jing_fang_bai_du
+  name: 荆防败毒散
+  for_syndromes: ["wind_cold_attack_lung"]
+  composition: ["荆芥", "防风", "羌活", "独活", "柴胡", "前胡", "川芎", "枳壳", "茯苓", "甘草"]
+  usage: 水煎服，辛温解表、散寒除湿
+  caution: 风热证忌用
+
+- slug: shen_ling_bai_zhu
+  name: 参苓白术散
+  for_syndromes: ["dampness_encumbering_spleen"]
+  composition: ["人参", "白术", "茯苓", "山药", "扁豆", "莲子", "砂仁", "薏苡仁", "甘草"]
+  usage: 健脾益气、渗湿止泻
+  caution: 实证腹胀慎用
+
+- slug: xiao_yao_san
+  name: 逍遥散
+  for_syndromes: ["liver_qi_stagnation"]
+  composition: ["柴胡", "当归", "白芍", "白术", "茯苓", "甘草", "薄荷", "生姜"]
+  usage: 疏肝解郁、健脾养血
+  caution: 阴虚火旺者慎用
+
+- slug: sheng_mai_yin
+  name: 生脉饮
+  for_syndromes: ["qi_and_yin_deficiency"]
+  composition: ["人参", "麦冬", "五味子"]
+  usage: 益气生津、敛阴止汗
+  caution: 实热证不宜
+
+- slug: yin_chen_hao
+  name: 茵陈蒿汤
+  for_syndromes: ["spleen_stomach_damp_heat"]
+  composition: ["茵陈", "栀子", "大黄"]
+  usage: 清热利湿退黄，主治湿热黄疸
+  caution: 寒湿发黄、脾虚便溏者忌用
+
+- slug: ge_gen_qin_lian
+  name: 葛根芩连汤
+  for_syndromes: ["spleen_stomach_damp_heat"]
+  composition: ["葛根", "黄芩", "黄连", "甘草"]
+  usage: 清热化湿、升清止泻，主治湿热泄泻
+  caution: 虚寒泄泻不宜

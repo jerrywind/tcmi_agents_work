@@ -1,0 +1,9 @@
+# harness 运行配置
+# 运维可调：端口、LLM 网关地址；中医一般无需修改本文件。
+listen: "0.0.0.0:8011"          # 监听地址
+llm_base_url: "http://localhost:11223/v1"  # 上游 LLM 网关（lmstudio / llm_server）
+llm_api_key: ""                  # 若网关开启 Key 校验则填写
+model: "google/gemma-4-12b-qat" # 默认模型
+resources_dir: "resources"      # YAML 资源目录
+llm_timeout_secs: 120            # 单次 LLM 调用超时（秒）
+hot_reload: false                # 是否允许 /reload 热重载 YAML

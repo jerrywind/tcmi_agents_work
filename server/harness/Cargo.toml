@@ -1,0 +1,35 @@
+[package]
+name = "harness"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "harness"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+clap = { workspace = true }
+reqwest = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+base64 = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+toml = { workspace = true }
+regex = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+rrserver = { path = "../rrserver" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+serde_json = { workspace = true }

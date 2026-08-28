@@ -3,7 +3,10 @@
 本项目同时扮演 **MCP Server**（把中医诊疗能力暴露给外部）与 **MCP Client**
 （把外部 MCP 工具接入本系统的 Sub-Agent / SKILL 体系）。
 
-本文是 MCP 能力的设计规格与实施计划，配套实现见 `backend/app/mcp/`。
+本文是 MCP 能力的设计规格与实施计划。
+- **harness（Rust，现行）**：`server/harness/src/mcp/`（Streamable HTTP client 等）。
+- **原 backend（Python，已归档）**：`_useless/backend/app/mcp/`（含 stdio server 实现，
+  仅留档备查）。
 
 ---
 
@@ -31,7 +34,7 @@
 
 ```
                     ┌─────────────────────────────────────┐
-  外部 MCP Client   │          本项目 (backend)            │
+  外部 MCP Client   │          本项目 (harness)            │
   (Claude/Cursor)   │                                     │
         │           │   ┌──────────────┐                  │
         │  stdio    │   │ orchestrator │                  │
@@ -164,6 +167,15 @@ mcp:
 
 ### 5.1 作为 stdio MCP Server（Claude Desktop / Cursor）
 
+> **harness 当前未提供 MCP Server**：`server/harness/src/mcp/` 只实现了
+> **MCP Client**（`call_tool` / `list_tools`，Streamable HTTP）。
+> 原 backend 的 stdio MCP Server（`python -m app.mcp.server`）已随 backend 归档至
+> `_useless/backend/app/mcp/`，harness 侧尚未复刻。如需对外暴露能力，
+> 请直接使用 harness 的 REST 端点（`/chat`、`/agents`、`/skills`）。
+
+<details>
+<summary>原 backend 的配置（已归档，仅留档）</summary>
+
 ```json
 {
   "mcpServers": {
@@ -175,18 +187,20 @@ mcp:
   }
 }
 ```
+</details>
 
 ### 5.2 作为 HTTP MCP Server
 
-启动后端后，MCP 端点位于 `http://<host>:<port>/mcp`（Streamable HTTP）。
-注意该端点依赖应用 lifespan，务必以正常方式启动服务（而非直接调用 ASGI app）。
+> 同上：harness 未提供 `/mcp` 端点与 `/api/mcp/tools`、`/api/mcp/status` 等管理接口。
+> 现行替代：用 `GET /skills` 查看可用工具，`POST /skills` 执行工具
+> （见 [`usage.md`](./usage.md) 2.5）。
 
-查看当前暴露的工具：
+<details>
+<summary>原 backend 的用法（已归档，仅留档）</summary>
 
-```bash
-curl http://localhost:8000/api/mcp/tools
-curl http://localhost:8000/api/mcp/status
-```
+启动后端后，MCP 端点位于 `http://<host>:<port>/mcp`（Streamable HTTP）；
+查看工具用 `curl http://localhost:8000/api/mcp/tools` 与 `/api/mcp/status`。
+</details>
 
 ### 5.3 接入外部 MCP Server
 

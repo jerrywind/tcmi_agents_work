@@ -1,0 +1,52 @@
+# 问诊问题库（可改）
+# 每条：slug(英文索引) / prompt(向患者提问的中文文案) / category(分组) /
+#       evidence_keys(命中后关联的证据关键词) / priority(优先级，越小越先问)
+# 问诊 agent 会跳过证据已收集的问题，按优先级追问。
+
+- slug: fever
+  prompt: 您有没有发烧？体温大概多少？怕冷还是怕热？
+  category: 寒热
+  evidence_keys: ["恶寒", "发热", "怕冷", "怕热"]
+  priority: 1
+
+- slug: sweat
+  prompt: 出汗多吗？是白天动则汗出，还是夜间睡着后出汗？
+  category: 汗出
+  evidence_keys: ["汗出", "自汗", "盗汗", "无汗"]
+  priority: 2
+
+- slug: head_body
+  prompt: 头身有没有酸痛、沉重或胀痛的感觉？
+  category: 头身
+  evidence_keys: ["头痛", "身痛", "身重", "头晕"]
+  priority: 3
+
+- slug: stool_urine
+  prompt: 大便和小便情况怎么样？大便干稀、次数，小便颜色？
+  category: 二便
+  evidence_keys: ["便溏", "便秘", "小便黄", "小便清长"]
+  priority: 4
+
+- slug: appetite
+  prompt: 胃口怎么样？有没有腹胀、恶心？
+  category: 饮食
+  evidence_keys: ["纳呆", "脘腹胀满", "恶心", "纳差"]
+  priority: 5
+
+- slug: sleep
+  prompt: 睡眠好吗？有没有失眠、多梦、易醒？
+  category: 睡眠
+  evidence_keys: ["失眠", "多梦", "心悸", "嗜睡"]
+  priority: 6
+
+- slug: emotion
+  prompt: 最近情绪如何？容易生气、抑郁或焦虑吗？
+  category: 情志
+  evidence_keys: ["情志抑郁", "善太息", "烦躁", "焦虑"]
+  priority: 7
+
+- slug: menstruation
+  prompt: 若是女性，月经是否规律？有无痛经、色量异常？
+  category: 经带
+  evidence_keys: ["月经不调", "痛经", "经量少", "经量多"]
+  priority: 8

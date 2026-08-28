@@ -1,118 +1,147 @@
-# llm_server：可部署的本地大模型服务
+# llm_server v2：LM Studio 网关 + Agent 中间层
 
-`llm_server/` 为系统提供「可部署的本地大模型后端」。**也可直接采用 LM Studio / Ollama 等任意
-OpenAI 兼容服务作为 LLM 后端**（本地开发更简单，无需下载 GGUF 权重），见 `deployment.md` §2.6.1。
-默认包含两类模型：
+`llm_server/` 为系统提供「LLM 中间层」。**v2 起不再托管/内置任何模型**：
+模型推理统一由宿主机 **LM Studio**（默认 `http://localhost:11223/v1`，模型
+`google/gemma-4-12b-qat`）提供。本服务在其之上实现：
 
-- **文本模型 `qwen3.6-9B`**：承担听/问/切/辨证/安全/施治等纯文本能力。
-- **视觉模型 `Qwen3-VL`**：原生多模态，承担望诊（舌象/面象/患处图片）的**图文理解**，
-  **无需 mmproj**。
+1. **prompt 优化** —— 上下文压缩、冗余合并、预算裁剪；
+2. **tool calling** —— 工具注册表与执行循环；
+3. **MCP** —— 以 MCP Client 接入外部 MCP Server，将其工具纳入 agent；
+4. **agent** —— ReAct 风格多步工具调用循环。
 
-两类模型分别由 `llm_server`（文本）与 `llm_vision`（视觉）两个服务承载，均暴露
-**OpenAI 兼容 API**，与 `backend/app/protocol/llm.py` 的 `OpenAICompatProvider` 对接，
-由 backend 按模型名自动路由到对应端点。
-
-> `OpenAICompatProvider` 同时支持两种调用协议，由 `llm.api`（或环境变量 `TCM_LLM_API`）切换：
-> - `responses`（默认）：LM Studio 的 **Responses API**（`/v1/responses`），支持多模态与工具调用。
-> - `chat`：传统 **Chat Completions**（`/v1/chat/completions`）。
-> 本地开发最推荐用 **LM Studio + Responses API**（加载 `google/gemma-4-12b-qat` 等原生多模态模型，
-> 文本与视觉共用同一端点），无需下载 GGUF 权重，见 `deployment.md` §2.6.1。
-
-## 定位
+同时暴露 OpenAI 兼容 API（`/v1/chat/completions`、`/v1/responses`、`/v1/embeddings`），
+与 harness 的 LLM 调用完全兼容（OpenAI 兼容协议），**harness 无需改动**。
 
 ```
-前端 (Taro) ──► backend (FastAPI + Sub-Agents)
-                  │
-                  ├─ 文本端点 TCM_LLM_BASE_URL    ──► llm_server  (qwen3.6-9B)
-                  └─ 视觉端点 TCM_LLM_VISION_BASE_URL ──► llm_vision (Qwen3-VL 原生多模态)
+┌──────────┐   OpenAI 兼容    ┌─────────────────────┐   OpenAI 兼容   ┌──────────────────────┐
+│  harness │ ──────────────▶ │      llm_server     │ ──────────────▶ │  LM Studio :11223    │
+│  (Rust)  │                 │ 网关 + Agent 中间层   │                 │  google/gemma-4-12b  │
+└──────────┘                 │                      │                 └──────────────────────┘
+                             │  · prompt 优化       │
+                             │  · tool calling      │
+                             │  · MCP client        │──────────▶ 外部 MCP Server（可选）
+                             │  · agent 循环         │
+                             └─────────────────────┘
 ```
 
-- 纯文本问诊走 `qwen3.6-9B`（文本端点）。
-- 望诊图片走 `Qwen3-VL`（视觉端点），由 `Qwen3-VL` 原生理解，**不需要 mmproj**。
-- 无权重/无服务时，backend 自动回退到 `MockProvider`，整套系统仍可离线运行（见 `testing.md`）。
+## 快速启动
 
-## 目录内容
+### 前置：宿主机 LM Studio
 
-| 文件 | 作用 |
-|------|------|
-| `Dockerfile` | 基于 `ghcr.io/ggml-org/llama.cpp:server`，内置 `llama-server` |
-| `entrypoint.sh` | 读取环境变量启动模型；`mmproj` 可选（原生多模态模型如 Qwen3-VL 无需它） |
-| `.env.example` | 权重路径、端口、上下文、GPU 层数、API Key 示例 |
-| `README.md` | 本服务的详细部署与 API 说明 |
+1. LM Studio 加载 `google/gemma-4-12b-qat`（多模态，文本/视觉共用）；
+2. Developer → Local Server 开启，默认端口 `11223`；
+3. 记录 Server Settings 中的 API Key（关闭校验则任意非空值）。
 
-## 默认模型
+> **模型事实（单一来源）**：当前默认 `routing.llm.yaml` 中文本与视觉（望诊）**共用同一个
+> `google/gemma-4-12b-qat` 多模态端点**，不单独部署视觉模型。系统仍保留「经
+> `TCM_LLM_VISION_BASE_URL` / `TCM_LLM_VISION_MODEL` 把视觉能力独立部署到专属端点」的
+> 可选能力（非默认）。无上游时
+> llm_server `/healthz` 返回 `degraded`、`/v1/models` 返回 503。
+> harness **无 MockProvider**：LLM 不可用时 `/chat` 会返回错误，只读端点不受影响。
 
-| 项 | 默认值 | 说明 |
-|----|--------|------|
-| 文本模型（llm_server） | `qwen3.6-9B` | GGUF 路径见 `MODEL_PATH`，纯文本，可选挂 mmproj |
-| 视觉模型（llm_vision） | `Qwen3-VL-8B` | GGUF 路径见 `MODEL_PATH`，**原生多模态，无需 mmproj** |
-| 服务端口 | `8000` | OpenAI 兼容 `/v1/chat/completions` |
-
-> `qwen3.6-9B` / `Qwen3-VL-8B` 为项目约定的模型标识，请替换为实际可用的 Qwen GGUF。
-> 视觉模型建议选用 **Qwen3-VL** 系列（原生图文理解）；若使用需投影的文本模型，
-> 可另行挂载 `mmproj`。权重需自行下载，镜像**不含**任何模型文件。
-
-## 准备权重
-
-1. 文本模型：下载 Qwen 的 GGUF 主模型（如 `qwen3.6-9B-Q4_K_M.gguf`）放到 `llm_server/models/`。
-   （可选）若文本模型需图文理解，再下载对应的 `mmproj` 投影文件放到同一目录。
-2. 视觉模型：下载 **Qwen3-VL** 的 GGUF（如 `qwen3-vl-Q4_K_M.gguf`）放到 `llm_server/models/`，
-   设置 `MODEL_PATH` 指向它；Qwen3-VL 内嵌视觉编码器，**无需 mmproj**。
-3. 在 `.env` / compose 环境变量中确认各路径与端点。
-
-## 本地运行（Docker）
+### 本地运行
 
 ```bash
 cd llm_server
-cp .env.example .env          # 按需修改路径/层数
-docker build -t tcm-llm-server .
-docker run --rm -p 8000:8000 --env-file .env -v "$PWD/models:/models" tcm-llm-server
+pip install -r requirements.txt
+python -m app.main        # 监听 0.0.0.0:8000
 ```
 
-## 通过 compose 一键拉起（含 backend）
-
-compose 已下沉到各自目录：`llm_server/docker-compose.yml` 提供模型服务，
-`backend/docker-compose.llm.yml` 提供 backend 接入本地模型的 env 覆盖。
+### Docker 运行
 
 ```bash
-# 1) 先在 llm_server/models 放好权重
-# 2) 在 llm_server/ 启动模型服务（vision profile 同时拉起视觉服务）
-cd llm_server && docker compose --profile vision up --build
-
-# 3) 在 backend/ 用 llm 覆盖文件启动，backend 自动接入两个模型服务
-cd backend && docker compose -f docker-compose.yml -f docker-compose.llm.yml --profile llm up --build
+cd llm_server
+docker compose up --build
+# 宿主机端口 22010 -> 容器 8000；容器经 host.docker.internal 访问宿主机 LM Studio
 ```
 
-backend 在该配置下会自动设置：
-`TCM_LLM_BASE_URL=http://llm_server:8000/v1`、`TCM_LLM_TEXT_MODEL=qwen3.6-9B`、
-`TCM_LLM_VISION_MODEL=Qwen3-VL-8B`、`TCM_LLM_VISION_BASE_URL=http://llm_vision:8000/v1`、
-`TCM_ROUTING_FILE=/app/routing.llm.yaml`（启用各 Sub-Agent 的 LLM 实现）。
-需把两个目录的容器加入同一 docker 网络，backend 才能解析 `llm_server` / `llm_vision`。
+### harness 接入
 
-## API 速览
+| 场景 | `HARNESS_LLM_BASE_URL` |
+|---|---|
+| 经 llm_server 网关（本服务） | `http://localhost:8000/v1`（本地）／ `http://llm_server:8000/v1`（Docker 同网络） |
+| 直连 LM Studio（无需中间层，默认值） | `http://localhost:11223/v1` |
 
-| 端点 | 用途 |
-|------|------|
-| `GET  /health` | 服务存活（llama.cpp 自带） |
-| `POST /v1/chat/completions` | OpenAI 兼容对话（支持 `tools` 与 `images` 多模态） |
-| `POST /completion` | llama.cpp 原生补全 |
+配置方式：`resources/config.yaml` 的 `llm_base_url`，或环境变量 `HARNESS_LLM_BASE_URL`
+（前缀是 `HARNESS_`，不是 `TCM_`）。模型用 `HARNESS_MODEL`，默认
+`google/gemma-4-12b-qat`；视觉与文本共用同一端点。
 
-多模态（舌象）请求示例：
+## API 一览
+
+| 端点 | 说明 |
+|---|---|
+| `GET /healthz` | 健康检查（含 LM Studio 连通性、工具数量） |
+| `GET /v1/models` | 透传 LM Studio 模型列表 |
+| `POST /v1/chat/completions` | OpenAI chat 兼容；带 `x-tcm-agent: 1` 或 `"agent": true` 时走网关内 agent 循环 |
+| `POST /v1/responses` | 透传 LM Studio Responses API |
+| `POST /v1/embeddings` | 透传 LM Studio（供 RAG 复用 embedding 模型） |
+| `POST /v1/agent/run` | 完整 Agent 接口（prompt 优化 + MCP 工具 + tool calling 循环） |
+| `GET /v1/agent/tools` | 查看当前可用工具（内置 + MCP） |
+
+### Agent 接口示例
+
+```json
+POST /v1/agent/run
+{
+  "messages": [
+    {"role": "system", "content": "你是中医助手，可调用工具获取信息。"},
+    {"role": "user", "content": "现在几点？并算一下 123*45。"}
+  ]
+}
+```
+
+返回 `content`（最终答案）+ `trace`（每轮工具调用记录）+ `usage`（token 汇总）。
+
+## 四个核心模块
+
+| 模块 | 路径 | 说明 |
+|---|---|---|
+| prompt 优化 | `app/prompt/optimizer.py` | system 注入、相邻消息合并、超长截断、预算裁剪 |
+| tool calling | `app/tools/` | `ToolRegistry` 统一管理 schema + handler；内置工具见 `builtin.py` |
+| MCP | `app/mcp/` | 极简 Streamable HTTP Client（`initialize`/`tools/list`/`tools/call`），`MCP_CLIENTS` 声明外部 server |
+| agent | `app/agent/loop.py` | ReAct 循环：调用模型 → 执行工具 → 回填结果 → 直到纯文本或达上限 |
+
+### 接入 MCP Server
 
 ```bash
-curl http://127.0.0.1:8000/v1/chat/completions \
-  -H "Content-Type: application/json" -H "Authorization: Bearer sk-noauth" \
-  -d '{"model":"Qwen3-VL-8B",
-       "messages":[{"role":"user","content":[
-         {"type":"text","text":"描述舌象"},
-         {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,...."}}]}]}'
+$env:MCP_CLIENTS = '[{"name":"kb","url":"http://127.0.0.1:9000/mcp","headers":{"Authorization":"Bearer sk-xxx"}}]'
 ```
 
-## 调参
+工具以 `{name}_{tool}` 命名注入 agent 工具集；单个 server 连接失败不影响启动。
 
-- `GPU_LAYERS`：CPU 填 `0`；有 CUDA 请将 `Dockerfile` 的 `FROM` 改为
-  `ghcr.io/ggml-org/llama.cpp:server-cuda` 并把该项设为 `20~35` 以显存卸载加速。
-- `CTX_SIZE`：上下文窗口，望诊多图时可适当调大。
+## 配置项
 
-详见 [`sub_agents.md`](./sub_agents.md)（各 Sub-Agent 如何调用本服务）与
-[`skills.md`](./skills.md)（tcm-vision 等技能）。
+见 `llm_server/.env.example`。核心项：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `LMSTUDIO_BASE_URL` | `http://localhost:11223/v1` | LM Studio 端点（Docker 内用 `host.docker.internal`） |
+| `LMSTUDIO_API_KEY` | `sk-noauth` | LM Studio API Key |
+| `DEFAULT_MODEL` | `google/gemma-4-12b-qat` | 默认模型 id |
+| `LLM_HOST` / `LLM_PORT` | `0.0.0.0` / `8000` | 监听地址 |
+| `ENABLE_PROMPT_OPTIMIZE` | `true` | prompt 优化开关 |
+| `AGENT_MAX_ROUNDS` | `8` | agent 最大轮数 |
+| `ENABLE_MCP` / `MCP_CLIENTS` | `true` / `[]` | MCP 开关与客户端列表 |
+
+## RAG（可选独立组件）
+
+`llm_server/rag/` 保留为**可选独立组件**，不再随主服务自动启动。需要 RAG 时单独运行：
+
+```bash
+cd llm_server/rag
+pip install numpy fastapi httpx
+$env:RAG_EMBED_BASE_URL = "http://localhost:8000/v1"   # 走网关 /v1/embeddings 透传 LM Studio
+python -m rag serve
+```
+
+> 前提：LM Studio 需额外加载一个 embedding 模型（如 `bge-m3`）以提供 `/v1/embeddings`；
+> 图像 caption 需多模态模型（gemma-4-12b-qat 支持）。详见 [`rag.md`](./rag.md)。
+
+## 常见问题
+
+- **`/healthz` 显示 `degraded`**：LM Studio 未启动或未加载模型，业务请求返回 503；
+  此时 harness 的 `/chat` 会返回错误（无 MockProvider 兜底），只读端点仍可用。
+- **503 `upstream_unavailable`**：上游不可达时的统一错误码。
+- **流式（`stream: true`）**：网关暂不转发流式；harness 默认非流式调用，不受影响。
+- **prompt 优化是否影响响应质量**：只做无损/低损压缩（合并/截断/裁剪最旧历史），
+  可用 `ENABLE_PROMPT_OPTIMIZE=false` 关闭。

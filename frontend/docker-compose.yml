@@ -1,15 +1,18 @@
-# 前端服务（独立的 docker compose，不依赖仓库根编排）。
+# 前端构建产物镜像（不含 nginx，仅产出 /dist 静态文件，见 frontend/Dockerfile）。
 #
-# 启动：docker compose up --build （默认映射 8080:80）
+# 注意：本 compose 仅用于构建前端静态产物镜像（tcm-frontend:local），镜像内不运行
+# 任何 web 服务器。静态托管与 /api、/uploads 反代统一由 deploy/ 的 nginx 完成
+# （见 deploy/nginx/frontend.conf + deploy/docker-compose.yml）。
 #
-# 前端经 nginx 反代 /api -> backend:8000，需 backend 可达：
-#   另在 backend/ 启动并加入同一 docker 网络，或将 frontend/nginx.conf 的
-#   upstream 改为宿主可达地址（如 host.docker.internal:8000）。
+# 生产部署：
+#   1) 在 frontend/ 执行 `npm run build:h5` 产出 dist/
+#   2) docker compose -f deploy/docker-compose.yml up -d --build
+#      （deploy 的 nginx 直接 bind mount ../frontend/dist 托管，无需本镜像）
+#
+# 仅构建镜像：docker compose build
 
 services:
   frontend:
     build: .
     image: tcm-frontend:local
-    ports:
-      - "8080:80"
-    restart: unless-stopped
+

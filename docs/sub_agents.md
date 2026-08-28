@@ -1,12 +1,19 @@
 # Sub-Agent 设计：职责、System Prompt 与技能
 
-本文档说明各 Sub-Agent 的角色边界、面向 **qwen3.6-9B（文本）/ Qwen3-VL（视觉）** 设计的 system prompt，
-以及每个 agent 可调用的 **skill（工具）**。所有 LLM 实现均位于 `backend/app/agents/`，
-system prompt 集中在 `backend/app/agents/prompts.py`，技能映射见 `backend/app/agents/skills_map.py`。
+本文档说明各 Sub-Agent 的角色边界、面向 **`google/gemma-4-12b-qat`（文本+视觉共用，原生多模态）** 设计的 system prompt，
+以及每个 agent 可调用的 **skill（工具）**。
 
-> 关键约束：默认（`routing.yaml`）各能力走 **rule** 实现，保证离线可用与测试稳定；
-> 启用 `routing.llm.yaml`（配合 `llm_server`）后切换为 **llm** 实现。无论哪种实现，
-> 无模型可用时 LLM 路径都会**优雅降级**为 rule/mock，不会使问诊中断。
+后端已由 Python（原 `backend/`，归档于 `_useless/backend/`）重写为 Rust **harness**：
+- 各 agent 实现：`server/harness/src/agents/*.rs`（`inspection.rs`、`listening.rs`、
+  `inquiry.rs`、`palpation.rs`、`differentiation.rs`、`safety.rs`、`treatment.rs`）
+- system prompt：`server/harness/resources/prompts.yaml`（**可改，中文维护**）
+- 技能映射：`server/harness/src/skills/builtin.rs`（内置注册 9 个技能）
+- 流程顺序：`server/harness/resources/routing.yaml`
+
+> 关键约束：harness 中各 agent 统一走 **LLM** 实现（无 rule/mock 切换开关），
+> 因此 `/chat` 需要真实 LLM（LM Studio 或 llm_server 网关）。
+> 确定性逻辑（关键词证据匹配、证候推断、配伍禁忌、方剂调护检索）不依赖 LLM，
+> 由 `cargo test -p harness --test cases` 覆盖。
 
 ## 总览
 
@@ -27,7 +34,7 @@ system prompt 集中在 `backend/app/agents/prompts.py`，技能映射见 `backe
 
 ### 望诊 `diagnosis.inspection`
 - **职责**：解读用户上传的舌象/面象/患处图片。
-- **与模型关系**：唯一走 `llm_vision` 的能力；图片由独立的 **Qwen3-VL** 视觉服务（原生多模态）理解，无需 mmproj。
+- **与模型关系**：唯一走 `llm_vision` 的能力；图片由 **`google/gemma-4-12b-qat`** 原生多模态端点理解（文本+视觉共用同一模型，无独立视觉服务），无需 mmproj。
 - **System Prompt 要点**：仅描述可见事实（舌体/舌苔/舌态/面色/神/患处），不做诊断结论；
   输出契约 `{findings:[{part,value,confidence}], summary}`。
 - **技能 `tcm-vision`**：模型可调用 `analyze_tongue_image(path)` / `analyze_face_image(path)`，
@@ -83,12 +90,22 @@ system prompt 集中在 `backend/app/agents/prompts.py`，技能映射见 `backe
 - **技能 `tcm-rag`**：`rag_text_retrieve` / `rag_paired_retrieve` 可检索治法/方剂出处或相关病例，
   进一步支撑方案生成。
 
-## 如何切换实现
+## 如何调整诊断流程
 
-编辑 `backend/app/routing.yaml`（或 `routing.llm.yaml`）中每个能力的 `impl`：
-- `rule`：规则/关键词实现，离线可用，确定性最强。
-- `llm`：调用 `qwen3.6-9B` 的文本实现（`diagnosis.listening/inquiry/palpation/differentiation/safety/treatment.plan`）。
-- `llm_vision`：调用 `Qwen3-VL` 原生多模态视觉实现（`diagnosis.inspection`，独立视觉端点）。
+编辑 `server/harness/resources/routing.yaml` 的 `active` 列表，即可增删诊断步骤
+（删除某行即跳过该能力）：
 
-启用全部 LLM 实现的最简方式：用 `TCM_ROUTING_FILE` 指向 `routing.llm.yaml`
-（compose 的 `llm` profile 已为你设好）。
+```yaml
+active:
+  - inspection        # 望诊（多模态，与文本共用 google/gemma-4-12b-qat）
+  - listening         # 闻诊
+  - inquiry           # 问诊
+  - palpation         # 切诊
+  - differentiation   # 辨证
+  - safety            # 安全门
+  - treatment         # 治疗
+default: inspection
+```
+
+改完调用 `POST /reload` 生效（需 `resources/config.yaml` 中 `hot_reload: true`），
+或重启 harness。

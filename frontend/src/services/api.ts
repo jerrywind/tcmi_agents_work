@@ -57,13 +57,13 @@ export function uploadImage(cid: string, type: 'tongue' | 'face' | 'lesion' | 'p
   })
 }
 
-export function startConsultation(cid: string): Promise<ConsultState> {
-  return request('POST', `/api/consultations/${cid}/start`)
+export function startConsultation(cid: string, sync = true): Promise<ConsultState> {
+  return request('POST', `/api/consultations/${cid}/start?sync=${sync}`)
 }
 
 export function answerQuestion(cid: string, questionId: string, value: string,
-  text: string = ''): Promise<ConsultState> {
-  return request('POST', `/api/consultations/${cid}/answer`,
+  text: string = '', sync = true): Promise<ConsultState> {
+  return request('POST', `/api/consultations/${cid}/answer?sync=${sync}`,
     { question_id: questionId, value, text })
 }
 

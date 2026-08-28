@@ -1,0 +1,99 @@
+# 证候库（可改）
+# 每条证候：slug(英文索引) / name(中文名) / meridian(脏腑经络) /
+#           symptoms(典型症状) / tongue(舌象) / pulse(脉象) / pathogenesis(病机)
+# slug 被 keywords.yaml / formulas.yaml / care.yaml 引用，请勿随意改动已引用的 slug。
+
+- slug: wind_cold_attack_lung
+  name: 风寒感冒
+  meridian: 肺
+  symptoms:
+    - 恶寒重发热轻
+    - 无汗
+    - 头痛
+    - 身痛
+    - 鼻塞
+    - 流清涕
+    - 咳嗽
+    - 痰白稀
+    - 咽痒
+  tongue: 舌淡红，苔薄白
+  pulse: 脉浮紧
+  pathogenesis: 风寒外束，肺卫不宣
+
+- slug: wind_heat_attack_lung
+  name: 风热犯肺证
+  meridian: 肺
+  symptoms:
+    - 发热
+    - 微恶风
+    - 有汗
+    - 咽痛
+    - 鼻塞
+    - 流黄涕
+    - 咳嗽
+    - 痰黄稠
+    - 口渴
+  tongue: 舌尖红，苔薄黄
+  pulse: 脉浮数
+  pathogenesis: 风热犯表，肺失清肃
+
+- slug: dampness_encumbering_spleen
+  name: 脾虚湿困证
+  meridian: 脾
+  symptoms:
+    - 脘腹胀满
+    - 纳呆
+    - 便溏
+    - 肢体困重
+    - 乏力
+    - 面色萎黄
+  tongue: 舌淡胖，边有齿痕，苔白腻
+  pulse: 脉濡缓
+  pathogenesis: 脾虚运化失司，湿浊内停
+
+- slug: liver_qi_stagnation
+  name: 肝郁气滞
+  meridian: 肝
+  symptoms:
+    - 情志抑郁
+    - 胸胁胀闷
+    - 善太息
+    - 烦躁易怒
+    - 月经不调
+    - 纳差
+    - 乳房胀痛
+  tongue: 舌淡红，苔薄白
+  pulse: 脉弦
+  pathogenesis: 肝失疏泄，气机郁滞
+
+- slug: qi_and_yin_deficiency
+  name: 气阴两虚证
+  meridian: 心肺脾
+  symptoms:
+    - 神疲乏力
+    - 气短
+    - 口干
+    - 自汗
+    - 盗汗
+    - 心悸
+    - 失眠
+  tongue: 舌红少苔
+  pulse: 脉细弱
+  pathogenesis: 久病气阴耗伤
+
+- slug: spleen_stomach_damp_heat
+  name: 脾胃湿热
+  meridian: 脾胃
+  symptoms:
+    - 口苦
+    - 口臭
+    - 脘腹胀满
+    - 食欲不振
+    - 肢体困重
+    - 大便溏黏
+    - 粘滞不爽
+    - 恶心呕吐
+    - 小便黄
+  tongue: 舌红，苔黄腻
+  pulse: 脉滑数
+  pathogenesis: 湿热蕴结中焦，脾胃升降失常

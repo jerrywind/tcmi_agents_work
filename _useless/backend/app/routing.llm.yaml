@@ -1,0 +1,53 @@
+# =============================================================
+# LLM 路由配置（启用 llm_server 网关或直连 LM Studio 时使用）
+# 通过 TCM_ROUTING_FILE 指向本文件即可切换：各 Sub-Agent 改用 LLM 实现。
+# - 文本类能力（听/问/切/辨证/安全/施治）走 text-default
+# - 视觉类能力（望诊图像）走 vision-default（gemma-4-12b-qat 原生多模态，文本/视觉共用端点）
+# base_url 留空，由环境变量 TCM_LLM_BASE_URL 注入：
+#   直连模式：http://localhost:11223/v1 （LM Studio）
+#   网关模式：http://localhost:8000/v1   （llm_server 网关，含 prompt 优化/tool calling/MCP/agent）
+# 无模型可用时，所有 LLM 实现会自动降级为 rule/mock，保证系统可用。
+# =============================================================
+routing:
+  diagnosis.inspection:        # 望诊（舌象/面相/患处图像，走 gemma-4-12b-qat 原生多模态图文理解）
+    impl: llm_vision
+    model: vision-default
+    options: {}
+  diagnosis.listening:         # 闻诊（文本中的声/味线索，语义抽取）
+    impl: llm
+    model: text-default
+  diagnosis.inquiry:           # 问诊（下一个最优问题）
+    impl: llm
+    model: text-default
+    options:
+      max_options: 6
+  diagnosis.palpation:         # 切诊（脉率/自述脉感语义化）
+    impl: llm
+    model: text-default
+  diagnosis.differentiation:   # 辨证（候选证候+置信度，结合 tcm-reference 技能）
+    impl: llm
+    model: text-default
+  diagnosis.safety:            # 安全（语义识别红旗症状，叠加 rule 兜底）
+    impl: llm
+    model: text-default
+  treatment.plan:              # 诊疗方案（开方/针灸/西医检查/调护，结合 tcm-kb 技能）
+    impl: llm
+    model: text-default
+    options:
+      max_questions: 2
+
+llm:
+  base_url: ""                 # 文本端点，由 TCM_LLM_BASE_URL 注入（LM Studio: http://localhost:11223/v1）
+  api: responses              # 使用 LM Studio Responses API (/v1/responses)；如需 Chat Completions 改为 chat
+  api_key_env: TCM_LLM_API_KEY
+  timeout: 120                # 本地模型推理较慢，放宽超时
+  models:
+    text-default: google/gemma-4-12b-qat          # 文本+视觉统一模型（LM Studio）
+    vision-default: google/gemma-4-12b-qat        # 望诊视觉复用同一多模态模型
+
+loop:
+  max_rounds: 8
+  single_conf: 0.55
+  single_gap: 0.15
+  dual_conf: 0.42
+  min_evidences: 5

@@ -1,0 +1,21 @@
+# 当前激活的诊断流程顺序（可改）
+# 按顺序依次调用各 sub-agent；删除某行即跳过该步骤。
+# slug 含义：
+#   inspection     望诊
+#   listening      闻诊
+#   inquiry        问诊
+#   palpation      切诊
+#   differentiation 辨证
+#   safety         安全门
+#   treatment      治疗
+active:
+  - inspection
+  - listening
+  - inquiry
+  - palpation
+  - differentiation
+  - safety
+  - treatment
+
+# 默认入口（前端直接发起诊断时的起点）
+default: inspection

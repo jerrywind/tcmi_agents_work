@@ -10,15 +10,20 @@ Sub-Agent 零改动**。
 
 每个诊断子项是一个 capability，采用命名空间字符串：
 
-| Capability | 子项 | 产出 |
-|---|---|---|
-| `diagnosis.inspection` | 望诊 | 舌象/面色/患处证据 |
-| `diagnosis.listening` | 闻诊 | 声/味/文本线索证据 |
-| `diagnosis.inquiry` | 问诊 | 下一个最优问题 |
-| `diagnosis.palpation` | 切诊 | 脉率证据（低置信度） |
-| `diagnosis.differentiation` | 辨证 | 候选证候 + 置信度 + 证据链 |
-| `diagnosis.safety` | 安全 | 红旗告警 |
-| `treatment.plan` | 诊疗方案 | 多模态方案 `plans`（开方/针灸/西医检查/调护）+ 个性化追问 `question` |
+| Capability（协议层） | harness slug | 子项 | 产出 |
+|---|---|---|---|
+| `diagnosis.inspection` | `inspection` | 望诊 | 舌象/面色/患处证据 |
+| `diagnosis.listening` | `listening` | 闻诊 | 声/味/文本线索证据 |
+| `diagnosis.inquiry` | `inquiry` | 问诊 | 下一个最优问题 |
+| `diagnosis.palpation` | `palpation` | 切诊 | 脉率证据（低置信度） |
+| `diagnosis.differentiation` | `differentiation` | 辨证 | 候选证候 + 置信度 + 证据链 |
+| `diagnosis.safety` | `safety` | 安全 | 红旗告警 |
+| `treatment.plan` | `treatment` | 诊疗方案 | 多模态方案（开方/针灸/西医检查/调护）+ 个性化追问 |
+
+> **命名映射**：本协议的 capability 为带命名空间的形式（`diagnosis.*` / `treatment.plan`）；
+> harness（Rust）的 `Capability` 枚举序列化为**无前缀 slug**（`inspection`、`treatment` 等），
+> 用于 `resources/routing.yaml`、`POST /agents` 的 `capability` 字段与 rrserver 协议帧。
+> 二者一一对应，见 `server/harness/src/model.rs` 的 `Capability::from_slug`。
 
 > `treatment.plan` 在辨证完成后触发：可先就"煎药便利性/是否接受外治/是否愿做西医检查/
 > 是否孕期备孕"追问 1~2 条，再产出以"更快、更彻底痊愈"为目标的综合方案，不限于开中药，
@@ -72,7 +77,7 @@ routing:
     model: vision-default   # 逻辑模型名
 llm:
   models:
-    vision-default: gpt-4o  # 逻辑名 -> 实际模型，换模型只改这里
+    vision-default: google/gemma-4-12b-qat  # 逻辑名 -> 实际模型，换模型只改这里
 ```
 
 解析链：`resolve(capability)` → 查路由 → 注册表取实现 → 实现缺失自动降级 `rule`。

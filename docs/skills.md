@@ -17,7 +17,7 @@ app/skills/
 │   └── __init__.py
 ├── tcm-reference/       # 内置技能：证候典型表现检索（辨证调用）
 │   └── __init__.py
-├── tcm-vision/          # 内置技能：望诊图文理解（Qwen3-VL，望诊调用）
+├── tcm-vision/          # 内置技能：望诊图文理解（google/gemma-4-12b-qat 多模态，望诊调用）
 │   └── __init__.py
 ├── tcm-diet/            # 内置技能：辨证食疗/膳食调护（施治调用）
 │   └── __init__.py
@@ -103,14 +103,14 @@ HANDLERS = {"lookup_xxx": lookup_xxx}
 「辨证」LLM 在 `diagnosis.differentiation` 能力下运行时会自动获得该工具，可查询某证候
 （如 `肝郁脾虚`、`脾胃湿热`）的典型表现以校验候选证候与支撑证据，减少臆造。
 
-### 3.2 内置技能 `tcm-vision`（望诊调用，依赖 Qwen3-VL 视觉模型）
+### 3.2 内置技能 `tcm-vision`（望诊调用，依赖 `google/gemma-4-12b-qat` 多模态端点）
 
 | 工具 | 能力 | 说明 |
 |---|---|---|
 | `analyze_tongue_image` | `diagnosis.inspection` | 分析舌象图片，返回舌体/舌苔/舌态客观观察 |
 | `analyze_face_image` | `diagnosis.inspection` | 分析面象/神色图片，返回面色/神色客观观察 |
 
-该技能依赖独立的 **Qwen3-VL** 视觉服务（原生多模态，无需 mmproj）：处理函数把图片以 data-URL
+该技能走 **`google/gemma-4-12b-qat`** 原生多模态端点（文本+视觉共用同一模型，无独立视觉服务，无需 mmproj）：处理函数把图片以 data-URL
 形式发送到视觉端点并取回描述文字。「望诊」LLM（`llm_vision`）在推理时可决定对哪张图片调用
 `analyze_tongue_image` / `analyze_face_image`，再综合成结构化望诊结论。无视觉模型时
 处理函数返回错误标记，由望诊 Agent 降级为 `skip`。详见 [`llm_server.md`](./llm_server.md)。
@@ -170,18 +170,19 @@ HANDLERS = {"lookup_xxx": lookup_xxx}
 多模态中医知识库。通过 `TCM_RAG_BASE_URL` 配置服务地址；**服务不可用时工具优雅降级**
 （`ok=false`、空结果），不阻断诊疗流程。
 
-## 4. 装载方式（两者都支持）
+## 4. 装载方式
 
-### 4.1 启动自动发现
-应用导入 `app.main` 时执行 `discover_skills(SKILLS_DIR)`，扫描 `skills/` 目录下的
-所有技能包/模块并注册。技能目录默认 `backend/app/skills`，可用环境变量覆盖：
+> **harness（Rust）为内置注册**：9 个技能在 `server/harness/src/skills/builtin.rs` 中
+> 于启动时注册到 `SkillRegistry`，**不支持**原 backend 的目录扫描发现与运行时热装载/卸载。
+> 新增技能需修改 `builtin.rs` 后重新构建（`cargo build -p harness`）。
+> 扩展知识库的推荐方式是改 `resources/*.yaml`，或用 `HARNESS_RAG_ENDPOINT` 接入自有 RAG。
 
-```bash
-export TCM_SKILLS_DIR=/path/to/your/skills
-```
+### 4.1 启动注册
+harness 启动时把内置技能注册进全局注册表，四诊/辨证/安全门各自绑定专属技能
+（其余为全局可用）。查询当前技能：`GET /skills`。
 
-### 4.2 运行时热装载 / 卸载（API）
-无需重启即可增删技能：
+### 4.2 运行时热装载 / 卸载（原 backend 行为，harness 已移除）
+原 backend 支持无需重启增删技能：
 
 ```bash
 # 列出当前已装载技能与工具
@@ -246,18 +247,20 @@ DELETE /api/mcp/clients/weather
 
 > 工具执行异常会被捕获并作为 `{"error": ...}` 回填，不会击穿整个流程。
 
-## 6. 编写你自己的技能
+## 6. 编写你自己的技能（harness）
 
-1. 在 `backend/app/skills/` 下新建目录（或 `.py` 文件），如 `my-skill/__init__.py`；
-2. 按第 2 节契约定义 `SKILL` 与 `HANDLERS`；
-3. 重启服务（自动发现）或 `POST /api/skills/load {"name": "my-skill"}` 热装载；
-4. 在 Prompt 中（或依赖 `capability` 过滤）让 LLM 知道何时调用你的工具。
+1. 在 `server/harness/src/skills/builtin.rs` 中用 `reg.register(Skill::new(...))` 注册，
+   指定 `name`、`description`、`owner`（`Some(Capability::Inquiry)` 表示专属某 agent，
+   `None` 表示全局）；
+2. 实现异步执行体 `SkillFn`（返回 `serde_json::Value`）；
+3. `cargo build -p harness` 后重启服务，`GET /skills` 可见新技能。
+
+> 若只是补充中医知识（方剂、食疗、调护、证候），**无需写代码**，
+> 直接改 `resources/*.yaml` 即可。
 
 ## 7. 测试
 
-- `tests/test_skills.py`：清单/工具注册、`tools_for` 能力过滤、同步/异步执行、卸载、
-  目录发现、错误分支（清单缺失 / 缺 handler / 按名装载）。
-- `tests/test_skill_api.py`：列表、热装载、热卸载、错误分支（缺参数 400 / 未知 404）。
-- `tests/test_llm_agents.py`：扩展 `OpenAICompatProvider.chat` 的工具调用路径，
-  以及 `run_tool_loop` 的多种分支（无工具回退 / 执行工具 / 空工具调用 / 轮次耗尽 /
-  工具模式下直接返回文本）。
+- `cd server && cargo test -p harness`：技能注册、能力过滤（`owner`）、同步执行与错误分支。
+- 手工验证：`GET /skills` 列出技能；`POST /skills {"name":"tcm-kb","arguments":{...}}` 执行。
+- 案例回归 `cargo test -p harness --test cases` 会校验 `tcm-kb` / `tcm-diet` 等
+  依赖的资源数据完整性。

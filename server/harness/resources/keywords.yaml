@@ -1,0 +1,40 @@
+# 关键词证据映射（可改）
+# 每条：slug(英文索引) / label(中文标签) / keywords(触发关键词) /
+#       syndromes(指向的证候 slug) / note(说明)
+# 四诊 agent 命中关键词即叠加证据，辨证 agent 据此初筛证候。
+
+- slug: wind_cold
+  label: 风寒证据
+  keywords: ["恶寒", "恶寒重发热轻", "无汗", "清涕", "白痰", "身痛", "头痛", "浮紧", "流清涕", "鼻塞"]
+  syndromes: ["wind_cold_attack_lung"]
+  note: 风寒表实之象
+
+- slug: wind_heat
+  label: 风热证据
+  keywords: ["咽痛", "黄涕", "黄痰", "口渴", "恶风", "浮数"]
+  syndromes: ["wind_heat_attack_lung"]
+  note: 风热表热之象
+
+- slug: damp_spleen
+  label: 脾虚湿困证据
+  keywords: ["便溏", "纳呆", "腹胀", "肢困", "乏力", "齿痕", "腻苔"]
+  syndromes: ["dampness_encumbering_spleen"]
+  note: 脾虚生湿
+
+- slug: spleen_stomach_damp_heat
+  label: 脾胃湿热证据
+  keywords: ["口苦", "口臭", "粘滞不爽", "肢体困重", "食欲不振", "脘腹胀满", "大便溏黏", "恶心呕吐", "小便黄", "黄腻苔"]
+  syndromes: ["spleen_stomach_damp_heat"]
+  note: 湿热蕴结中焦
+
+- slug: liver_stagnation
+  label: 肝郁气滞证据
+  keywords: ["抑郁", "情志抑郁", "胁痛", "胸胁胀闷", "胸胁胀痛", "太息", "善太息", "烦躁易怒", "月经不调", "乳房胀痛", "脉弦"]
+  syndromes: ["liver_qi_stagnation"]
+  note: 肝失疏泄
+
+- slug: qi_yin_def
+  label: 气阴两虚证据
+  keywords: ["乏力", "气短", "盗汗", "口干", "心悸", "少苔", "脉细"]
+  syndromes: ["qi_and_yin_deficiency"]
+  note: 气阴耗伤

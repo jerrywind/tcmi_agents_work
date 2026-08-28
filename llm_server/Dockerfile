@@ -1,37 +1,31 @@
-# llm_server：基于 llama.cpp 的可部署模型服务（OpenAI 兼容 API）
+# llm_server v2 —— LM Studio 网关 + Agent 中间层（纯 Python，无需模型权重）
 #
-# 默认模型：qwen3.6-9B（文本）/ Qwen3-VL（视觉，原生多模态，无需 mmproj）。
-# 镜像内置 llama.cpp 的 `llama-server`，并通过 entrypoint.sh 读取环境变量启动。
+# 模型推理全部由宿主机 LM Studio 提供；本镜像仅承载
+# prompt 优化 / tool calling / MCP / agent 逻辑。
 #
-# 同一镜像还内置 Python 3 RAG 服务（见 rag/）：复用本服务的 Embedding 与 Qwen3-VL
-# 端点，提供文本 RAG / 图像 RAG / 图文对应 RAG。
-#
-# 变体：
-#   - 默认（本 Dockerfile）：CPU 构建，可在任意机器运行（速度受限）。
-#   - GPU（CUDA）：将 FROM 改为 ghcr.io/ggml-org/llama.cpp:server-cuda 即可启用 --n-gpu-layers。
-FROM ghcr.io/ggml-org/llama.cpp:server
+# 注意：容器内访问宿主机 LM Studio 需使用 host.docker.internal
+# （compose 已通过 extra_hosts 注入），或在运行时用 -e LMSTUDIO_BASE_URL 覆盖。
+FROM python:3.11-slim
 
-# ---- Python 3 RAG 依赖 ----
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt /rag-requirements.txt
-RUN python3 -m pip install --no-cache-dir -r /rag-requirements.txt
+WORKDIR /app
 
-ENV MODEL_DIR=/models \
-    MODEL_PATH=/models/qwen3.6-9B.gguf \
-    MMPROJ_PATH=/models/mmproj.gguf \
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+# rag 为可选独立组件（默认不随主服务启动），保留以便单独运行
+COPY rag ./rag
+
+ENV PYTHONUNBUFFERED=1 \
     LLM_HOST=0.0.0.0 \
-    LLM_PORT=8000 \
-    CTX_SIZE=8192 \
-    GPU_LAYERS=0 \
-    API_KEY=sk-noauth \
-    RAG_DATA_DIR=/data/rag \
-    RAG_PORT=8080
+    LLM_PORT=8000
 
-COPY entrypoint.sh /entrypoint.sh
-COPY rag /app/rag
-RUN chmod +x /entrypoint.sh
+EXPOSE 8000
 
-EXPOSE 8000 8080
+# 健康检查：本服务存活 + 上游 LM Studio 连通性
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request,sys; \
+  sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).status==200 else 1)" \
+  || exit 1
 
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "-m", "app.main"]

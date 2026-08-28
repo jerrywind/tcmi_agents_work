@@ -1,0 +1,39 @@
+# 红色警戒 / 安全门（可改）
+# 每条：slug(英文索引) / label(中文标签) / keywords(触发关键词) /
+#       advice(给用户的警示文案) / severity(low|medium|high|critical)
+
+- slug: chest_pain
+  label: 胸痛
+  keywords: ["胸痛", "胸闷压榨", "心前区疼痛"]
+  advice: 若出现压榨性胸痛并放射至左臂/下颌，立即拨打急救电话，疑似心绞痛/心梗。
+  severity: critical
+
+- slug: breathless
+  label: 呼吸困难
+  keywords: ["喘憋", "呼吸困难", "气促不能平卧"]
+  advice: 严重呼吸困难可能为心肺急症，请立即就医，不要自行服药。
+  severity: critical
+
+- slug: high_fever
+  label: 高热
+  keywords: ["高热", "39度以上", "持续发热"]
+  advice: 持续高热伴神昏需及时就诊，注意补液，警惕热入营血。
+  severity: high
+
+- slug: blood_stool
+  label: 出血
+  keywords: ["咯血", "便血", "呕血", "黑便"]
+  advice: 任何部位的活动性出血请立即就医，记录出血量与时长。
+  severity: high
+
+- slug: pregnancy
+  label: 妊娠
+  keywords: ["怀孕", "妊娠", "孕期", "备孕"]
+  advice: 妊娠期用药须格外谨慎，多数活血/毒性药禁用，请务必在产科/中医师指导下用药。
+  severity: medium
+
+- slug: unconscious
+  label: 神识异常
+  keywords: ["昏迷", "嗜睡不醒", "抽搐", "谵语"]
+  advice: 神识异常属急症，立即送医，不要延误。
+  severity: critical

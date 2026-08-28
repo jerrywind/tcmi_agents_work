@@ -7,8 +7,12 @@ export default {
     devServer: {
       port: 10086,
       proxy: {
-        '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-        '/uploads': { target: 'http://127.0.0.1:8000', changeOrigin: true }
+        // harness（Rust 后端）监听 8011；其端点无 /api 前缀，故代理时剥离。
+        '/api': {
+          target: 'http://127.0.0.1:8011',
+          changeOrigin: true,
+          pathRewrite: { '^/api': '' }
+        }
       }
     }
   }

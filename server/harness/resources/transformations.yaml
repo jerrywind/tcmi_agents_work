@@ -1,0 +1,21 @@
+# 疾病传变（可改）
+# 每条：slug(英文索引) / from(来源证候 slug) / to(目标证候 slug) /
+#       label(中文描述) / probability(概率/条件说明)
+
+- slug: wc_to_damp
+  from: wind_cold_attack_lung
+  to: dampness_encumbering_spleen
+  label: 风寒久羁，脾阳受损，可转为脾虚湿困
+  probability: 迁延不愈、过用寒凉时
+
+- slug: lq_to_qy
+  from: liver_qi_stagnation
+  to: qi_and_yin_deficiency
+  label: 肝郁化火伤阴，久则气阴两虚
+  probability: 病程较久、情志不遂
+
+- slug: wh_to_qy
+  from: wind_heat_attack_lung
+  to: qi_and_yin_deficiency
+  label: 风热伤津，热退后可见气阴两虚
+  probability: 素体亏虚者

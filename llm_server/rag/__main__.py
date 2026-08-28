@@ -25,7 +25,7 @@ def _serve() -> None:
     import uvicorn
 
     cfg = RAGConfig.from_env()
-    port = int(os.environ.get("RAG_PORT", "8080"))
+    port = int(os.environ.get("RAG_PORT", "9000"))
     app = __import__("fastapi").FastAPI()  # placeholder; replaced below
     from .api import create_app
 

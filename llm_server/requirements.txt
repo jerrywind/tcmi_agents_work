@@ -1,7 +1,6 @@
-# llm_server RAG 服务依赖（Python 3）
-fastapi>=0.110
-uvicorn[standard]>=0.29
+# llm_server 依赖：LM Studio 网关 + Agent 中间层（Python 3.10+）
+fastapi>=0.111
+uvicorn[standard]>=0.30
 httpx>=0.27
+# numpy 仅供可选独立运行的 rag/ 模块使用（嵌入向量）；主服务不需要
 numpy>=1.26
-# 可选：大规模向量近似最近邻加速（缺失时自动回退暴力检索）
-annoy>=1.17

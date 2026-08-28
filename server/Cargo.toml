@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "rrserver",
+    "harness",
+]
+
+# 工作区统一依赖版本，避免各 crate 重复声明
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["ws", "json"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+futures = "0.3"
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+toml = "0.8"
+regex = "1"
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
