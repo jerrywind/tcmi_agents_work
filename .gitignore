@@ -29,3 +29,6 @@ lcov.info
 .vitest/
 install.*
 *.docker-cargo/
+_useless
+.github
+.vscode
