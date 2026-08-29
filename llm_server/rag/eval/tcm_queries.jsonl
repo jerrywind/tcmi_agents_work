@@ -1,0 +1,39 @@
+# 典籍召回评估样例集（T4.3）
+#
+# 每条字段：
+#   query         检索词（模拟 Sub-Agent 调用 tcm-rag 时的提问）
+#   expect_quote  **计分判据**：应当被召回的原文原样字符串（如「半夏泻心汤」）
+#   expect_terms  top-k 里应当覆盖的关键词（衡量上下文是否完整）
+#   expect_books  期望出处（**仅提示，不计分**——同一知识在语料里有多部典籍论述）
+#   note          该知识点的依据，便于后人复核
+#
+# 为什么按「原文字样」而不是「书名」计分：语料 694 部，同一张经方在
+# 《伤寒论》《医宗金鉴》《证治准绳》里都有论述，「该出自哪本」没有唯一答案；
+# 真正要保证的是把能回答问题的那段原文召回来。
+#
+# 新增样例前请确认 quote 在语料中确实存在（`python -m rag corpus-search`）。
+
+{"query": "半夏泻心汤 心下痞 呕而肠鸣", "expect_quote": "半夏泻心汤", "expect_terms": ["半夏", "黄连"], "expect_books": ["伤寒论", "金匮要略"], "note": "《伤寒论》半夏泻心汤主之"}
+{"query": "小柴胡汤 往来寒热 胸胁苦满 嘿嘿不欲饮食", "expect_quote": "小柴胡汤", "expect_terms": ["柴胡", "黄芩"], "expect_books": ["伤寒论"], "note": "《伤寒论》小柴胡汤主之"}
+{"query": "桂枝汤 头痛发热 汗出恶风", "expect_quote": "桂枝汤", "expect_terms": ["桂枝", "芍药"], "expect_books": ["伤寒论"], "note": "《伤寒论》太阳中风"}
+{"query": "麻黄汤 恶寒 无汗 而喘", "expect_quote": "麻黄汤", "expect_terms": ["麻黄", "杏仁"], "expect_books": ["伤寒论"], "note": "《伤寒论》太阳病恶风无汗而喘"}
+{"query": "补中益气汤 黄芪 升麻 柴胡 脾胃气虚", "expect_quote": "补中益气汤", "expect_terms": ["黄芪", "升麻"], "expect_books": ["脾胃论"], "note": "《脾胃论》补中益气汤"}
+{"query": "脾胃虚弱 怠惰嗜卧 四肢不收 泄泻", "expect_quote": "怠惰嗜卧", "expect_terms": ["脾胃"], "expect_books": ["脾胃论", "内外伤辨"], "note": "《脾胃论》脾胃胜衰论"}
+{"query": "六味地黄丸 小儿肾虚 囟门不合", "expect_quote": "地黄丸", "expect_terms": ["地黄"], "expect_books": ["小儿药证直诀"], "note": "《小儿药证直诀》地黄丸"}
+{"query": "逍遥散 肝郁血虚 月经不调", "expect_quote": "逍遥散", "expect_terms": ["柴胡", "当归"], "expect_books": ["太平惠民和剂局方"], "note": "《局方》逍遥散"}
+{"query": "四物汤 当归 川芎 白芍 熟地黄", "expect_quote": "四物汤", "expect_terms": ["当归", "川芎"], "expect_books": ["太平惠民和剂局方"], "note": "《局方》四物汤"}
+{"query": "温邪上受 首先犯肺 逆传心包", "expect_quote": "温邪上受", "expect_terms": ["肺", "心包"], "expect_books": ["温热论"], "note": "叶天士《温热论》开篇"}
+{"query": "卫之后方言气 营之后方言血", "expect_quote": "营之后方言血", "expect_terms": ["营", "血"], "expect_books": ["温热论", "温病条辨"], "note": "《温热论》卫气营血辨证"}
+{"query": "湿温 身热不扬 胸闷 苔腻", "expect_quote": "身热不扬", "expect_terms": ["湿热"], "expect_books": ["湿热病篇", "温病条辨"], "note": "薛生白《湿热病篇》"}
+{"query": "浮脉 举之有余 按之不足", "expect_quote": "浮脉", "expect_terms": ["浮"], "expect_books": ["脉经", "濒湖脉学"], "note": "《濒湖脉学》浮脉体状诗"}
+{"query": "甘草 味甘平 主五脏六腑寒热邪气", "expect_quote": "五脏六腑寒热", "expect_terms": ["甘草"], "expect_books": ["神农本草经"], "note": "《神农本草经》甘草条"}
+{"query": "人参 补五脏 安精神 定魂魄", "expect_quote": "安精神", "expect_terms": ["人参", "五脏"], "expect_books": ["神农本草经"], "note": "《本经》人参条"}
+{"query": "舌红苔黄腻 湿热内蕴", "expect_quote": "黄腻", "expect_terms": ["舌", "苔"], "expect_books": ["伤寒舌鉴", "温病条辨"], "note": "舌诊专著"}
+{"query": "足三里 针灸 主治", "expect_quote": "足三里", "expect_terms": ["三里"], "expect_books": ["针灸大成", "针灸甲乙经"], "note": "针灸典籍足三里穴"}
+{"query": "妊娠禁忌候 孕妇起居饮食宜忌", "expect_quote": "妊娠禁忌", "expect_terms": ["妊娠"], "expect_books": ["诸病源候论", "本草纲目"], "note": "《诸病源候论》卷四十一 妊娠禁忌候"}
+{"query": "十八反 甘草反甘遂", "expect_quote": "甘遂", "expect_terms": ["甘草"], "expect_books": ["本草纲目", "珍珠囊补遗药性赋"], "note": "十八反歌"}
+{"query": "茵陈蒿汤 黄疸 身黄如橘子色", "expect_quote": "茵陈蒿汤", "expect_terms": ["茵陈"], "expect_books": ["伤寒论", "金匮要略"], "note": "《伤寒论》茵陈蒿汤"}
+{"query": "小儿惊风 抽搐 目直视", "expect_quote": "惊风", "expect_terms": ["小儿"], "expect_books": ["小儿药证直诀", "幼幼集成"], "note": "儿科惊风"}
+{"query": "阴阳者 天地之道也 万物之纲纪", "expect_quote": "天地之道", "expect_terms": ["阴阳"], "expect_books": ["黄帝内经素问"], "note": "《素问》阴阳应象大论"}
+{"query": "麻黄 发汗 解表 止咳逆上气", "expect_quote": "麻黄", "expect_terms": ["发汗"], "expect_books": ["神农本草经", "本草纲目"], "note": "《本经》麻黄条"}
+{"query": "当归 主咳逆上气 妇人漏下绝子", "expect_quote": "当归", "expect_terms": ["妇人"], "expect_books": ["神农本草经", "本草纲目"], "note": "《本经》当归条"}

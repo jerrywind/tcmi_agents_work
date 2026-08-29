@@ -69,6 +69,23 @@ pub struct HarnessConfig {
     #[serde(default)]
     pub hot_reload: bool,
 
+    /// 报告持久化目录（T5.1）
+    ///
+    /// `None` 表示不持久化（默认）：harness 保持无状态，`/chat` 不返回 `report_id`。
+    /// 配置后每次 `/chat` 落盘一份报告，`GET /reports/:id` 可回查。
+    #[serde(default)]
+    pub store_dir: Option<PathBuf>,
+
+    /// 落盘前是否脱敏（T5.4）：屏蔽手机号 / 身份证 / 邮箱 / 长数字串
+    ///
+    /// 默认开启。仅在运维明确接受「明文入库」风险时关闭。
+    #[serde(default = "default_true")]
+    pub store_redact: bool,
+
+    /// `GET /reports` 返回条数上限
+    #[serde(default = "default_store_list_limit")]
+    pub store_list_limit: usize,
+
     /// 可选隧道配置：经 rrserver 暴露本服务（None 表示不启用隧道）
     #[serde(default)]
     pub tunnel: Option<TunnelConfig>,
@@ -133,6 +150,9 @@ fn default_retry_backoff_ms() -> u64 {
 fn default_true() -> bool {
     true
 }
+fn default_store_list_limit() -> usize {
+    crate::store::DEFAULT_LIST_LIMIT
+}
 
 impl Default for HarnessConfig {
     fn default() -> Self {
@@ -150,6 +170,9 @@ impl Default for HarnessConfig {
             mcp_clients: Vec::new(),
             hot_reload: false,
             tunnel: None,
+            store_dir: None,
+            store_redact: true,
+            store_list_limit: crate::store::DEFAULT_LIST_LIMIT,
         }
     }
 }
@@ -268,6 +291,17 @@ impl HarnessConfig {
         // MCP server：HARNESS_MCP_CLIENTS="name=kb,url=http://host:9000/mcp;name=...,url=..."
         if let Ok(v) = std::env::var("HARNESS_MCP_CLIENTS") {
             cfg.mcp_clients = parse_mcp_clients(&v);
+        }
+        if let Ok(v) = std::env::var("HARNESS_STORE_DIR") {
+            cfg.store_dir = Some(PathBuf::from(v));
+        }
+        if let Ok(v) = std::env::var("HARNESS_STORE_REDACT") {
+            cfg.store_redact = matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes");
+        }
+        if let Ok(v) = std::env::var("HARNESS_STORE_LIST_LIMIT") {
+            if let Ok(n) = v.parse() {
+                cfg.store_list_limit = n;
+            }
         }
 
         if let Some(l) = &cli.listen {

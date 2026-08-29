@@ -21,7 +21,7 @@
 | 集成 | `server/harness/tests/behavior.rs` | **行为回归**：红旗中断判定、技能归属（含 treatment 专属工具）、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**（均不依赖 LLM） |
 | 评测 | `server/harness/tests/llm_eval.rs` | **LLM 质量评分**（T4.4）：以 `cases.jsonl` 跑真实辨证并自动评分；默认跳过，`HARNESS_EVAL=1` 才启用 |
 
-当前 **后端 125 个用例全绿**（harness 25：behavior 22 + cases 2 + llm_eval 1；rrserver 100）。
+当前 **后端 129 个用例全绿**（harness 29：behavior 26 + cases 2 + llm_eval 1；rrserver 100）。
 | 隧道 | `server/rrserver/tests/integration.rs` | rrserver 端到端：注册鉴权、隧道转发、流式、CORS、断线重连、模型部署包装 |
 
 ```bash
@@ -86,7 +86,7 @@ npx vitest run            # 单测（jsdom）
 - 测试文件：`src/services/harness.test.ts`（契约客户端）、
   `src/services/harness.contract.test.ts`（连真实 harness，不可达自动 skip）、
   `src/utils/format.test.ts`。
-- 当前 **29 个用例全绿**（含 6 条契约：`/health`、`/agents`、`/skills`、
+- 当前 **32 个用例全绿**（含 6 条契约：`/health`、`/agents`、`/skills`、
   `POST /skills` 错误分支 + MCP 的 `tools/list`、`list_agent_capabilities`）。
 
 > 2026-08-29 修复：此前 18 个用例失败，根因是 `vitest.setup.ts` 里的
@@ -95,6 +95,28 @@ npx vitest run            # 单测（jsdom）
 > `TypeError: mockImplementation is not a function`；
 > 同时 `vitest.config.ts` 把后端地址硬编码成已废弃的 `:22000`（旧 Python backend 端口）。
 > 现在 mock 用 `vi.hoisted()` + `vi.fn()` 构造，端口指向 harness 的 `:8011`。
+
+### 2.1 RAG 语料（`llm_server/rag`，T4.3）
+
+```bash
+cd llm_server/rag
+python -m unittest test_corpus -v     # 语料索引（12 条，纯离线）
+python -m unittest test_rag -v        # 检索服务（6 条，含网络降级路径）
+```
+
+- `test_corpus.py` 覆盖：编码探测（**语料是 GB18030**，曾导致「索引建好却搜不到」）、
+  书目元数据剥离、切分合并与硬切、建库/检索往返、同书限流、路径穿越防护、
+  脱敏保留临床数字、评估脚本能否产出指标。
+- 召回质量评估（不是单测，是**跑分**）：
+  ```bash
+  cd llm_server
+  python -m rag corpus-build --dir ../rag_data --db ../rag_data/_index/corpus.sqlite3
+  python -m rag eval --queries rag/eval/tcm_queries.jsonl \
+      --db ../rag_data/_index/corpus.sqlite3 --top-k 5 --top-docs 3
+  ```
+  24 条人工样例，判据是「**原文原样**是否被召回」（不按书名判分——同一张经方在
+  多部典籍里都有论述，「该出自哪本」没有唯一答案）。基线存 `rag/eval/baseline.json`：
+  **hit@5 95.8% / hit@1 95.8% / MRR 0.958 / 关键词覆盖 97.9% / 平均 41ms**。
 
 ---
 
@@ -115,6 +137,19 @@ npx vitest run            # 单测（jsdom）
 网关透传；harness 仅验证只读端点（`/health`、`/agents`、`/skills`）。
 详见 [`e2e.md`](./e2e.md)。
 
+### 3.1 人工验收（T1.5，需真实 LLM）
+
+自动化只证明「链路通」，**结论对不对必须人看**：
+
+```powershell
+cd e2e_tests
+$env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'
+.\run_manual_e2e.ps1 -Case damp-heat     # 或 wind-cold / red-flag
+```
+
+跑完把输入、输出、耗时、工具调用与自动检查结论归档到
+[`docs/samples/<case>/`](../samples/README.md)，供后续改动对照回归。
+
 ---
 
 ## 4. 本地一键
@@ -131,6 +166,12 @@ docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
 
 # 后端镜像（多阶段，镜像内编译）—— 等价于 scripts/build-release.ps1
 pwsh scripts\build-release.ps1
+
+# 前端单测
+cd frontend && npm run test
+
+# RAG 语料单测
+cd llm_server/rag && python -m unittest test_corpus
 ```
 
 > 挂载 `server:/build` 时容器内会重新编译；依赖已由 Cargo 缓存，

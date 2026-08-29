@@ -12,11 +12,13 @@ from typing import Any
 
 try:
     from .config import RAGConfig
+    from .corpus import CorpusIndex
     from .embedders import ImageEmbedder, TextEmbedder
     from .loader import load_directory, load_records
     from .store import Hit, Record, VectorStore
 except ImportError:  # 作为脚本直接运行时退化为绝对导入
     from config import RAGConfig
+    from corpus import CorpusIndex
     from embedders import ImageEmbedder, TextEmbedder
     from loader import load_directory, load_records
     from store import Hit, Record, VectorStore
@@ -28,6 +30,12 @@ class RAGService:
         self.store = VectorStore.load(cfg.index_path())
         self.text_embedder = TextEmbedder(cfg)
         self.image_embedder = ImageEmbedder(cfg, self.text_embedder)
+        self._corpus: CorpusIndex | None = None
+        if cfg.corpus_db and Path(cfg.corpus_db).exists():
+            try:
+                self._corpus = CorpusIndex(cfg.corpus_db)
+            except Exception as e:  # noqa: BLE001 - 索引损坏不应让服务起不来
+                print(f"[warn] 典籍索引不可用，已跳过：{e}")
 
     # ---- 索引构建 / 增量 ----
     async def build_from_corpus(self) -> int:
@@ -76,12 +84,52 @@ class RAGService:
 
     # ---- 检索 ----
     async def retrieve_text(self, query: str, top_k: int | None = None) -> list[dict]:
+        k = top_k or self.cfg.top_k
         vec = await self.text_embedder.embed_one(query)
         hits = self.store.search(vec, modality="text",
-                                 top_k=top_k or self.cfg.top_k,
+                                 top_k=k,
                                  threshold=self.cfg.score_threshold,
                                  query_text=query)
-        return [self._hit_to_dict(h) for h in hits]
+        out = [self._hit_to_dict(h) for h in hits]
+        # 典籍语料补充（T4.3）：向量域没召回满时，用离线索引补齐。
+        # 两者是互补而非替代——向量擅长语义相近，bigram 索引擅长精确用词。
+        if len(out) < k and self._corpus is not None:
+            seen = {h["text"][:40] for h in out}
+            # 语料检索是**同步且读盘**的，放进线程池执行，避免阻塞事件循环
+            corpus_hits = await __import__("asyncio").get_running_loop().run_in_executor(
+                None,
+                lambda: self._corpus.search(
+                    query,
+                    top_k=k,
+                    top_docs=self.cfg.corpus_top_docs,
+                    max_chars=self.cfg.corpus_max_chars,
+                    overlap=self.cfg.corpus_overlap,
+                ),
+            )
+            for ch in corpus_hits:
+                if ch.text[:40] in seen:
+                    continue
+                seen.add(ch.text[:40])
+                out.append({
+                    "id": ch.id,
+                    "score": round(ch.score, 4),
+                    "modality": "text",
+                    "text": ch.text,
+                    "image_path": None,
+                    "image_caption": None,
+                    "meta": {
+                        **ch.meta,
+                        # 出处带上篇名：模型引用时能说清「出自哪一本的哪一篇」
+                        "source": f"《{ch.book}》{ch.meta.get('section', '')}".rstrip(),
+                        "kind": "corpus",
+                    },
+                })
+                if len(out) >= k:
+                    break
+        return out
+
+    def corpus_stats(self) -> dict | None:
+        return self._corpus.stats() if self._corpus else None
 
     async def retrieve_image(self, image_path: str, top_k: int | None = None) -> list[dict]:
         """以图搜图：用查询图 caption 向量检索库内图像向量域。"""

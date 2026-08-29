@@ -1,0 +1,405 @@
+{
+  "top_k": 5,
+  "top_docs": 3,
+  "cases": 24,
+  "hit_at_k": 0.9583,
+  "hit_at_1": 0.9583,
+  "term_coverage": 0.9792,
+  "mrr": 0.9583,
+  "avg_latency_ms": 40.9,
+  "p95_latency_ms": 122.7,
+  "index": {
+    "books": 696,
+    "terms": 196675,
+    "postings": 1817919,
+    "chars": 66188058,
+    "db": "..\\rag_data\\_index\\corpus.sqlite3"
+  },
+  "details": [
+    {
+      "query": "半夏泻心汤 心下痞 呕而肠鸣",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 46.3,
+      "top_sources": [
+        "《类证治裁》集诸名家呕吐哕治法",
+        "《药征》人参",
+        "《药征》黄芩",
+        "《类证治裁》癖瘕诸积论治",
+        "《症因脉治》内伤呃逆"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "小柴胡汤 往来寒热 胸胁苦满 嘿嘿不欲饮食",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 13.0,
+      "top_sources": [
+        "《伤寒审证表》少阳",
+        "《伤寒括要》咳嗽",
+        "《伤寒括要》小柴胡汤",
+        "《伤寒医诀串解》少阳篇",
+        "《伤寒医诀串解》少阳篇"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "桂枝汤 头痛发热 汗出恶风",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 0.5,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 122.7,
+      "top_sources": [
+        "《医宗金鉴》桂枝汤方",
+        "《伤寒证治准绳》可汗",
+        "《证治准绳·伤寒》可汗",
+        "《证治准绳·伤寒》可汗",
+        "《伤寒证治准绳》可汗"
+      ],
+      "missing_terms": [
+        "芍药"
+      ]
+    },
+    {
+      "query": "麻黄汤 恶寒 无汗 而喘",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 211.8,
+      "top_sources": [
+        "《本草纲目》麻黄",
+        "《本草纲目》桂",
+        "《证类本草》雀瓮",
+        "《证类本草》麻黄",
+        "《新修本草》恒山"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "补中益气汤 黄芪 升麻 柴胡 脾胃气虚",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 20.6,
+      "top_sources": [
+        "《医学传心录》",
+        "《医学传心录》",
+        "《症因脉治》内伤痢疾",
+        "《症因脉治》内伤遗尿",
+        "《七十二症辨治方法》"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "脾胃虚弱 怠惰嗜卧 四肢不收 泄泻",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 22.9,
+      "top_sources": [
+        "《内外伤辨》肺之脾胃虚方",
+        "《脾胃论》肺之脾胃虚论",
+        "《脾胃论》脾胃虚弱随时为病随病制方",
+        "《卫生宝鉴》劳倦所伤虚中有寒",
+        "《内外伤辨》辨筋骨四肢"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "六味地黄丸 小儿肾虚 囟门不合",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 30.1,
+      "top_sources": [
+        "《慈幼便览》头缝不合",
+        "《竹林女科证治》解颅",
+        "《幼幼集成》入方",
+        "《幼幼集成》鹤膝证治",
+        "《竹林女科证治》口软"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "逍遥散 肝郁血虚 月经不调",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 67.2,
+      "top_sources": [
+        "《中医临证经验与方法》",
+        "《中医临证经验与方法》",
+        "《济阴纲目》论有热虚劳",
+        "《李翰卿》",
+        "《李翰卿》"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "四物汤 当归 川芎 白芍 熟地黄",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 18.6,
+      "top_sources": [
+        "《竹林女科证治》形瘦经少",
+        "《竹林女科证治》经来过多",
+        "《妇科心法要诀》调经证治",
+        "《医学传灯》香港脚",
+        "《妇科心法要诀》调经门汇方"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "温邪上受 首先犯肺 逆传心包",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 30.7,
+      "top_sources": [
+        "《热病衡正》",
+        "《温病正宗》四、温邪上受解",
+        "《热病衡正》",
+        "《温病正宗》二十四、论温热伏气与新感不同",
+        "《温热经纬》叶香岩外感温热篇"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "卫之后方言气 营之后方言血",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 23.1,
+      "top_sources": [
+        "《六因条辨》斑疹条辨第五",
+        "《六因条辨》春温条辨第二",
+        "《热病衡正》",
+        "《热病衡正》",
+        "《针灸问对》卷之上"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "湿温 身热不扬 胸闷 苔腻",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 34.5,
+      "top_sources": [
+        "《丁甘仁医案》呃嗳案",
+        "《丁甘仁医案》湿温案",
+        "《张聿青医案》湿温",
+        "《张聿青医案》湿温",
+        "《医验随笔》"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "浮脉 举之有余 按之不足",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 11.6,
+      "top_sources": [
+        "《濒湖脉学》浮（阳）",
+        "《濒湖脉学》虚（阴）",
+        "《脉确》芤革",
+        "《脉确》诊法",
+        "《冷庐医话》阴证阳证"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "甘草 味甘平 主五脏六腑寒热邪气",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 20.5,
+      "top_sources": [
+        "《名医别录》甘草",
+        "《名医别录》白蒿",
+        "《千金食治》菜蔬第三（五十八条）",
+        "《滇南本草》荷包草",
+        "《滇南本草》葛根葛花"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "人参 补五脏 安精神 定魂魄",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 15.5,
+      "top_sources": [
+        "《名医别录》人参",
+        "《汤液本草》人参",
+        "《肯堂医论》论人参",
+        "《肯堂医论》论人参",
+        "《名医别录》龙骨"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "舌红苔黄腻 湿热内蕴",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 29.2,
+      "top_sources": [
+        "《戴丽三医疗经验选》",
+        "《姚贞白医案》",
+        "《姚贞白医案》",
+        "《近现代名医验案类编》",
+        "《近现代名医验案类编》"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "足三里 针灸 主治",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 44.8,
+      "top_sources": [
+        "《针灸集成》乳",
+        "《针灸大成》中风瘫痪针灸秘诀",
+        "《针灸集成》胀满",
+        "《针灸大成》取膏肓穴法",
+        "《类经图翼》诸证灸法要穴"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "妊娠禁忌候 孕妇起居饮食宜忌",
+      "quote_hit": false,
+      "quote_rank": 0,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 0.0,
+      "latency_ms": 16.4,
+      "top_sources": [
+        "《济生集》胎前饮食",
+        "《急救广生集》饮食宜忌",
+        "《急救广生集》受孕",
+        "《济生集》孕后便览",
+        "《宜麟策》逐月养胎（胎教二）"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "十八反 甘草反甘遂",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 5.1,
+      "top_sources": [
+        "《炮炙大法》十八反",
+        "《珍珠囊补遗药性赋》十八反歌",
+        "《珍珠囊补遗药性赋》海藻",
+        "《炮炙大法》海藻"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "茵陈蒿汤 黄疸 身黄如橘子色",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 30.3,
+      "top_sources": [
+        "《伤寒证治准绳》黄",
+        "《医学摘粹》里热证",
+        "《伤寒证治准绳》可下",
+        "《伤寒舌鉴》黄苔舌总论",
+        "《伤寒舌鉴》黄苔舌总论"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "小儿惊风 抽搐 目直视",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 44.7,
+      "top_sources": [
+        "《保婴撮要》惊搐目直",
+        "《小儿药证直诀》肝有热",
+        "《小儿卫生总微论方》欲发搐",
+        "《小儿药证直诀》卷中·记尝所治病二十三证",
+        "《小儿卫生总微论方》欲发搐"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "阴阳者 天地之道也 万物之纲纪",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 38.1,
+      "top_sources": [
+        "《灵素节注类编》经解",
+        "《黄帝内经素问》阴阳应象大论篇第五",
+        "《内经知要》二、治则",
+        "《黄帝内经素问》天元纪大论篇第六十六",
+        "《灵素节注类编》运气总论"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "麻黄 发汗 解表 止咳逆上气",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 40.2,
+      "top_sources": [
+        "《医学摘粹》表寒证",
+        "《伤寒缵论》太阳上编",
+        "《伤寒证治准绳》咳",
+        "《医学摘粹》水胀",
+        "《伤寒缵论》少阳篇"
+      ],
+      "missing_terms": []
+    },
+    {
+      "query": "当归 主咳逆上气 妇人漏下绝子",
+      "quote_hit": true,
+      "quote_rank": 1,
+      "term_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "latency_ms": 44.8,
+      "top_sources": [
+        "《增广和剂局方药性总论》当归",
+        "《增广和剂局方药性总论》太一余粮",
+        "《普济方·针灸》十二经流注五脏六腑明堂",
+        "《普济方·针灸》十二经流注五脏六腑明堂",
+        "《针灸资生经》齿噤"
+      ],
+      "missing_terms": []
+    }
+  ]
+}

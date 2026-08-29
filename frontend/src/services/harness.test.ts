@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Taro from '@tarojs/taro'
 import {
-  callSkill, chat, health, listAgents, listMcpTools, listSkills, mcpRpc,
-  reloadResources, runAgent,
+  callSkill, chat, getReport, health, listAgents, listMcpTools, listReports,
+  listSkills, mcpRpc, reloadResources, runAgent,
 } from './harness'
 
 const mockedRequest = vi.mocked(Taro.request)
@@ -96,6 +96,38 @@ describe('endpoint wiring', () => {
     expect(arg.data).toEqual({
       jsonrpc: '2.0', id: 1, method: 'tools/list', params: {},
     })
+  })
+
+  // T5.1 报告持久化
+  it('GET /reports sends optional limit', async () => {
+    mockedRequest.mockResolvedValue({
+      statusCode: 200,
+      data: { reports: [], enabled: true },
+    } as any)
+    await listReports(5)
+    const arg: any = mockedRequest.mock.calls[0][0]
+    expect(String(arg.url).endsWith('/reports?limit=5')).toBe(true)
+    expect(arg.method).toBe('GET')
+  })
+
+  it('GET /reports omits limit when not given', async () => {
+    mockedRequest.mockResolvedValue({
+      statusCode: 200,
+      data: { reports: [], enabled: false, hint: '报告持久化未启用' },
+    } as any)
+    const r = await listReports()
+    const arg: any = mockedRequest.mock.calls[0][0]
+    expect(String(arg.url).endsWith('/reports')).toBe(true)
+    // 未启用时不应抛错（只是空列表），调用方据此隐藏入口
+    expect(r.enabled).toBe(false)
+    expect(r.hint).toBe('报告持久化未启用')
+  })
+
+  it('GET /reports/:id escapes the id', async () => {
+    mockedRequest.mockResolvedValue({ statusCode: 200, data: { id: 'a b' } } as any)
+    await getReport('a b')
+    const arg: any = mockedRequest.mock.calls[0][0]
+    expect(String(arg.url).endsWith('/reports/a%20b')).toBe(true)
   })
 
   it('mcpRpc forwards method, params and id', async () => {

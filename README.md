@@ -170,8 +170,10 @@ cargo build --release                       # 需先构建二进制
 
   其中 `--test cases` 以 `server/harness/cases.jsonl` 做**确定性回归**：
   校验关键词证据匹配、证候推断（支持兼证）、方剂/调护检索与 YAML 资源完整性。
-- **前端**：`cd frontend && npm run test`（vitest，当前 **29 个用例全绿**；
+- **前端**：`cd frontend && npm run test`（vitest，当前 **32 个用例全绿**；
   契约测试在后端不可达时自动 skip）。详见 [`docs/testing.md`](./docs/testing.md)。
+- **RAG 语料**（T4.3）：`cd llm_server/rag && python -m unittest test_corpus`；
+  召回质量跑分与基线见 `docs/testing.md` 2.1 节。
 - **全链路 E2E**（rrserver / llm_server / harness）：`e2e_tests/` 下 pytest，一键编排
   `run_full_chain_e2e.ps1`（默认不含 rrserver 与前端；`-WithRrserver` / `-WithFrontend` 开启）。
   详见 [`docs/e2e.md`](./docs/e2e.md)。
@@ -193,7 +195,8 @@ AI 健康参考，非医疗诊断。上线前需完成合规复核（免责强�
 | `frontend/` | Taro 多端（H5 / 微信小程序） |
 | `llm_server/` | LM Studio 网关 + Agent 中间层（Python），`rag/` 为可选子组件 |
 | `deploy/` | 统一 nginx 入口（静态托管 + 反代 /api、/rr + TLS 终止）与 compose 编排 |
-| `e2e_tests/` | 全链路 E2E（harness → rrserver → llm_server） |
+| `e2e_tests/` | 全链路 E2E（harness → rrserver → llm_server）与人工验收脚本（`run_manual_e2e.ps1`） |
+| `docs/samples/` | 连真实 LLM 跑出的端到端样例（输入/输出/耗时/工具调用），见 [`samples/README.md`](./docs/samples/README.md) |
 | `scripts/` | `build-release.ps1`（WSL2 预编译）、`cleanup.ps1`（清理） |
 | `docs/` | 文档，见 [`docs/README.md`](./docs/README.md) |
 

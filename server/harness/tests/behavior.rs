@@ -10,13 +10,14 @@ use harness::agents::differentiation::assess;
 use harness::agents::{blocking_red_flag, detect_red_flags, is_blocking};
 use harness::config::HarnessConfig;
 use harness::model::{Capability, Message};
-use harness::orchestrator::{diagnosis_payload, Blocked, Diagnosis};
+use harness::orchestrator::{diagnosis_payload, resolve_order, Blocked, Diagnosis, DISCLAIMER};
 use harness::resources::load;
+use harness::resources::model::{ResourceBundle, Routing};
 use harness::skills::build_default_registry;
 use harness::trace::{new_trace, record, snapshot, LlmCallStat, StepTrace};
 use harness::AppState;
 use serde_json::json;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn bundle() -> harness::resources::ResourceBundle {
     load(Path::new("resources")).expect("资源加载失败")
@@ -524,4 +525,178 @@ async fn mcp_run_agent_requires_messages() {
     .await
     .expect("缺 messages 应回 JSON-RPC error");
     assert_eq!(r["error"]["code"], json!(server::INVALID_PARAMS));
+}
+
+// ---------------- T5.1 报告持久化 / T5.4 合规 ----------------
+
+/// 起一个真实监听的 harness（随机端口），返回 base url 与进程内状态
+async fn spawn_app(store_dir: Option<PathBuf>) -> (String, AppState) {
+    let cfg = HarnessConfig {
+        resources_dir: PathBuf::from("resources"),
+        store_dir,
+        ..HarnessConfig::default()
+    };
+    let st = AppState::load(cfg).await.expect("AppState 加载失败");
+    let app = harness::http::build_router(st.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("绑定随机端口失败");
+    let addr = listener.local_addr().expect("取监听地址失败");
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("服务异常退出");
+    });
+    (format!("http://{addr}"), st)
+}
+
+fn temp_dir(tag: &str) -> PathBuf {
+    let d = std::env::temp_dir().join(format!(
+        "harness-behavior-{tag}-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&d).expect("创建临时目录失败");
+    d
+}
+
+#[tokio::test]
+async fn reports_can_be_archived_and_retrieved() {
+    let dir = temp_dir("reports");
+    let (base, st) = spawn_app(Some(dir.clone())).await;
+
+    // 归档：走 store 直接写入（/chat 需要 LLM，端到端由人工验收覆盖）
+    let id = st
+        .store
+        .save(
+            &json!({"steps": [{"capability":"safety"}], "summary": "ok", "partial": false}),
+            &json!([{"role":"user","content":"口苦口臭，手机 13812345678"}]),
+            &json!({"age": 34}),
+        )
+        .expect("落盘失败")
+        .expect("启用存储后应返回 id");
+
+    // 回查：内容一致，且入参已脱敏
+    let got: serde_json::Value = reqwest::get(format!("{base}/reports/{id}"))
+        .await
+        .expect("请求失败")
+        .json()
+        .await
+        .expect("解析失败");
+    assert_eq!(got["id"], json!(id));
+    assert_eq!(got["result"]["summary"], json!("ok"));
+    assert_eq!(got["payload"]["age"], json!(34));
+    let stored_msg = got["messages"][0]["content"].as_str().unwrap_or_default();
+    assert!(
+        stored_msg.contains("口苦口臭"),
+        "症状描述应保留：{stored_msg}"
+    );
+    assert!(
+        stored_msg.contains("[手机号已脱敏]"),
+        "落盘应脱敏：{stored_msg}"
+    );
+
+    // 列表：最新一份即刚才那份
+    let list: serde_json::Value = reqwest::get(format!("{base}/reports"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list["enabled"], json!(true));
+    assert_eq!(list["reports"][0]["id"], json!(id));
+    assert_eq!(list["reports"][0]["steps"], json!(1));
+
+    // 不存在的 id → 404（而非 500 或空 200）
+    let miss = reqwest::get(format!("{base}/reports/does-not-exist"))
+        .await
+        .unwrap();
+    assert_eq!(miss.status(), 404);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn reports_endpoints_degrade_gracefully_when_store_disabled() {
+    // 默认配置不启用持久化：端点必须明确告知「未启用」，而不是返回空列表假装成功
+    let (base, st) = spawn_app(None).await;
+    assert!(!st.store.is_enabled());
+
+    let list: serde_json::Value = reqwest::get(format!("{base}/reports"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list["enabled"], json!(false));
+    assert!(list["reports"].as_array().unwrap().is_empty());
+
+    let r = reqwest::get(format!("{base}/reports/anything"))
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 404);
+}
+
+#[test]
+fn safety_step_cannot_be_removed_by_routing() {
+    // 合规底线（T5.4）：红旗路径不可移除。
+    // routing.yaml 允许增删步骤，但把 safety 删掉会让红旗症状直接走到治疗建议。
+    let res = ResourceBundle {
+        routing: Routing {
+            active: vec!["differentiation".to_string(), "treatment".to_string()],
+            default: None,
+        },
+        ..ResourceBundle::default()
+    };
+    let order = resolve_order(&res);
+    assert!(
+        order.contains(&Capability::Safety),
+        "安全门必须被强制补齐：{order:?}"
+    );
+    let pos_safety = order
+        .iter()
+        .position(|c| *c == Capability::Safety)
+        .expect("含 safety");
+    let pos_treatment = order
+        .iter()
+        .position(|c| *c == Capability::Treatment)
+        .expect("含 treatment");
+    assert!(
+        pos_safety < pos_treatment,
+        "安全门必须排在治疗之前：{order:?}"
+    );
+
+    // 已显式配置时保持原样，不重复插入
+    let res2 = ResourceBundle {
+        routing: Routing {
+            active: vec!["safety".to_string(), "treatment".to_string()],
+            default: None,
+        },
+        ..ResourceBundle::default()
+    };
+    assert_eq!(
+        resolve_order(&res2),
+        vec![Capability::Safety, Capability::Treatment]
+    );
+}
+
+#[test]
+fn chat_payload_carries_disclaimer() {
+    // 合规（T5.4）：免责声明随每份结果下发，接入方不必（也不该）自己编一段
+    let d = Diagnosis {
+        steps: vec![(Capability::Safety, "未触发红色警戒".to_string())],
+        final_text: "x".to_string(),
+        failures: vec![],
+        skipped: vec![],
+        blocked: None,
+        trace: vec![],
+        structured: vec![],
+    };
+    let v = diagnosis_payload(&d);
+    assert_eq!(v["disclaimer"], json!(DISCLAIMER));
+    assert!(
+        v["disclaimer"].as_str().unwrap().contains("不构成医疗诊断"),
+        "免责声明内容应完整：{}",
+        v["disclaimer"]
+    );
 }

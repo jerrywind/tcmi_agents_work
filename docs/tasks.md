@@ -1,9 +1,16 @@
 # 任务看板（Task Board）
 
 > 对应 [`plan.md`](./plan.md) 的阶段路线图。状态约定：🔲 待办 / 🔧 进行中 / ✅ 已完成 / 🚫 阻塞。
-> 最后更新：2026-08-29（本轮完成「诊疗提质」主体：
-> T4.1 结构化辨证 / T4.2 兼证 / T4.4 LLM 评测集 / T4.5 MCP Server，
-> 并把结构化结论接到前端报告页）
+> 最后更新：2026-08-30（本轮：T4.3 RAG 语料与召回评估落地；
+> T5.1 报告持久化 / T5.4 合规落地；T5.2、T5.3 给出上线检查清单；
+> T1.5 连真实 LM Studio 完成端到端人工验收，3 个样例归档）
+>
+> **下一轮重点**（来自 T1.5 人工审阅，详见 `docs/samples/*/README.md` 第 7 节）：
+> 1. **方剂与主证不对口**：damp-heat 判「脾胃湿热」却开「龙胆泻肝汤」（清肝胆湿热）。
+> 2. **经方药味记错**：wind-cold 的麻黄汤里凭空多出「白术」。
+>    两者都应靠知识库 `formulas.yaml` 校正，而不是靠提示词硬掰。
+> 3. **问诊未区分性别**：`payload.gender=男` 时仍追问月经。
+> 4. **技能调用偏少**：7 步里只有切诊触发了 `tcm-palpation`。
 
 ## ⚠️ 铁律
 
@@ -20,7 +27,7 @@
 | T1.2 | 前端维护多轮 `messages`（harness 无服务端循环），新增 `services/session.ts` | 页面可完成「追问 → 回答 → 再追问」 | ✅ 已完成 |
 | T1.3 | 前端解析 `steps[]` 分步渲染 + `summary` | 7 步可切换查看 | ✅ 已完成 |
 | T1.4 | 启用前端 e2e：编排脚本改为 Docker 起 harness（`tcm-harness:e2e`），前端契约测试默认开启，`-SkipFrontend` 关闭；`-WithFrontend` 保留为兼容参数 | `pytest=0 frontend=0`（4 + 4 用例全绿） | ✅ 已完成 |
-| T1.5 | 连真实 LM Studio 做一次端到端人工验收，产出样例问诊记录 | 记录归档 | 🔲 待办 |
+| T1.5 | 连真实 LM Studio 做一次端到端人工验收，产出样例问诊记录 | 记录归档 | ✅ 已完成（`e2e_tests/run_manual_e2e.ps1` 一键跑 3 个用例并归档到 `docs/samples/<case>/`；2026-08-30 在 `google/gemma-4-12b-qat` 上跑通，自动检查全部 PASS，人工审阅意见写入各样例 README 第 7 节） |
 | T1.6 | 移除 CI 中 frontend job 的 `continue-on-error` | CI 门禁生效 | ✅ 已完成 |
 | T1.7 | 补齐 CI：`cargo fmt --check` + `clippy -D warnings` | lint job 通过 | ✅ 已完成（Docker 内执行） |
 | T1.8 | 清理死代码：`model.rs` 的 5 个未使用类型 | 编译通过 | ✅ 已完成 |
@@ -55,7 +62,7 @@
 |---|---|---|---|
 | T4.1 | 辨证结构化输出（证候 + 置信度 + 支持/矛盾证据） | `differentiation` 步可解析为对象 | ✅ 已完成（`src/agents/differentiation.rs::assess` 纯函数打分；新增 `resources/contradictions.yaml` 相反表现表产出矛盾证据；经 `SubAgent::structured` 随 `/chat`、`POST /agents` 返回 `structured.differentiation`） |
 | T4.2 | 兼证呈现 | 报告可展示多证候并存 | ✅ 已完成（主证之外，置信度达标且证据量 ≥ 主证 60% 的候选列为 `concurrent`；前端报告页卡片化展示主证/兼证与证据链） |
-| T4.3 | RAG 语料建设与召回质量评估 | 有评估样例集 | 🔲 待办（需先有语料，属内容建设而非代码） |
+| T4.3 | RAG 语料建设与召回质量评估 | 有评估样例集 | ✅ 已完成（`llm_server/rag/corpus.py`：中文典籍切分 + bigram 倒排 + BM25 书级召回 + 片段重排，索引 700 部 / 6618 万字 / 建库 60s / 查询 41ms；`eval/tcm_queries.jsonl` 24 条人工样例 + `eval_rag.py` 评分；基线 **hit@5 95.8% / hit@1 95.8% / MRR 0.958 / 关键词覆盖 97.9%**，报告存 `eval/baseline.json`；`test_corpus.py` 12 条离线单测） |
 | T4.4 | LLM 评测集（用 `cases.jsonl` 自动评分），nightly 跑分 | nightly 产出质量分 | ✅ 已完成（`tests/llm_eval.rs`，`HARNESS_EVAL=1` 启用，默认跳过；`.github/workflows/llm-eval.yml` nightly + 手动触发，跑在 self-hosted runner 上） |
 | T4.5 | MCP Server：对外暴露 7 个 `agent_*` 工具 | MCP 客户端可调用 | ✅ 已完成（`POST /mcp`，`src/mcp/server.rs`；7 个 `agent_*` + `run_agent` + `list_agent_capabilities`） |
 
@@ -63,10 +70,10 @@
 
 | # | 任务 | 验收 | 状态 |
 |---|---|---|---|
-| T5.1 | 会话 / 报告持久化层 | 报告可回查 | 🔲 待办 |
-| T5.2 | 对象存储（图片归档） | 上传走 OSS/S3 | 🔲 待办 |
-| T5.3 | 前端 H5 上 CDN + 微信小程序过审 | 线上可访问 | 🔲 待办 |
-| T5.4 | 合规审计：免责强制展示、红旗路径不可移除、日志脱敏 | 安全评审通过 | 🔲 待办 |
+| T5.1 | 会话 / 报告持久化层 | 报告可回查 | ✅ 已完成（`src/store.rs` + `GET /reports`、`GET /reports/:id`；**默认关闭**，配 `HARNESS_STORE_DIR` 才启用，保持 harness 无状态；`/chat` 响应多出 `report_id`；前端报告页「存证与回查」+ `pages/reports` 存证记录页；落盘失败不影响本次响应） |
+| T5.2 | 对象存储（图片归档） | 上传走 OSS/S3 | 🚫 阻塞（需云资源；已给出检查清单见 `deployment.md` 7.1。注意：当前 harness **不保存图片**，图片以 base64/URL 随请求传入，接入存储会新增个人信息保护点） |
+| T5.3 | 前端 H5 上 CDN + 微信小程序过审 | 线上可访问 | 🚫 阻塞（需域名备案/CDN/小程序主体资质；清单见 `deployment.md` 7.2。最大风险是类目审核看资质不看代码，个人主体通常过不了医疗类目） |
+| T5.4 | 合规审计：免责强制展示、红旗路径不可移除、日志脱敏 | 安全评审通过 | ✅ 已完成（免责声明随每份结果下发 `/chat.disclaimer`，前端必须展示且不可关闭；安全门**不可从 `routing.yaml` 移除**，缺失时强制插入并告警；落盘脱敏手机号/身份证/邮箱/长数字串，临床数字保留；报告 id 白名单防路径穿越；单测覆盖） |
 
 ## 阶段 F：家庭算力云化（可并行）
 

@@ -192,10 +192,32 @@ curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
 `tools/call` 等价于一次 `POST /agents`，辨证工具额外在 `structuredContent` 里
 返回结构化的主证/兼证。完整工具表与错误约定见 [`mcp.md`](./mcp.md)。
 
-### 2.8 字段速览
+### 2.8 报告归档与回查（T5.1，可选能力）
+
+默认**关闭**：harness 保持无状态，不落任何盘。配置 `HARNESS_STORE_DIR`（或
+`config.yaml` 的 `store_dir`）后，每次 `/chat` 落盘一份报告快照。
+
+```bash
+curl http://localhost:8011/reports          # -> {"reports":[{id,created_at,partial,blocked,steps,primary_syndrome}],"enabled":true}
+curl http://localhost:8011/reports/20260830-101500-a1b2c3   # -> 完整快照（含 messages/payload/result）
+```
+
+- `/chat` 响应会多出 `report_id`（未启用时为 `null`）；
+- 落盘内容**已脱敏**（手机号 / 身份证 / 邮箱 / 12 位以上数字串），
+  与本次响应无关——用户看到的仍是原文；
+- 未启用持久化时，`GET /reports` 返回 `{"reports": [], "enabled": false, "hint": "..."}`。
+  这里用 `hint` 而不是 `error`：**未启用不是失败**，客户端统一把 `error` 当错误处理，
+  用 `error` 会让调用方无法区分「功能没开」与「查不出来」。
+- 报告 id 只含 `A-Za-z0-9_-`，服务端会拒绝含 `../` 之类的 id（防路径穿越）。
+
+删除某份记录：直接删掉 `store_dir` 下对应的 `<id>.json` 即可（无索引文件）。
+
+### 2.9 字段速览
 - `Message`：`{"role":"user"|"assistant"|"system", "content":"..."}`
 - `/chat` 响应：
   - `steps[]`（每步 `capability` + `text`）、`summary`（汇总 Markdown）
+  - `disclaimer`：服务端下发的免责声明（**必须展示且不可被用户关闭**，T5.4）
+  - `report_id`：归档报告 id（未启用持久化时为 `null`，见 2.8）
   - `failures[]`、`partial`：失败步骤与该次结果是否不完整
   - `blocked`、`blocked_by`、`block_reason`、`skipped[]`：安全门拦截标记与被跳过的步骤
   - `trace[]`：每步埋点（`capability`/`name`/`duration_ms`/`model`/`llm_calls`/
@@ -258,6 +280,11 @@ $env:HARNESS_LLM_BASE_URL="http://localhost:8000/v1"
 active: [inspection, listening, inquiry, palpation, differentiation, safety, treatment]
 ```
 
+> **安全门不可被移除（T5.4 合规）**：`active` 里可以增删其它步骤（如去掉 `palpation`），
+> 但如果**不含 `safety`**，harness 会在治疗步之前强制插入它并打 warn 日志。
+> 允许把安全门从流程里删掉，等于让红旗症状绕过拦截直接走到治疗建议——
+> 这是本系统最不能出错的一条路径，因此不接受配置关闭。
+
 ## 4. 常见问题
 
 - **`/chat` 返回 `{"error": ...}`？** harness 的错误体**也用 HTTP 200** 返回，
@@ -276,3 +303,7 @@ active: [inspection, listening, inquiry, palpation, differentiation, safety, tre
   排除器质病变，与中医方案互补。相关要求写在 `resources/prompts.yaml` 的 `treatment` 段。
 - **孕期/备孕用药安全？** 调用时在 `payload` 传 `{"herbs": [...], "pregnant": true}`，
   安全门会做妊娠禁忌与十八反十九畏校验。
+- **为什么 `GET /reports` 返回 `enabled: false`？** 报告持久化默认关闭，
+  需配置 `HARNESS_STORE_DIR`。这是刻意设计：harness 默认无状态、不落盘（见 2.8）。
+- **免责声明要不要自己写？** 不用，也不该自己写：服务端每份结果都带 `disclaimer` 字段，
+  前端与第三方接入方应**优先展示服务端下发的版本**，避免各端文案漂移。

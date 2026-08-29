@@ -30,12 +30,26 @@ class RAGConfig:
     dim: int = 0                                     # 0 = 首次嵌入时自动探测
 
     # ---- 存储 ----
-    data_dir: Path = field(default_factory=lambda: Path("/data/rag"))
+    # 注意：这里用**字面量默认值**而非 `field(default_factory=...)`。
+    # default_factory 会让它没有类属性，`from_env()` 里的 `cls.xxx` 取默认值时会
+    # 抛 AttributeError（此前 `RAGConfig.from_env()` 因此完全不可用）。
+    # Path 是不可变对象，用作类级默认值是安全的。
+    data_dir: Path = Path("/data/rag")
     index_name: str = "tcm"
 
     # ---- 资源加载 ----
     # 支持形如 images/<id>.jpg + images/<id>.txt（配对）或 texts/<file>.txt/.md
     corpus_dir: Path | None = None
+
+    # ---- 典籍语料索引（T4.3，见 corpus.py）----
+    # 由 `python -m rag corpus-build` 生成；配置后文本检索会把它作为
+    # 向量检索之外的补充（端点不可达时它就是唯一的检索路径）。
+    corpus_db: Path = Path("/data/rag/corpus.sqlite3")
+    # 片段切分参数
+    corpus_max_chars: int = 600
+    corpus_overlap: int = 80
+    # 书级召回部数：命中越多越全，但每多一部就要多读一本书做精排
+    corpus_top_docs: int = 3
 
     @classmethod
     def from_env(cls) -> "RAGConfig":
@@ -55,6 +69,10 @@ class RAGConfig:
             data_dir=Path(env("RAG_DATA_DIR", str(cls.data_dir))),
             index_name=env("RAG_INDEX_NAME", cls.index_name),
             corpus_dir=Path(env("RAG_CORPUS_DIR")) if env("RAG_CORPUS_DIR", "") else None,
+            corpus_db=Path(env("RAG_CORPUS_DB", str(cls.corpus_db))),
+            corpus_max_chars=int(env("RAG_CORPUS_MAX_CHARS", str(cls.corpus_max_chars))),
+            corpus_overlap=int(env("RAG_CORPUS_OVERLAP", str(cls.corpus_overlap))),
+            corpus_top_docs=int(env("RAG_CORPUS_TOP_DOCS", str(cls.corpus_top_docs))),
         )
 
     # ---- 持久化文件路径 ----

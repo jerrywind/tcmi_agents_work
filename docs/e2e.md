@@ -79,6 +79,33 @@ $env:VITE_API_BASE = "http://127.0.0.1:8011"
 cd frontend && npx vitest run src/services/harness.contract.test.ts
 ```
 
+### 3.3 人工端到端验收（T1.5，需真实 LLM）
+
+自动化 e2e 只验证「链路通不通」，而**结论对不对必须由人看一眼**：
+
+```powershell
+cd tcm_work/e2e_tests
+$env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'   # 若服务端开启了鉴权
+.\run_manual_e2e.ps1 -Case damp-heat            # 或 wind-cold / red-flag
+```
+
+脚本会：Docker 起 harness（把 LM Studio 以 `host.docker.internal` 暴露给容器）
+→ 用一段真实主诉跑完整个 `/chat` → 把原始响应、归档快照与
+**人读版报告**写入 `docs/samples/<case>/` → 自动检查硬指标
+（步骤齐全、主证非空、治疗有内容、红旗被拦、报告已落盘）。
+
+自动检查只覆盖「有输出、结构完整」，**内容是否合理仍需人工审阅**
+（证候是否对得上主诉、治疗是否安全可行）。三个用例：
+
+| 用例 | 主诉要点 | 重点看什么 |
+|---|---|---|
+| `damp-heat` | 口苦口臭、大便粘滞、肢体困重、舌红苔黄腻 | 主证是否判为湿热类；方剂/调护是否对症 |
+| `wind-cold` | 恶寒重发热轻、无汗、头身痛、脉浮紧 | 是否判为风寒表实；是否辛温解表 |
+| `red-flag` | 突发胸痛、冷汗、呼吸困难 | **必须**被安全门拦截且不给治疗方案 |
+
+> 前置：LM Studio 已启动并加载 `google/gemma-4-12b-qat`。
+> 容器经 `host.docker.internal` 访问宿主机端口，Docker Desktop 上无需额外配置。
+
 ---
 
 ## 4. 关键环境变量

@@ -20,6 +20,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Instant;
 
+/// 免责声明（T5.4 合规）
+///
+/// 必须由**服务端**随每份结果下发，而不只是前端写死一段话：
+/// 任何接入方（含 MCP 客户端与第三方页面）拿到结论时都该同时拿到免责声明，
+/// 否则「AI 健康建议」极易被误当作诊断。前端应优先展示本字段。
+pub const DISCLAIMER: &str = "本内容由 AI 生成，仅供健康参考，不构成医疗诊断或处方建议。\
+如有不适或出现胸痛、咯血、高热不退等警示症状，请及时线下就医。";
+
 /// 安全门拦截信息（T3.3）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Blocked {
@@ -52,6 +60,38 @@ pub struct Diagnosis {
     pub structured: Vec<(Capability, serde_json::Value)>,
 }
 
+/// 解析执行顺序：**安全门不可被配置移除**（T5.4 合规）
+///
+/// `routing.yaml` 的 `active` 允许增删步骤（如跳过切诊），但安全门是**合规底线**：
+/// 若允许把它从流程里删掉，红旗症状就会绕过拦截直接走到治疗建议，
+/// 这是本系统最不能出错的一条路径。故此处强制补齐：
+/// - `active` 里已有 safety：原样使用；
+/// - 缺失：插到治疗步之前（无治疗步则追加到末尾），并告警。
+pub fn resolve_order(res: &ResourceBundle) -> Vec<Capability> {
+    let order: Vec<Capability> = if res.routing.active.is_empty() {
+        Capability::ALL.to_vec()
+    } else {
+        res.routing
+            .active
+            .iter()
+            .filter_map(|s| Capability::from_slug(s))
+            .collect()
+    };
+
+    if order.contains(&Capability::Safety) {
+        return order;
+    }
+
+    let mut order = order;
+    let pos = order
+        .iter()
+        .position(|c| *c == Capability::Treatment)
+        .unwrap_or(order.len());
+    order.insert(pos, Capability::Safety);
+    tracing::warn!("routing.yaml 的 active 未包含 safety，已强制插入安全门（红旗路径不可移除）");
+    order
+}
+
 /// 执行一次完整诊断流程。
 ///
 /// `messages` 为截至当前的对话；`registry` 提供各 agent 实现，`skills` 提供工具。
@@ -65,16 +105,7 @@ pub async fn run_diagnosis(
     messages: &[Message],
     payload: &serde_json::Value,
 ) -> Result<Diagnosis> {
-    // 激活顺序：路由表指定，缺省为经典四诊->辨证->安全->治疗
-    let order: Vec<Capability> = if res.routing.active.is_empty() {
-        Capability::ALL.to_vec()
-    } else {
-        res.routing
-            .active
-            .iter()
-            .filter_map(|s| Capability::from_slug(s))
-            .collect()
-    };
+    let order = resolve_order(res);
 
     let mut steps = Vec::new();
     let mut failures = Vec::new();
@@ -309,6 +340,8 @@ pub fn diagnosis_payload(d: &Diagnosis) -> serde_json::Value {
     json!({
         "steps": steps,
         "summary": d.final_text,
+        // 合规（T5.4）：免责声明随每份结果下发，不依赖调用方自带
+        "disclaimer": DISCLAIMER,
         "failures": failures,
         "partial": !d.failures.is_empty(),
         "blocked": d.blocked.is_some(),

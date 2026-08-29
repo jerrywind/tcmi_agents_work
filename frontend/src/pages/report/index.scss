@@ -295,6 +295,28 @@
   line-height: 1.6;
 }
 
+// 存证区（T5.1）：编号 + 说明，编号需要能被长按复制，故用等宽感更强的样式
+.ev-row {
+  display: flex;
+  align-items: baseline;
+  padding: 12px 0;
+}
+
+.ev-key {
+  width: 160px;
+  flex-shrink: 0;
+  font-size: 24px;
+  color: #2a6f4e;
+  font-weight: 600;
+}
+
+.ev-val {
+  flex: 1;
+  font-size: 24px;
+  color: #44544b;
+  word-break: break-all;
+}
+
 .submit-wrap { margin: 30px 24px; }
 
 .care-row {

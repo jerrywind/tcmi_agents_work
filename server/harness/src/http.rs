@@ -9,11 +9,13 @@
 //! - POST /mcp         MCP Server 端点（T4.5，对外暴露 7 个能力）
 //! - GET  /health      健康检查
 //! - POST /reload      热重载 YAML 资源（hot_reload 时）
+//! - GET  /reports     列出已归档报告（T5.1，需配置 store_dir）
+//! - GET  /reports/:id 按 id 回查报告（T5.1）
 
 use crate::model::{AgentRequest, Capability, Message};
 use crate::skills::Skill;
 use crate::AppState;
-use axum::extract::{Query, State};
+use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -31,6 +33,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/skills", post(call_skill))
         .route("/mcp", post(mcp))
         .route("/reload", post(reload))
+        .route("/reports", get(list_reports))
+        .route("/reports/:id", get(get_report))
         .with_state(state)
 }
 
@@ -82,7 +86,23 @@ async fn chat(State(st): State<AppState>, Json(req): Json<Value>) -> Json<Value>
                     .map(|(c, e)| json!({"capability": c, "error": e}))
                     .collect::<Vec<_>>()}))
             } else {
-                Json(crate::orchestrator::diagnosis_payload(&d))
+                let mut result = crate::orchestrator::diagnosis_payload(&d);
+                // 归档（T5.1）：存储未启用时 save 返回 None，字段填 null。
+                // 落盘失败**不影响本次响应**——报告是附加能力，不该让问诊结果丢失。
+                let stored = st.store.save(&result, &json!(messages), &payload);
+                match stored {
+                    Ok(Some(id)) => {
+                        result["report_id"] = json!(id);
+                    }
+                    Ok(None) => {
+                        result["report_id"] = serde_json::Value::Null;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "报告落盘失败，本次响应不受影响");
+                        result["report_id"] = serde_json::Value::Null;
+                    }
+                }
+                Json(result)
             }
         }
         Err(e) => Json(json!({"error": e.to_string()})),
@@ -172,5 +192,58 @@ async fn reload(State(st): State<AppState>) -> Json<Value> {
     match st.reload_resources().await {
         Ok(_) => Json(json!({"ok": true})),
         Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+    }
+}
+
+/// 列出已归档报告（T5.1）
+///
+/// 未启用持久化时返回空列表（而不是报错）：调用方据此判断功能未开启。
+async fn list_reports(
+    State(st): State<AppState>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Json<Value> {
+    if !st.store.is_enabled() {
+        // 注意：字段名用 `hint` 而不是 `error`。
+        // 客户端统一把 `{"error": ...}` 当失败处理并抛错，而「未启用持久化」
+        // 不是失败，只是功能没开——用 error 会让调用方无法区分二者。
+        return Json(json!({
+            "reports": [],
+            "enabled": false,
+            "hint": "报告持久化未启用（配置 HARNESS_STORE_DIR）",
+        }));
+    }
+    // clamp 而不是 max(1).min(200)——等价且不会被 clippy 判为「应改用 clamp」
+    let limit = q
+        .get("limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(st.config.store_list_limit)
+        .clamp(1, 200);
+    match st.store.list(limit) {
+        Ok(reports) => Json(json!({"reports": reports, "enabled": true})),
+        Err(e) => Json(json!({"reports": [], "enabled": true, "error": e.to_string()})),
+    }
+}
+
+/// 按 id 回查报告（T5.1）
+async fn get_report(State(st): State<AppState>, AxumPath(id): AxumPath<String>) -> Response {
+    if !st.store.is_enabled() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "报告持久化未启用（配置 HARNESS_STORE_DIR）"})),
+        )
+            .into_response();
+    }
+    match st.store.get(&id) {
+        Ok(Some(v)) => Json(v).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": format!("报告不存在: {id}")})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }

@@ -133,6 +133,48 @@ export interface DiagnosisResult {
   structured?: {
     differentiation?: DifferentiationStructured
   } | null
+  /**
+   * 归档报告 id（T5.1）：服务端配置了 `store_dir` 才有值，
+   * 未启用持久化时为 `null`。可用 `GET /reports/:id` 回查。
+   */
+  report_id?: string | null
+  /**
+   * 服务端下发的免责声明（T5.4 合规）。
+   * 前端**必须**展示，且不得由用户关闭——AI 健康建议被误当诊断是最需防的风险。
+   */
+  disclaimer?: string
+}
+
+/** 归档报告的列表项（`GET /reports`） */
+export interface ReportMeta {
+  id: string
+  created_at: string | null
+  /** 该次问诊是否有步骤失败（结果不完整） */
+  partial: boolean
+  /** 是否被安全门拦截 */
+  blocked: boolean
+  steps: number
+  /** 主证名（无结构化结论时为 null） */
+  primary_syndrome: string | null
+}
+
+export interface ReportsResult {
+  reports: ReportMeta[]
+  /** 服务端是否启用了报告持久化；false 时 reports 恒为空 */
+  enabled: boolean
+  /** 未启用时的说明（不是错误，故服务端用 hint 而非 error 字段） */
+  hint?: string
+  error?: string
+}
+
+/** 归档报告详情（`GET /reports/:id`），即一次 `/chat` 的完整快照 */
+export interface StoredReport {
+  id: string
+  created_at: string
+  /** 存档时已脱敏的问诊输入 */
+  messages: HarnessMessage[]
+  payload: Record<string, any>
+  result: DiagnosisResult
 }
 
 /** GET /agents 的响应 */
@@ -243,6 +285,17 @@ export function callSkill(
 /** 热重载 YAML 资源（需服务端 hot_reload: true） */
 export function reloadResources(): Promise<{ ok: boolean }> {
   return harnessRequest<{ ok: boolean }>('POST', '/reload')
+}
+
+/** 列出已归档报告（T5.1）；服务端未启用持久化时返回 `enabled: false` */
+export function listReports(limit?: number): Promise<ReportsResult> {
+  const q = limit && limit > 0 ? `?limit=${limit}` : ''
+  return harnessRequest<ReportsResult>('GET', `/reports${q}`)
+}
+
+/** 按 id 回查一份归档报告（T5.1） */
+export function getReport(id: string): Promise<StoredReport> {
+  return harnessRequest<StoredReport>('GET', `/reports/${encodeURIComponent(id)}`)
 }
 
 /** `/mcp` 返回的 MCP 工具定义（T4.5） */

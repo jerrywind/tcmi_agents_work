@@ -12,6 +12,9 @@ import type {
   HarnessCapability,
   HarnessMessage,
   HarnessSkill,
+  ReportMeta,
+  ReportsResult,
+  StoredReport,
   SyndromeAssessment,
 } from './services/harness'
 
@@ -22,6 +25,9 @@ export type {
   HarnessCapability,
   HarnessMessage,
   HarnessSkill,
+  ReportMeta,
+  ReportsResult,
+  StoredReport,
   SyndromeAssessment,
 }
 

@@ -3,6 +3,7 @@ export default defineAppConfig({
     'pages/index/index',
     'pages/consult/index',
     'pages/report/index',
+    'pages/reports/index',
     'pages/skills/index',
     'pages/family/index'
   ],

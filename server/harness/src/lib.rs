@@ -21,6 +21,7 @@ pub mod model;
 pub mod orchestrator;
 pub mod resources;
 pub mod skills;
+pub mod store;
 pub mod trace;
 
 use anyhow::Context;
@@ -29,6 +30,7 @@ use tokio::sync::RwLock;
 
 use crate::config::HarnessConfig;
 use crate::resources::ResourceBundle;
+use crate::store::ReportStore;
 
 /// 进程内共享状态
 #[derive(Clone)]
@@ -42,6 +44,8 @@ pub struct AppState {
     pub registry: agents::Registry,
     /// 技能/工具注册表（MCP / HTTP）
     pub skills: Arc<skills::SkillRegistry>,
+    /// 报告存储（T5.1；未配置 store_dir 时为空实现）
+    pub store: Arc<ReportStore>,
 }
 
 impl AppState {
@@ -68,12 +72,24 @@ impl AppState {
             skills::mount_mcp_clients(&mut skills, &config, &llm).await;
         }
 
+        // 报告存储：未配置 store_dir 时为空实现，行为与持久化前一致
+        let store = ReportStore::new(config.store_dir.clone(), config.store_redact)
+            .context("初始化报告存储失败")?;
+        if store.is_enabled() {
+            tracing::info!(
+                dir = %store.dir().map(|d| d.display().to_string()).unwrap_or_default(),
+                redact = config.store_redact,
+                "报告持久化已启用"
+            );
+        }
+
         Ok(Self {
             config: Arc::new(config),
             resources: Arc::new(RwLock::new(resources)),
             llm,
             registry,
             skills: Arc::new(skills),
+            store: Arc::new(store),
         })
     }
 
