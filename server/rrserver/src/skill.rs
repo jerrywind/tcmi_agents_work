@@ -95,7 +95,11 @@ impl std::fmt::Display for JudgeError {
                 write!(f, "insufficient resource: have {}, need {}", have, need)
             }
             JudgeError::StateMismatch { expected, actual } => {
-                write!(f, "state mismatch: expected `{}`, actual `{}`", expected, actual)
+                write!(
+                    f,
+                    "state mismatch: expected `{}`, actual `{}`",
+                    expected, actual
+                )
             }
             JudgeError::UnknownSkill(s) => write!(f, "unknown skill: `{}`", s),
             JudgeError::Internal(m) => write!(f, "internal error: {}", m),
@@ -257,27 +261,57 @@ pub struct SkillRule {
 /// ResourcePassed → Approved → Triggered。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JudgeEvent {
-    PreCheck { skill: String },
-    CooldownPassed { skill: String },
-    CooldownBlocked { skill: String, remaining: Duration },
-    ResourcePassed { skill: String },
-    ResourceBlocked { skill: String, have: u64, need: u64 },
-    StatePassed { skill: String },
-    StateBlocked { skill: String, expected: String, actual: String },
-    Approved { skill: String },
-    Triggered { skill: String, remaining: u64 },
-    Error { skill: String, reason: String },
+    PreCheck {
+        skill: String,
+    },
+    CooldownPassed {
+        skill: String,
+    },
+    CooldownBlocked {
+        skill: String,
+        remaining: Duration,
+    },
+    ResourcePassed {
+        skill: String,
+    },
+    ResourceBlocked {
+        skill: String,
+        have: u64,
+        need: u64,
+    },
+    StatePassed {
+        skill: String,
+    },
+    StateBlocked {
+        skill: String,
+        expected: String,
+        actual: String,
+    },
+    Approved {
+        skill: String,
+    },
+    Triggered {
+        skill: String,
+        remaining: u64,
+    },
+    Error {
+        skill: String,
+        reason: String,
+    },
 }
 
 // ───────────────────────────── 判定引擎 ─────────────────────────────
 
 /// 技能判定引擎：组合冷却 / 资源 / 状态三类组件，对外提供「判定」与「触发」两类入口，
 /// 并通过回调机制广播状态机事件。
+/// 状态机事件回调：判定引擎每次状态变化都会广播给所有订阅者。
+pub type JudgeCallback = Box<dyn Fn(&JudgeEvent) + Send + Sync>;
+
 pub struct JudgeEngine {
     cooldown: CooldownTracker,
     resources: ResourceLedger,
     state: Arc<dyn StateProvider>,
-    callbacks: Mutex<Vec<Box<dyn Fn(&JudgeEvent) + Send + Sync>>>,
+    callbacks: Mutex<Vec<JudgeCallback>>,
     /// 提交锁：串起「判定 → 提交」，避免跨组件部分提交。
     commit: Mutex<()>,
 }
@@ -531,10 +565,7 @@ impl SkillSet {
 
     /// 当前已登记技能数量。
     pub fn len(&self) -> usize {
-        self.rules
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .len()
+        self.rules.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// 是否没有任何技能。
@@ -601,9 +632,15 @@ mod tests {
         let clock = Arc::new(MockClock::new(Duration::ZERO));
         let cd = CooldownTracker::new(clock.clone());
         cd.arm("s", Duration::from_secs(60)).unwrap();
-        assert_eq!(cd.remaining("s", Duration::from_secs(60)), Duration::from_secs(60));
+        assert_eq!(
+            cd.remaining("s", Duration::from_secs(60)),
+            Duration::from_secs(60)
+        );
         clock.advance(Duration::from_secs(20));
-        assert_eq!(cd.remaining("s", Duration::from_secs(60)), Duration::from_secs(40));
+        assert_eq!(
+            cd.remaining("s", Duration::from_secs(60)),
+            Duration::from_secs(40)
+        );
     }
 
     // ---- 资源账本 ----
@@ -676,10 +713,7 @@ mod tests {
     // ---- 触发成功路径 + 事件回调 ----
     #[test]
     fn trigger_success_emits_full_event_chain_and_consumes() {
-        let e = Arc::new(JudgeEngine::new(
-            100,
-            Arc::new(ConstState("idle".into())),
-        ));
+        let e = Arc::new(JudgeEngine::new(100, Arc::new(ConstState("idle".into()))));
         let seen = Arc::new(Mutex::new(Vec::new()));
         let seen2 = seen.clone();
         e.on_event(move |ev| seen2.lock().unwrap().push(ev.clone()));
@@ -691,18 +725,28 @@ mod tests {
         assert_eq!(e.resources_available(), 70);
 
         let events = seen.lock().unwrap();
-        let names: Vec<_> = events.iter().map(|e| match e {
-            JudgeEvent::PreCheck { .. } => "PreCheck",
-            JudgeEvent::CooldownPassed { .. } => "CooldownPassed",
-            JudgeEvent::StatePassed { .. } => "StatePassed",
-            JudgeEvent::ResourcePassed { .. } => "ResourcePassed",
-            JudgeEvent::Approved { .. } => "Approved",
-            JudgeEvent::Triggered { .. } => "Triggered",
-            other => panic!("unexpected event: {:?}", other),
-        }).collect();
+        let names: Vec<_> = events
+            .iter()
+            .map(|e| match e {
+                JudgeEvent::PreCheck { .. } => "PreCheck",
+                JudgeEvent::CooldownPassed { .. } => "CooldownPassed",
+                JudgeEvent::StatePassed { .. } => "StatePassed",
+                JudgeEvent::ResourcePassed { .. } => "ResourcePassed",
+                JudgeEvent::Approved { .. } => "Approved",
+                JudgeEvent::Triggered { .. } => "Triggered",
+                other => panic!("unexpected event: {:?}", other),
+            })
+            .collect();
         assert_eq!(
             names,
-            vec!["PreCheck", "CooldownPassed", "StatePassed", "ResourcePassed", "Approved", "Triggered"]
+            vec![
+                "PreCheck",
+                "CooldownPassed",
+                "StatePassed",
+                "ResourcePassed",
+                "Approved",
+                "Triggered"
+            ]
         );
     }
 
@@ -744,10 +788,7 @@ mod tests {
     // ---- 触发失败路径：资源不足 ----
     #[test]
     fn trigger_blocked_by_resource_emits_resource_blocked() {
-        let e = Arc::new(JudgeEngine::new(
-            5,
-            Arc::new(ConstState("idle".into())),
-        ));
+        let e = Arc::new(JudgeEngine::new(5, Arc::new(ConstState("idle".into()))));
         let seen = Arc::new(Mutex::new(Vec::new()));
         let seen2 = seen.clone();
         e.on_event(move |ev| seen2.lock().unwrap().push(ev.clone()));
@@ -767,10 +808,7 @@ mod tests {
     // ---- 触发失败路径：状态不符 ----
     #[test]
     fn trigger_blocked_by_state_emits_state_blocked() {
-        let e = Arc::new(JudgeEngine::new(
-            100,
-            Arc::new(ConstState("battle".into())),
-        ));
+        let e = Arc::new(JudgeEngine::new(100, Arc::new(ConstState("battle".into()))));
         let seen = Arc::new(Mutex::new(Vec::new()));
         let seen2 = seen.clone();
         e.on_event(move |ev| seen2.lock().unwrap().push(ev.clone()));

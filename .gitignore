@@ -2,7 +2,7 @@
 *__pycache__/
 *.pyc
 *.venv/
-_useless/backend/uploads/
+.venv/
 
 # node / taro
 frontend/node_modules/
@@ -15,20 +15,32 @@ frontend/.swc/
 **/*.rs.bk
 Cargo.lock.bak
 
-# misc
-.DS_Store
+# 环境变量（保留 *.example 作为模板）
+.env
+.env.*
+!.env.example
+
+# 日志与错误输出（运行期产物，禁止提交）
 *.log
 *.err
-.env
+*.out
+logs/
 
-# test / coverage artifacts
+# 编辑器 / 系统
+.DS_Store
+.idea/
+*.swp
+
+# 测试与覆盖率产物
 htmlcov/
 .coverage
 coverage/
 lcov.info
+.pytest_cache/
 .vitest/
 install.*
 *.docker-cargo/
-_useless
-.github
-.vscode
+
+# e2e 运行期产物
+e2e_tests/images/
+rag_data

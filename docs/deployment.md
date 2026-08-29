@@ -2,9 +2,8 @@
 
 覆盖四组件的部署：**前端 / harness / llm_server / rrserver**，以及端口、配置、网络与全链路验证。
 
-> 后端已由 Python（原 `backend/`，归档于 `_useless/backend/`）重写为 Rust
-> **harness**（`server/harness`），与 rrserver 同属 `server/` Cargo workspace。
-> 原 `backend/` 的 uvicorn、requirements、routing.*.yaml 等部署方式均已失效。
+> 后端为 Rust **harness**（`server/harness`），与 rrserver 同属 `server/` Cargo workspace，
+> 统一用 `cargo build` 构建。
 
 > 模型与降级事实的权威说明见 [`llm_server.md`](./llm_server.md)：`llm_server` 是纯 LM Studio
 > 网关（**不托管模型**），模型统一 `google/gemma-4-12b-qat`（文本+视觉共用，原生多模态），
@@ -44,7 +43,8 @@ cd frontend && npm install && npm run dev:h5   # http://localhost:10086
 ```bash
 cd frontend && npm run build:h5     # 产物在 dist/
 # 静态托管与反向代理统一由 deploy/ 的 nginx 完成（见 deploy/docker-compose.yml）：
-#   - deploy/nginx/frontend.conf：托管 dist/（SPA 回退）+ 反代 /api、/uploads 到 harness
+#   - deploy/nginx/frontend.conf：托管 dist/（SPA 回退）+ 反代 /api 到 harness（剥离前缀）
+#     （harness 不落盘图片，无 /uploads 目录，故不再反代该路径）
 #   - deploy/nginx/rrserver.conf：TLS 终止 + 反代 /rr 到 rrserver
 # 启动：docker compose -f deploy/docker-compose.yml up -d --build
 ```
@@ -158,27 +158,33 @@ docker compose up --build                # 容器 :8000 -> 宿主机 22010
 cd server
 cargo build --release -p rrserver     # 产物 server/target/release/rrserver（Windows 为 .exe）
 ```
-> 容器化镜像需先在 WSL2（glibc 2.39）编译后 COPY 二进制（容器内 cargo build 会因网络损坏 crates.io 下载而失败，且 debian:bookworm 的 glibc 2.36 不兼容）。详见 `server/rrserver/README.md`。
+> 镜像**在 Docker 内编译**（多阶段构建）：`rust:1.98-bookworm` 负责编译，
+> `ubuntu:24.04` 作为运行镜像。两者 glibc 向前兼容（2.36 编译 → 2.39 运行），
+> 不会出现 "GLIBC_2.39 not found"。
+> 宿主机构建机无需安装 Rust 工具链，也**不使用**本地 `cargo build` 产物。
+> 依赖层由 Docker 缓存复用（先复制清单 + 占位源码预编译依赖，再复制真实源码）。
 
 ### 5.2 启动
 ```bash
-# 一键起 server(:8088) + client(:9000)，client 把本地 LLM 暴露为 /t/home/*
-cd server/rrserver && .\start_rrserver.ps1
+# 手动启动 server：
+rrserver server --listen 0.0.0.0:8080 --config config/rrserver.toml   # 容器内 8080，nginx 8088 对外
 
-# 或手动：
-rrserver server --listen 0.0.0.0:8080 --config rrserver.toml      # 容器内 8080，nginx 8088 对外
+# 家庭端 client（另一台机器 / 另一进程）：
 rrserver client --server https://rr.windblue.tech \
                --name home --token <TOKEN> \
                --local http://host.docker.internal:8900           # 家庭端本地 LLM 地址
 ```
-配置要点（`rrserver.toml`）：`external_ws_base`（对外 WS 基址）、`[[tunnels]]`（`name`/`token`）；
-client 经 `/api/register` 用 token 换取 `ws_url` 并建立隧道。
+配置要点（`server/rrserver/config/rrserver.toml`）：`external_ws_base`（对外 WS 基址）、
+`[[tunnels]]`（`name`/`token`）；client 经 `/api/register` 用 token 换取 `ws_url` 并建立隧道。
 
-> **配置文件**：镜像内已内置一份默认配置（由 `rrserver.toml.example` 生成，且
+> **配置文件**：镜像内已内置一份默认配置（由 `config/rrserver.toml.example` 生成，且
 > **示例 token 被清空**），因此 `docker run tcm-rrserver:local` 不带挂载也能启动。
 > 生产必须由 compose 挂载真实配置覆盖（`deploy/docker-compose.yml` 已配）：
 > `../server/rrserver/config/rrserver.toml:/etc/rrserver.toml:ro`，
 > 并把 `token` 与 `external_ws_base` 改成实际值。
+>
+> ⚠️ `server/rrserver/start_rrserver.ps1` 中的路径仍指向已迁移前的 `tcm_work/rrserver`，
+> 当前不可用；请按上面的手动命令启动。修复见 [`tasks.md`](./tasks.md) T1.9。
 
 ### 5.2.1 把 harness 经隧道暴露（无需额外家庭端进程）
 

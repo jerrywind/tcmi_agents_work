@@ -6,25 +6,23 @@
 
 > - 后端 **harness（Rust）** 的测试（含 `cases.jsonl` 案例回归）见 [`testing.md`](./testing.md)，
 >   本文件只讲**跨组件**的全链路 e2e。
-> - 原 backend（Python）的契约用例 `test_backend_llm_integration_e2e.py` 已随 backend 归档，
->   默认排除；harness 的问诊链路需真实 LLM，不在本套件内。
+> - harness 的问诊链路（`/chat`）需真实 LLM，不在本套件内（无 mock 兜底）。
 
 ---
 
 ## 1. 结构
 
 ```
-tcm_work/e2e_tests/
+e2e_tests/
 ├── conftest.py                        # 各组件 base_url + 健康等待 + httpx fixtures
-├── e2e_helpers.py                     # 驱动问诊 / 读取产物 的共享辅助
+├── e2e_helpers.py                     # 共享辅助
 ├── test_rrserver_e2e.py               # rrserver 隧道：server+client 启动、token 鉴权、/t/<name> 转发
-├── test_llm_server_e2e.py            # llm_server 网关：/healthz(degraded/ok)、/v1/models、chat 透传
-├── test_backend_llm_integration_e2e.py # [已归档] 原 backend(Python) 契约用例，默认排除
-├── _make_sample_image.py              # 生成 1x1 样例 JPEG（上传素材）
-├── run_full_chain_e2e.ps1            # 一键编排：起 harness → pytest → 前端 vitest(默认跳过)
-└── images/sample.jpg                  # 自动生成的样例图片
+├── test_llm_server_e2e.py             # llm_server 网关：/healthz(degraded/ok)、/v1/models、chat 透传
+├── _make_sample_image.py              # 生成 1x1 样例 JPEG（素材）
+├── run_full_chain_e2e.ps1             # 一键编排：起 harness → pytest → 前端 vitest(默认跳过)
+└── images/                            # 运行期生成的样例图片（gitignore）
 
-frontend/src/services/api.e2e.test.ts  # vitest：真实执行 api.ts（Taro 适配层替换为真实 fetch）
+frontend/src/services/harness.contract.test.ts  # vitest：真实执行 harness.ts（Taro 适配层换成真实 fetch）
 ```
 
 ---
@@ -35,8 +33,11 @@ frontend/src/services/api.e2e.test.ts  # vitest：真实执行 api.ts（Taro 适
 |---|---|---|---|
 | rrserver | `test_rrserver_e2e.py` | server/client 启动、token 鉴权、隧道把请求转发到本地 stub llm 并回传 | 否（stub 充当本地 llm） |
 | llm_server | `test_llm_server_e2e.py` | 服务可达；无上游→`degraded` + `/v1/models` 503；有 stub 上游→`/v1/chat/completions` 透传 | 否（stub 充当 LM Studio） |
-| harness | `run_full_chain_e2e.ps1` 启动后探活 | `/health` 可达；`/agents`、`/skills` 返回 7 个 agent 与 9 个技能 | 否（仅只读端点） |
-| 前端→后端 | `frontend/src/services/api.e2e.test.ts` | 真实执行 `api.ts` 函数（**默认跳过**：契约未对齐，需 `-WithFrontend`） | 否 |
+| harness | `run_full_chain_e2e.ps1` 启动后探活 | `/health` 可达（返回 `ok`） | 否（仅只读端点） |
+| 前端→后端 | `frontend/src/services/harness.contract.test.ts` | 真实执行 `harness.ts` 函数：`/health`、`/agents`、`/skills`、`POST /skills` 错误分支，以及 MCP 的 `tools/list`、`list_agent_capabilities`（**默认开启**） | 否 |
+
+> 前端契约用例会先探测 `/health`：后端不可达时整个 describe **自动 skip**，
+> 因此无 Docker 或后端未起时 `npm run test` 依旧全绿，不会误报失败。
 
 **离线跑通原理**：真实 LLM 推理依赖宿主机 LM Studio。全链路 e2e 通过
 - llm_server / rrserver 用 **stub 上游**（Python 标准库 HTTP 服务）充当 LM Studio / 本地 llm，
@@ -53,47 +54,58 @@ frontend/src/services/api.e2e.test.ts  # vitest：真实执行 api.ts（Taro 适
 ### 3.1 一键编排（推荐）
 ```powershell
 cd tcm_work/e2e_tests
-.\run_full_chain_e2e.ps1                       # 跑 harness 探活 + pytest（不含 rrserver、不含前端）
-.\run_full_chain_e2e.ps1 -WithRrserver         # 额外包含 rrserver 隧道（需先 cargo build rrserver）
-.\run_full_chain_e2e.ps1 -WithFrontend         # 额外跑前端 vitest（需先对齐前端契约）
+.\run_full_chain_e2e.ps1                       # harness(镜像) + pytest + 前端契约测试
+.\run_full_chain_e2e.ps1 -WithRrserver         # 额外包含 rrserver 隧道（需 TCM_RRSERVER_BIN）
+.\run_full_chain_e2e.ps1 -SkipFrontend         # 只跑 pytest
+.\run_full_chain_e2e.ps1 -SkipBuild            # 复用已存在的镜像，不重新构建
 ```
-脚本流程：生成样例图片 → 启动 harness（`server/harness/target/{debug,release}/harness.exe`，
-`:8011`，cwd 为 `server/harness` 以定位 `resources/`）→ `/health` 探活 → 跑 pytest →
-（可选）前端 vitest → 关闭进程。
+脚本流程：生成样例图片 → `docker build` harness 镜像（多阶段，镜像内编译）
+→ `docker run` 起容器（`:8011`）→ `/health` 探活 → 跑 pytest → 前端契约测试 → 删除容器。
 
-> harness 需先构建：`cd server && cargo build -p harness`（或 `--release`）。
+> **后端完全依赖 Docker**：脚本不再使用 `target/{debug,release}/harness.exe`
+> （宿主机 cargo 产物不作为交付/验证依据）。构建上下文为 workspace 根 `server/`。
+> 常用开关：`-SkipBuild` 跳过构建、`-ImageName` 指定镜像名（默认 `tcm-harness:e2e`）。
 
 ### 3.2 分别运行
 ```powershell
-# 跨组件 pytest（先手动起 harness 在 :8011）
-$env:TCM_HARNESS_BASE="http://127.0.0.1:8011"
-python -m pytest tcm_work/e2e_tests -q -k "not backend"
+# 跨组件 pytest（先手动起 harness 容器在 :8011）
+$env:TCM_HARNESS_BASE = "http://127.0.0.1:8011"
+cd e2e_tests
+python -m pytest -q                        # 不含 rrserver
+python -m pytest -q -k rrserver            # 只跑 rrserver
 
-# 前端 e2e（需先对齐前端契约；先起 harness 在 :8011）
-$env:TCM_API_BASE="http://localhost:8011"
-cd frontend && npx vitest run src/services/api.e2e.test.ts
+# 前端契约测试（先起 harness 在 :8011）
+$env:VITE_API_BASE = "http://127.0.0.1:8011"
+cd frontend && npx vitest run src/services/harness.contract.test.ts
 ```
 
 ---
 
 ## 4. 关键环境变量
-- `TCM_HARNESS_BASE`：harness 地址（默认 `http://127.0.0.1:8011`）。
-- `TCM_LLM_BASE` / `TCM_RRSERVER_SERVER_BASE` / `TCM_RRSERVER_CLIENT_BASE`：各组件地址（conftest 默认值见文件）。
-- `TCM_BACKEND_LLM_BASE`：llm_server 相关用例指向的 LLM 网关地址。
-- `TCM_API_BASE`：前端 e2e 指向的后端地址（对齐契约后为 harness `:8011`）。
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `TCM_HARNESS_BASE` | `http://127.0.0.1:8011` | harness 地址（编排脚本自动设置） |
+| `TCM_LLM_BASE` | `http://localhost:8000` | llm_server 网关地址（`conftest.py`） |
+| `TCM_RRSERVER_SERVER_BASE` | `http://localhost:8088` | rrserver 云端中继 |
+| `TCM_RRSERVER_CLIENT_BASE` | `http://localhost:9000` | rrserver 家庭端 client |
+| `TCM_FRONTEND_BASE` | `http://localhost:10086` | 前端 H5 dev server |
+| `TCM_RRSERVER_BIN` | — | rrserver 二进制路径（`-WithRrserver` 时用，缺省按 `server/rrserver/target/**` 查找） |
+| `VITE_API_BASE` | `http://127.0.0.1:8011` | 前端契约测试指向的后端地址（编排脚本自动设置） |
+| `TCM_E2E_HEALTH_TIMEOUT` / `TCM_E2E_HTTP_TIMEOUT` | `60` / `30` | 健康等待与请求超时（秒） |
 - `HARNESS_LLM_BASE_URL` / `HARNESS_LLM_API_KEY` / `HARNESS_MODEL`：harness 连接 LLM 用
   （前缀是 `HARNESS_`；无 LLM 时仅只读端点可用）。
 - `HARNESS_TUNNEL_SERVER` / `HARNESS_TUNNEL_NAME` / `HARNESS_TUNNEL_TOKEN`：harness 经
   rrserver 隧道暴露（等价于命令行 `--tunnel-*`）。
 - `TCM_E2E_HEALTH_TIMEOUT` / `TCM_E2E_HTTP_TIMEOUT`：健康等待与请求超时（秒）。
-- 前端 e2e 还需 `TCM_API_BASE` 与 Node 18+ 全局 `fetch`/`FormData`/`Blob`（无需额外依赖）。
+- 前端契约测试只需 Node 18+ 全局 `fetch`/`FormData`/`Blob`（无需额外依赖）。
 
 ---
 
 ## 5. 说明
-- rrserver 隧道测试需要本地已编译的 `rrserver` 二进制（`server/target/debug/rrserver` 或
-  `server/target/release/rrserver`）；未编译时自动 `skip` 并给出构建提示
-  （WSL2/Linux `cargo build --release`）。
+- rrserver 隧道测试需要 rrserver 二进制：`TCM_RRSERVER_BIN` 显式指定，或
+  `server/rrserver/target/{debug,release}/rrserver[.exe]`；未找到时自动 `skip`
+  并给出提示。后端只在 Docker 内构建，该用例属**可选**项，默认不跑。
 - llm_server 测试需要 Python 环境已安装 `fastapi` 等依赖；缺失时自动 `skip`。
 - 全链路 e2e 与 `cargo test -p harness` 是**互补**的两套：后者覆盖 harness 内部的确定性逻辑
   与 YAML 资源完整性（含案例回归），前者覆盖跨组件集成与前端契约对齐。

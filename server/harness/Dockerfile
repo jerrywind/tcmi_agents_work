@@ -1,22 +1,56 @@
-# harness 运行镜像（直接打包预编译的 Linux 二进制，不在容器内编译）。
+# harness 运行镜像 —— 多阶段构建，**在 Docker 内完成编译**。
 #
 # 【构建上下文】必须是 workspace 根（server/），而非本文件所在目录：
-#     docker build -f harness/Dockerfile ..      # 或由 deploy/docker-compose.yml 编排
-# 因为 harness 与 rrserver 同属一个 workspace，release 产物统一落在
-# **server/target/release/**，子 crate 没有独立 target/。
-# 上下文裁剪由 server/.dockerignore 负责（否则会传输整个 target/）。
+#     cd server && docker build -f harness/Dockerfile -t tcm-harness:local .
+# 因为 harness 与 rrserver 同属一个 workspace，且 harness 依赖 rrserver 的 lib，
+# 两者源码都必须进入上下文。
 #
-# 【为什么要预编译】Docker 构建容器内网络会损坏 crates.io 下载（manifest 解析失败，
-# exit 101），无法在容器内 `cargo build`。改为在 **WSL2** 的 Linux 环境预先编译：
-#     wsl -e bash -c '. "$HOME/.cargo/env"; cd /mnt/d/labs/windblue_tech/tcm_work/server && cargo build --release'
-# 或使用仓库脚本：pwsh scripts/build-release.ps1
-# 生成的 Linux 二进制 server/target/release/harness 即被本 Dockerfile 使用。
+# 【为什么在 Docker 内编译】
+# 后端**完全依赖 Docker** 构建、运行与验证，不使用宿主机/WSL2 的本地产物。
+# 此前本文件是 COPY 预编译二进制（需先在 WSL2 里 cargo build），
+# 那既违背「一切走 Docker」，也让 CI 无法独立复现产物。
 #
-# 运行时【无需系统 OpenSSL】（全部走 rustls），镜像内只需 ca-certificates 即可对外 TLS。
-# 以非 root 用户（uid 10001）运行，降低被攻陷后的影响面。
+# 【glibc 兼容性】构建镜像用 rust:1.98-bookworm（glibc 2.36），
+# 运行镜像用 ubuntu:24.04（glibc 2.39）。低版本 glibc 编译出的二进制
+# 可在高版本上运行（向前兼容）；反之才会报 "GLIBC_2.39 not found"。
+#
+# 【层缓存策略】先只复制清单 + 占位源码预编译依赖，再复制真实源码。
+# 依赖不变时，耗时的第三方 crate 编译结果可被 Docker 层缓存复用。
 
-# ubuntu:24.04 的 glibc 2.39 与 WSL2 编译环境一致，
-# 避免 "GLIBC_2.39 not found" 的 ABI 不兼容（debian:bookworm 为 glibc 2.36）。
+# ---------------- 构建阶段 ----------------
+FROM rust:1.98-bookworm AS builder
+
+WORKDIR /build
+
+# 1) 只复制清单文件（依赖未变动时，下面整层都能命中缓存）
+COPY Cargo.toml Cargo.lock ./
+COPY harness/Cargo.toml ./harness/
+COPY rrserver/Cargo.toml ./rrserver/
+
+# 2) 占位源码：让 cargo 能解析 workspace 并编译依赖。
+#    harness 依赖 rrserver 的 lib，故 rrserver 的 src 也必须有占位。
+RUN mkdir -p harness/src rrserver/src \
+    && printf '' > harness/src/lib.rs \
+    && printf 'fn main() {}\n' > harness/src/main.rs \
+    && printf '' > rrserver/src/lib.rs \
+    && printf 'fn main() {}\n' > rrserver/src/main.rs
+
+# 3) 预编译全部依赖（本层是耗时大头，但可被缓存）
+RUN cargo build --release -p harness
+
+# 4) 复制真实源码与资源
+COPY harness/src ./harness/src
+COPY harness/resources ./harness/resources
+COPY harness/cases.jsonl ./harness/cases.jsonl
+COPY harness/tests ./harness/tests
+COPY rrserver/src ./rrserver/src
+
+# 5) 重新构建：依赖已缓存，这里只重编 harness / rrserver 自身
+#    touch 是为了让 mtime 一定新于上一步产物，确保触发重编
+RUN touch harness/src/main.rs harness/src/lib.rs rrserver/src/lib.rs \
+    && cargo build --release -p harness
+
+# ---------------- 运行阶段 ----------------
 FROM ubuntu:24.04
 
 # rustls 不需要 OpenSSL；ca-certificates 用于对外 TLS 握手。
@@ -27,12 +61,10 @@ RUN apt-get update \
 
 WORKDIR /data
 
-# 预编译的 Linux release 二进制（路径相对于 workspace 根上下文）
-COPY target/release/harness /usr/local/bin/harness
+COPY --from=builder /build/target/release/harness /usr/local/bin/harness
 # 可改的 YAML 资源：打进镜像作为默认值，运行时用 bind mount 覆盖即可免重建调整
 COPY harness/resources /data/resources
 
-# 资源目录归属运行用户，保证可读（bind mount 场景由宿主机权限决定）
 RUN chown -R harness:harness /data
 
 USER harness

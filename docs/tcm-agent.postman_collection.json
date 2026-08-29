@@ -1,12 +1,13 @@
 {
   "info": {
-    "name": "中医智能问诊 Agent API",
-    "description": "中医问诊诊断 Agent 的 REST API 集合。\n\n注意：\n- 创建档案后，把返回的 id 填到集合变量 `cid` 再继续后续调用。\n- 未配置 LLM Key 时系统自动降级 mock，全流程仍可演示。\n- 也可直接访问服务根路径的 /openapi.json 获取自动生成的 OpenAPI 文档。",
+    "name": "harness 中医智能问诊 API",
+    "description": "harness（Rust 后端）的 REST API 集合。\n\n注意：\n- baseUrl 默认直连 harness :8011；若经 nginx，改为 https://<域名>/api（nginx 会剥离 /api 前缀）。\n- harness 是**无状态**服务，没有会话 id，多轮问诊由调用方维护 messages 数组。\n- 所有错误以 HTTP 200 + {\"error\": \"...\"} 返回，务必检查 error 字段。\n- /chat 与 POST /agents 需要真实 LLM（LM Studio 或 llm_server 网关），无 mock 兜底。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8000", "type": "string" },
-    { "key": "cid", "value": "", "type": "string" }
+    { "key": "baseUrl", "value": "http://localhost:8011", "type": "string" },
+    { "key": "capability", "value": "differentiation", "type": "string" },
+    { "key": "skill", "value": "tcm-kb", "type": "string" }
   ],
   "item": [
     {
@@ -16,95 +17,107 @@
           "name": "健康检查",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/health",
-            "description": "返回 {\"ok\": true}"
+            "url": "{{baseUrl}}/health",
+            "description": "返回纯文本 ok"
           }
         },
         {
-          "name": "查看 Sub-Agent 路由",
+          "name": "列出 Sub-Agent 能力",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/system/agents",
-            "description": "查看每个 capability 当前用的实现(impl)与模型(model)，便于运维切换。"
+            "url": "{{baseUrl}}/agents",
+            "description": "返回 {\"capabilities\":[...7 个 slug], \"names\":[...中文名]}"
+          }
+        },
+        {
+          "name": "热重载 YAML 资源",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/reload",
+            "description": "需 resources/config.yaml 中 hot_reload: true。返回 {\"ok\": true}"
           }
         }
       ]
     },
     {
-      "name": "问诊会话",
+      "name": "诊断",
       "item": [
         {
-          "name": "1. 新建问诊档案",
+          "name": "完整诊断流程（POST /chat）",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/api/consultations",
+            "url": "{{baseUrl}}/chat",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"patient\": {\n    \"region\": \"广州\",\n    \"height_cm\": 172,\n    \"weight_kg\": 78,\n    \"age\": 34,\n    \"gender\": \"男\"\n  },\n  \"complaint\": \"最近总觉得身体沉重，口苦口臭，大便粘马桶，没什么胃口\",\n  \"self_report\": { \"heart_rate\": 76 }\n}"
+              "raw": "{\n  \"messages\": [\n    {\"role\":\"user\",\"content\":\"口苦口臭、大便粘滞不爽、肢体困重，舌红苔黄腻\"}\n  ],\n  \"payload\": {\"gender\":\"男\",\"age\":34,\"region\":\"广州\"}\n}"
             },
-            "description": "返回 {\"id\": \"cons_xxx\", \"status\": \"created\"}，将 id 填到变量 cid。"
+            "description": "按 routing.yaml 的 active 顺序串行跑完所有步骤，返回 {\"steps\":[{\"capability\",\"text\"}], \"summary\"}。\n一次请求会调用 7 次 LLM，耗时较长；任一步失败整个请求返回 {\"error\":...}。"
           }
         },
         {
-          "name": "2. 上传舌象/面相/患处照片",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": "{{baseUrl}}/api/consultations/{{cid}}/images",
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                { "key": "type", "value": "tongue", "type": "text", "description": "tongue | face | lesion" },
-                { "key": "file", "type": "file", "src": "", "description": "选择本地图片" }
-              ]
-            },
-            "description": "可选步骤；type 取值 tongue/face/lesion。"
-          }
-        },
-        {
-          "name": "3. 启动诊断",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/consultations/{{cid}}/start",
-            "description": "返回 StateResp：status=waiting_answer 且带 question。"
-          }
-        },
-        {
-          "name": "4. 回答（辨证追问 / 方案个性化追问）",
+          "name": "诊断（带处方安全校验）",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/api/consultations/{{cid}}/answer",
+            "url": "{{baseUrl}}/chat",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"question_id\": \"q_xxx\",\n  \"value\": \"可煎药\",\n  \"text\": \"\"\n}"
+              "raw": "{\n  \"messages\": [\n    {\"role\":\"user\",\"content\":\"口苦口臭、肢体困重，舌红苔黄腻\"}\n  ],\n  \"payload\": {\"syndrome\":\"脾胃湿热\",\"herbs\":[\"半夏\",\"川乌\"],\"pregnant\":false}\n}"
             },
-            "description": "question_id 取自当前 question.id；value 通常为选项 label，自由输入放 text。\n状态会依次经历 waiting_answer / treatment_qa，最终 finished。"
+            "description": "payload.herbs 触发十八反十九畏校验，payload.pregnant 触发妊娠禁忌校验。示例中半夏+川乌属十八反应命中。"
           }
         },
         {
-          "name": "5. 拉取状态/消息流",
+          "name": "单步调用某个 Sub-Agent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/agents",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"capability\": \"{{capability}}\",\n  \"messages\": [{\"role\":\"user\",\"content\":\"口苦口臭、肢体困重、舌红苔黄腻\"}],\n  \"payload\": {}\n}"
+            },
+            "description": "capability 取值：inspection | listening | inquiry | palpation | differentiation | safety | treatment。\n返回 {\"capability\",\"content\"}。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "技能",
+      "item": [
+        {
+          "name": "列出技能",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/consultations/{{cid}}",
-            "description": "返回 StateResp（status / round / question / hypotheses / messages / report）。"
+            "url": "{{baseUrl}}/skills",
+            "description": "返回 {\"skills\":[{name, description, owner}]}，共 9 个。owner 为\"全局\"表示所有 capability 可见。"
           }
         },
         {
-          "name": "6. 诊断报告",
+          "name": "执行技能（全局：tcm-kb）",
           "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/consultations/{{cid}}/report",
-            "description": "返回 Report：syndromes(证候) + reasoning(依据) + advice(建议) + treatments(诊疗方案)。"
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/skills",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"tcm-kb\",\n  \"arguments\": {\"query\": \"脾胃湿热\"}\n}"
+            },
+            "description": "tcm-kb 入参 {\"query\": string}；tcm-diet 入参 {\"syndrome\": string}；tcm-rag 入参 {\"query\": string}；\n6 个专属技能（tcm-vision / tcm-auscultation / tcm-inquiry / tcm-palpation / tcm-reference / tcm-safety）入参均为 {\"text\": string}。"
           }
         },
         {
-          "name": "7. 调用轨迹(trace)",
+          "name": "执行技能（专属：tcm-vision）",
           "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/consultations/{{cid}}/trace",
-            "description": "查看每轮由哪个 impl/model 处理、耗时多少，便于排查与成本统计。"
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/skills",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"tcm-vision\",\n  \"arguments\": {\"text\": \"舌红，苔黄腻，舌体胖大边有齿痕\"}\n}"
+            },
+            "description": "6 个专属技能内部会以 text 为输入重跑对应 Sub-Agent（使用空技能注册表，不会递归）。"
           }
         }
       ]

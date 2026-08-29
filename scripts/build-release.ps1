@@ -1,155 +1,86 @@
 <#
 .SYNOPSIS
-  Build Linux release binaries for the server/ workspace (for Docker images).
-  Compatible with Windows PowerShell 5.1 and PowerShell 7+.
+  构建后端 Docker 镜像（harness / rrserver）。
 
 .DESCRIPTION
-  Why this script exists:
-    Inside a Docker build container the network corrupts crates.io downloads
-    (manifest parse failure, exit 101), so `cargo build` cannot run there.
-    Both images (harness / rrserver) therefore ship a PRE-BUILT Linux binary,
-    and this script produces those binaries.
+  后端**完全依赖 Docker** 构建：编译在两个多阶段 Dockerfile 内完成，
+  **不使用宿主机或 WSL2 的本地 cargo 产物**。
 
-  Why it builds inside the WSL native filesystem by default:
-    The repo lives on the Windows filesystem; WSL accesses /mnt/d over 9p, which
-    is extremely slow for a full compile. So the sources are copied to a native
-    ext4 dir (~/tcm-build/server), compiled there, and the two binaries are
-    copied back to server/target/release/ where `docker build` can COPY them.
+  本脚本此前负责「在 WSL2 里预编译 Linux 二进制再拷回 server/target/release/」，
+  这是因为旧版 Dockerfile 直接 COPY 预编译二进制。该流程已废弃——
+  镜像内编译让构建可复现、CI 可独立执行，也不再需要 WSL2 与本地 Rust 工具链。
 
-  Output paths (Dockerfiles depend on these - do not change):
-    server/target/release/harness
-    server/target/release/rrserver
-  (harness and rrserver share one workspace; sub-crates have no own target/,
-   so the docker build context MUST be the workspace root: server/.)
+  镜像内的层缓存策略（见各 Dockerfile）：
+    1) 先只复制清单 + 占位源码预编译第三方依赖（依赖不变则命中缓存）
+    2) 再复制真实源码，只重编本 workspace 的 crate
 
-.PARAMETER InPlace
-  Compile directly under /mnt/d instead (slower, but no copy needed).
+.PARAMETER Tag
+  镜像标签，默认 local（产出 tcm-harness:local / tcm-rrserver:local）。
 
-.PARAMETER Clean
-  Run `cargo clean` first (full rebuild).
+.PARAMETER NoCache
+  忽略 Docker 层缓存，全量重建。
+
+.PARAMETER SkipTests
+  跳过「在 Docker 内跑 cargo test」。
 
 .EXAMPLE
   powershell -NoProfile -File scripts\build-release.ps1
 
-  Then deploy:
+  然后部署：
     cd frontend && npm run build:h5
     docker compose -f deploy/docker-compose.yml up -d --build
 #>
 param(
-  [switch]$InPlace,
-  [switch]$Clean
+  [string]$Tag = 'local',
+  [switch]$NoCache,
+  [switch]$SkipTests
 )
 
 $ErrorActionPreference = 'Stop'
 
-# ---- 1. Paths -------------------------------------------------
 $RepoRoot  = Split-Path $PSScriptRoot -Parent          # tcm_work
 $ServerDir = Join-Path $RepoRoot 'server'
 
-# Windows path -> WSL path (d:\labs\... -> /mnt/d/labs/...)
-$WslServer = ($ServerDir -replace '\\', '/')
-if ($WslServer -match '^([A-Za-z]):') {
-  $WslServer = '/mnt/' + $Matches[1].ToLower() + $WslServer.Substring(2)
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+  throw 'docker not found. 后端一律通过 Docker 构建，请先安装 Docker Desktop。'
+}
+docker version --format '{{.Server.Version}}' *> $null
+if ($LASTEXITCODE -ne 0) { throw 'Docker 守护进程未运行，请启动 Docker Desktop。' }
+
+Write-Host "[build] workspace : $ServerDir" -ForegroundColor Cyan
+
+# ---------- 1. 测试（在 Docker 内，不依赖本地 Rust） ----------
+if (-not $SkipTests) {
+  Write-Host "[test ] cargo test -p harness (Docker) ..." -ForegroundColor Yellow
+  docker run --rm -v "${ServerDir}:/build" -w /build rust:1.98-bookworm cargo test -p harness
+  if ($LASTEXITCODE -ne 0) { throw "harness 测试失败（exit $LASTEXITCODE）" }
+  Write-Host "[test ] OK harness" -ForegroundColor Green
 }
 
-Write-Host "[build] repo root : $RepoRoot" -ForegroundColor Cyan
-Write-Host "[build] wsl path  : $WslServer" -ForegroundColor Cyan
+# ---------- 2. 构建镜像 ----------
+# 构建上下文必须是 workspace 根（server/）：两个 crate 共享 target/，
+# 且 harness 依赖 rrserver 的 lib，两者源码都要进上下文。
+Push-Location $ServerDir
+try {
+  foreach ($crate in @('harness', 'rrserver')) {
+    $image = "tcm-${crate}:${Tag}"
+    Write-Host "[build] docker build $image ..." -ForegroundColor Yellow
 
-# ---- 2. Environment checks ------------------------------------
-if (-not (Get-Command wsl -ErrorAction SilentlyContinue)) {
-  throw "wsl not found. Install WSL2 (Ubuntu 24.04 recommended: glibc 2.39 matches the runtime image)."
-}
-$cargoVer = (wsl -e bash -c '. "$HOME/.cargo/env" 2>/dev/null; cargo --version' | Out-String).Trim()
-if ($cargoVer -notmatch '^cargo ') {
-  throw "cargo not found in WSL (got: $cargoVer). Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-}
-Write-Host "[build] $cargoVer" -ForegroundColor Cyan
+    $dockerArgs = @('build', '-f', "${crate}/Dockerfile", '-t', $image)
+    if ($NoCache) { $dockerArgs += '--no-cache' }
+    $dockerArgs += '.'
 
-# ---- 3. Pick compile dir --------------------------------------
-$sw = [System.Diagnostics.Stopwatch]::StartNew()
-# Use ~/ (the WSL default user's home) - /root is not writable for a non-root user.
-# '~' is expanded by bash, so it must stay as-is in the command string.
-$WslBuildDir = '~/tcm-build/server'
-
-if ($InPlace) {
-  Write-Host '[build] mode: in-place under /mnt/d (slower)' -ForegroundColor Yellow
-  $compileDir = $WslServer
-} else {
-  Write-Host '[build] mode: WSL native dir (fast), then copy back' -ForegroundColor Yellow
-  $compileDir = $WslBuildDir
-
-  Write-Host "[build] syncing sources -> $WslBuildDir ..." -ForegroundColor Yellow
-  $sync = @'
-set -e
-mkdir -p @@BUILD@@
-cd '@@SRC@@'
-for d in harness rrserver; do
-  rm -rf @@BUILD@@/$d
-  cp -r $d @@BUILD@@/
-done
-cp Cargo.toml @@BUILD@@/ 2>/dev/null || true
-cp Cargo.lock @@BUILD@@/ 2>/dev/null || true
-echo synced
-'@
-  $sync = $sync -replace '@@BUILD@@', $WslBuildDir
-  $sync = $sync -replace '@@SRC@@', $WslServer
-  # PowerShell here-strings use CRLF; bash chokes on the trailing \r.
-  $sync = $sync -replace "`r`n", "`n"
-  wsl -e bash -c $sync
-  if ($LASTEXITCODE -ne 0) { throw "source sync failed (exit $LASTEXITCODE)" }
-}
-
-# ---- 4. Compile -----------------------------------------------
-if ($Clean) {
-  Write-Host '[build] cargo clean (full rebuild)...' -ForegroundColor Yellow
-  wsl -e bash -c ('cd ' + $compileDir + ' && . "$HOME/.cargo/env" && cargo clean')
-  if ($LASTEXITCODE -ne 0) { throw 'cargo clean failed' }
-}
-
-Write-Host '[build] cargo build --release (first run is slow)...' -ForegroundColor Yellow
-wsl -e bash -c ('cd ' + $compileDir + ' && . "$HOME/.cargo/env" && cargo build --release')
-if ($LASTEXITCODE -ne 0) {
-  throw "cargo build --release failed (exit $LASTEXITCODE). See output above."
-}
-
-$sw.Stop()
-Write-Host ("[build] compiled in {0}s" -f [int]$sw.Elapsed.TotalSeconds) -ForegroundColor Green
-
-# ---- 5. Copy binaries back ------------------------------------
-if (-not $InPlace) {
-  Write-Host '[build] copying binaries back to server/target/release/ ...' -ForegroundColor Yellow
-  $copy = @'
-set -e
-mkdir -p '@@SRC@@/target/release'
-cp -f @@BUILD@@/target/release/harness  '@@SRC@@/target/release/harness'
-cp -f @@BUILD@@/target/release/rrserver '@@SRC@@/target/release/rrserver'
-echo copied
-'@
-  $copy = $copy -replace '@@BUILD@@', $WslBuildDir
-  $copy = $copy -replace '@@SRC@@', $WslServer
-  $copy = $copy -replace "`r`n", "`n"
-  wsl -e bash -c $copy
-  if ($LASTEXITCODE -ne 0) { throw "copy back failed (exit $LASTEXITCODE)" }
-}
-
-# ---- 6. Verify ------------------------------------------------
-$missing = @()
-foreach ($bin in @('harness', 'rrserver')) {
-  $p = Join-Path $ServerDir ('target/release/' + $bin)
-  if (Test-Path $p) {
-    $size = [math]::Round((Get-Item $p).Length / 1MB, 2)
-    Write-Host ("[build] OK  target/release/{0} ({1} MB)" -f $bin, $size) -ForegroundColor Green
-  } else {
-    $missing += $bin
-    Write-Host "[build] NG  missing target/release/$bin" -ForegroundColor Red
+    & docker @dockerArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "docker build 失败：$crate（exit $LASTEXITCODE）"
+    }
+    Write-Host "[build] OK $image" -ForegroundColor Green
   }
-}
-
-if ($missing.Count -gt 0) {
-  throw ('binaries not produced: ' + ($missing -join ', ') + '. Docker build would fail.')
+} finally {
+  Pop-Location
 }
 
 Write-Host ''
-Write-Host '[build] done. Next steps:' -ForegroundColor Cyan
-Write-Host '        cd frontend && npm run build:h5            # static assets for nginx'
+Write-Host '[build] done. 下一步：' -ForegroundColor Cyan
+Write-Host '        cd frontend && npm run build:h5            # nginx 托管的静态产物'
 Write-Host '        docker compose -f deploy/docker-compose.yml up -d --build'

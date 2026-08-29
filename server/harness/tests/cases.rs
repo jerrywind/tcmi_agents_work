@@ -15,8 +15,7 @@ use std::path::Path;
 
 fn load_cases() -> Vec<serde_json::Value> {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("cases.jsonl");
-    let text = std::fs::read_to_string(&p)
-        .expect("cases.jsonl 缺失：请从 backend/cases 复制到此");
+    let text = std::fs::read_to_string(&p).expect("cases.jsonl 缺失：请从 backend/cases 复制到此");
     text.lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str::<serde_json::Value>(l).expect("cases.jsonl 行解析失败"))

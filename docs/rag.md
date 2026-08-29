@@ -119,10 +119,13 @@ curl -X POST http://localhost:8080/rag/ingest \
 
 ## 与 Sub-Agent 的衔接（可选）
 
-后端可经环境变量指向本服务：
-- **harness（Rust，现行）**：`HARNESS_RAG_ENDPOINT=http://<rag-host>:<port>`
-  （前缀是 `HARNESS_`；留空时 `tcm-rag` 技能返回提示而不报错）
-- **原 backend（Python，已归档）**：`TCM_RAG_BASE_URL=http://llm_server:8080`
+harness 经环境变量 `HARNESS_RAG_ENDPOINT` 指向本服务（前缀是 `HARNESS_`；
+留空时 `tcm-rag` 技能返回提示串而不报错）。
+
+> ⚠️ **契约尚未对齐**：`tcm-rag` 技能直接向该地址 POST `{"query": "..."}`，
+> 而本服务的检索端点是 `POST /rag/retrieve/text`（返回**数组**）。
+> 因此 `HARNESS_RAG_ENDPOINT` 需填写到具体端点路径，例如
+> `http://<rag-host>:8080/rag/retrieve/text`。对齐任务见 [`tasks.md`](./tasks.md) T2.1。
 
 Sub-Agent 在执行时若需检索药典、医案、舌象图谱等资料，可调用 RAG 服务获得相关上下文后
 再生成结论；无 RAG 服务时不影响问诊流程（参见 `docs/sub_agents.md`、`docs/skills.md`）。

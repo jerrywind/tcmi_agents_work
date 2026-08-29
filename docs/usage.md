@@ -6,6 +6,9 @@
 
 ## 1. 产品使用流程（前端页面）
 
+> **前端已切到 harness 契约**：旧的会话式 `services/api.ts` 已下线，5 个页面改用
+> `services/harness.ts`，多轮 `messages` 由 `services/session.ts` 在前端维护。
+
 1. **新建问诊档案**（`pages/index`）
    - 填写基本信息：常住地、身高、体重、年龄、性别。
    - 填写病情自述（主诉）。
@@ -20,12 +23,16 @@
    - 产出以「更快、更彻底痊愈」为目标的综合方案，涵盖：**中药方剂、针灸推拿、外治法、西医检查、生活调护/膳食**。
    - 西医检查项用于明确诊断、排除器质病变（用户暂拒则降级为可选建议）。
 4. **诊断报告**（`pages/report`）
-   - 证候结论（1~2 条）、辨证依据链（支持/矛盾证据）、调理建议、诊疗方案、免责声明，支持查看与分享。
+   - **辨证结构**卡片（T4.1/T4.2）：主证与兼证并列展示，各带置信度、支持证据与矛盾证据
+     （如「主证 脾胃湿热 80%｜支持：口苦、口臭…｜矛盾：（无）」），并给出基于主证的传变提示。
+     兼证与主证是**并存**关系，不是备选方案。
+   - 证候结论、辨证依据链（支持/矛盾证据）、调理建议、诊疗方案、免责声明，支持查看与分享。
 
 5. **技能管理**（`pages/skills`，可选）
-   - 列出当前可用技能及其归属（`GET /skills`）：`tcm-kb`、`tcm-diet`、`tcm-rag` 等共 9 个。
-   - harness 的技能为**内置注册**（Rust 编译期装配），不支持运行时按名装载/卸载
-     （区别于原 backend 的 `skills/` 目录热装载）；新增技能需改 `skills/builtin.rs` 后重新构建。
+   - 列出当前可用技能及其归属（`GET /skills`）：`tcm-kb`、`tcm-diet`、`tcm-rag` 等共 11 个，
+     外加 `config.yaml` 里 `mcp_clients` 挂载的 `mcp__*` 外部工具。
+   - harness 的内置技能为**编译期注册**，不支持运行时按名装载/卸载；
+     新增技能需改 `src/skills/builtin.rs` 后重新构建；外部工具改配置即可。
    - 扩展知识库请优先改 `resources/*.yaml`，或用 `HARNESS_RAG_ENDPOINT` 接入自有 RAG。
      详见 [`SKILL 工具集`](./skills.md)。
 
@@ -34,10 +41,10 @@
 Base URL（开发）：`http://localhost:8011`
 （生产经 nginx 时为 `https://<域名>/api`，nginx 会剥离 `/api` 前缀后转发）
 
-> **与原 backend 的重要差异**：harness 是**无状态**服务，不保存问诊会话，
-> 没有 `cons_xxx` 会话 id、没有 `start/answer/report/trace` 等会话端点、也不提供
-> 图片上传与 `/uploads` 静态目录（图片以 base64 / URL 随请求传入）。
-> 多轮问诊由**调用方**（前端）维护 `messages` 数组，每次带上完整对话历史。
+> **harness 是无状态服务**：不保存问诊会话，没有会话 id，也没有
+> `start/answer/report/trace` 等会话端点；不提供图片上传与 `/uploads` 静态目录
+> （图片以 base64 / URL 随请求传入）。
+> 多轮问诊由**调用方**维护 `messages` 数组，每次带上完整对话历史。
 
 ### 2.1 健康检查
 ```bash
@@ -63,10 +70,56 @@ curl -X POST http://localhost:8011/chat \
     "payload": {"gender":"男","age":34,"region":"广州"}
   }'
 # -> {"steps":[{"capability":"inspection","text":"..."}, ...],
-#     "summary":"## 望诊\n...\n\n## 辨证\n..."}
+#     "summary":"## 望诊\n...\n\n## 辨证\n...",
+#     "failures":[], "partial":false,
+#     "blocked":false, "skipped":[],
+#     "structured":{"differentiation":{
+#        "primary":{"slug":"spleen_stomach_damp_heat","name":"脾胃湿热",
+#                   "confidence":0.8,
+#                   "supporting":["口苦","口臭","肢体困重","脾胃湿热证据"],
+#                   "conflicting":[], "pathogenesis":"湿热蕴结中焦…","score":4.0},
+#        "concurrent":[{"slug":"liver_qi_stagnation","name":"肝郁气滞",
+#                       "confidence":0.4, "supporting":["烦躁易怒","肝郁气滞证据"],
+#                       "conflicting":[], "pathogenesis":"肝失疏泄…","score":2.0}],
+#        "transformations":[]}},
+#     "trace":[{"capability":"inspection","name":"望诊","duration_ms":1234,
+#               "model":"...","llm_calls":2,"llm_attempts":2,
+#               "prompt_tokens":..., "completion_tokens":..., "total_tokens":...,
+#               "tool_calls":["tcm-vision"], "error":null}, ...]}
 ```
 按 `resources/routing.yaml` 的 `active` 顺序依次调用各 Sub-Agent（望→闻→问→切→辨证→安全门→治疗），
-返回每一步的输出 `steps` 与汇总文本 `summary`。
+返回每一步的输出 `steps` 与汇总文本 `summary`，并附逐步埋点 `trace`。
+
+> **`/chat` 是一次性串行全跑，不是多轮对话**：一次请求把 `active` 列表里的
+> 每个 Sub-Agent 各跑一遍（默认 7 步），直接返回全部结果。
+> harness **没有**「问→等用户答→再问」的服务端循环，也**不会中途收敛**
+> （唯一例外是安全门命中高危红旗时提前终止，见下）。
+> 多轮交互必须由调用方实现：把历史问答累积进 `messages` 后再次 `POST /chat`。
+>
+> **部分失败降级**：某一步失败不再让整次 `/chat` 失败——已完成的步骤照常返回，
+> 失败步骤记入 `failures` 并置 `partial: true`；只有**全部步骤都失败**
+> （通常是 LLM 不可达）才返回 `{"error": ...}`。
+>
+> **安全门拦截（红旗）**：命中 `high`/`critical` 级红色警戒时，安全门之后
+> 的步骤被**跳过**不再执行（默认即治疗步），响应返回 `blocked: true`、
+> `block_reason` 与 `skipped[]`。调用方应据此引导就医，而不是展示治疗方案。
+>
+> **结构化输出（`structured`）**：目前只有辨证步产出，键为 `differentiation`，
+> 含主证（`primary`）、兼证（`concurrent`）与传变提示（`transformations`）；
+> 每个证候带 `confidence`（0~1）、`supporting[]`、`conflicting[]`、`pathogenesis`。
+> 与正文 `steps[].text` 同源、同一份输入，但**不经过 LLM**，因此是确定性的：
+> 调用方可直接按字段渲染，无需从 Markdown 反解析。
+> 仅在该步骤**成功**时产出（步骤失败则 `structured` 里没有该 capability 的键，
+> 此时看 `failures[]`）。详见 2.8。
+
+`payload` 字段（全部可选，按需传）：
+
+| 字段 | 类型 | 作用 |
+|---|---|---|
+| `syndrome` | string | 指定证候 slug/中文名，供治疗 Agent 检索方剂与调护 |
+| `herbs` | string[] | 待校验的处方药味，供安全门与治疗 Agent 做配伍禁忌校验 |
+| `pregnant` | bool | 妊娠禁忌校验开关，配合 `herbs` 使用 |
+| 其它（如 `gender`/`age`/`region`） | any | 透传给各 Agent，当前版本 Agent 未读取 |
 
 ### 2.4 单步调用某个 Sub-Agent
 ```bash
@@ -77,22 +130,46 @@ curl -X POST http://localhost:8011/agents \
     "messages": [{"role":"user","content":"口苦口臭、肢体困重、舌红苔黄腻"}],
     "payload": {}
   }'
-# -> {"capability":"differentiation","content":"..."}
+# -> {"capability":"differentiation","content":"...","trace":{...},
+#     "structured":{"primary":{...},"concurrent":[...],"transformations":[]}}
 ```
 `capability` 取值：`inspection` | `listening` | `inquiry` | `palpation` |
 `differentiation` | `safety` | `treatment`。
 
+`structured` 仅辨证步有内容，其余步骤为 `null`（字段恒定存在，便于调用方无分支取值）。
+
 ### 2.5 技能（SKILL）
 ```bash
-curl http://localhost:8011/skills           # 列出 9 个技能及归属（owner）
+curl http://localhost:8011/skills                # 列出全部技能及归属（owner）
+curl 'http://localhost:8011/skills?owner=treatment'   # 只看治疗步用得到的工具
 curl -X POST http://localhost:8011/skills \
   -H 'Content-Type: application/json' \
-  -d '{"name":"tcm-kb","arguments":{"q":"脾胃湿热 常用方"}}'
-# -> {"result": ...}
+  -d '{"name":"tcm-kb","arguments":{"query":"脾胃湿热"}}'
+# -> {"result":{"name":"脾胃湿热","pathogenesis":"..."}}
 ```
-内置技能：`tcm-vision`(望诊)、`tcm-auscultation`(闻诊)、`tcm-inquiry`(问诊)、
-`tcm-palpation`(切诊)、`tcm-reference`(辨证)、`tcm-safety`(安全门)、
-`tcm-kb`、`tcm-diet`、`tcm-rag`(全局)。详见 [`SKILL 工具集`](./skills.md)。
+
+**11 个内置技能及其入参**（详见 [`skills.md`](./skills.md)）：
+
+| 技能 | 归属 | 入参 |
+|---|---|---|
+| `tcm-vision` | 望诊 | `{"text": "..."}` |
+| `tcm-auscultation` | 闻诊 | `{"text": "..."}` |
+| `tcm-inquiry` | 问诊 | `{"text": "..."}` |
+| `tcm-palpation` | 切诊 | `{"text": "..."}` |
+| `tcm-reference` | 辨证 | `{"text": "..."}` |
+| `tcm-safety` | 安全门 | `{"text": "..."}` |
+| `tcm-kb` | 全局 | `{"query": "..."}` |
+| `tcm-diet` | 全局 | `{"syndrome": "..."}` |
+| `tcm-rag` | 全局 | `{"query": "...", "top_k"?: number}` |
+| `tcm-formula` | 治疗 | `{"syndrome": "..."}` |
+| `tcm-care` | 治疗 | `{"syndrome": "..."}` |
+
+> - 内置技能为**编译期注册**，不支持运行时装载/卸载；外部 MCP 工具改 `config.yaml` 的
+>   `mcp_clients` 即可挂载。
+> - 7 个 Sub-Agent 在推理时**会自动调用**自己可见的技能（每步最多 `max_tool_rounds` 轮），
+>   调用轨迹见 `/chat` 响应 `trace[].tool_calls`；也可按上表显式 `POST /skills` 触发。
+> - `POST /skills` 带 `owner` 时按该 capability 的可见范围过滤，越界调用返回
+>   `{"error":"未知技能: xxx"}`。
 
 ### 2.6 热重载 YAML 资源
 ```bash
@@ -100,12 +177,37 @@ curl -X POST http://localhost:8011/reload   # -> {"ok":true}
 ```
 需 `resources/config.yaml` 中 `hot_reload: true`。改完证候/方剂/问诊等 YAML 后调用即可，
 无需重启（详见 [`deployment.md`](./deployment.md) 3.4）。
+新增的 `contradictions.yaml` 同样走热重载；文件缺失时按空列表处理（只是没有矛盾证据）。
 
-### 2.7 字段速览
+### 2.7 MCP 端点（供外部 MCP 客户端接入）
+
+```bash
+curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# -> {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"agent_inspection",...}, ...]}}
+```
+
+对外暴露 7 个 `agent_*` 工具（每个 capability 一个）+ `run_agent`（通用入口）+
+`list_agent_capabilities`（能力清单，不需要 LLM）。
+`tools/call` 等价于一次 `POST /agents`，辨证工具额外在 `structuredContent` 里
+返回结构化的主证/兼证。完整工具表与错误约定见 [`mcp.md`](./mcp.md)。
+
+### 2.8 字段速览
 - `Message`：`{"role":"user"|"assistant"|"system", "content":"..."}`
-- `/chat` 响应：`steps[]`（每步 `capability` + `text`）、`summary`（汇总 Markdown）
+- `/chat` 响应：
+  - `steps[]`（每步 `capability` + `text`）、`summary`（汇总 Markdown）
+  - `failures[]`、`partial`：失败步骤与该次结果是否不完整
+  - `blocked`、`blocked_by`、`block_reason`、`skipped[]`：安全门拦截标记与被跳过的步骤
+  - `trace[]`：每步埋点（`capability`/`name`/`duration_ms`/`model`/`llm_calls`/
+    `llm_attempts`/`llm_duration_ms`/`prompt_tokens`/`completion_tokens`/`total_tokens`/
+    `tool_calls[]`/`error`）
+  - `structured`：按 capability 键的结构化输出，目前只有 `differentiation`
+    （`primary` / `concurrent[]` / `transformations[]`；每个证候含 `slug` / `name` /
+    `confidence` / `supporting[]` / `conflicting[]` / `pathogenesis` / `score`）
+- `POST /agents` 响应：`capability`、`content`、`trace`（同上，单步）、`structured`（无则为 `null`）
 - 错误：任一接口失败返回 `{"error":"..."}`（HTTP 状态码仍为 200，需检查 `error` 字段）
-- 安全门：`safety` 步骤会给出红旗告警提示（建议立即就医）
+- 安全门：命中 `high`/`critical` 红旗时**中断后续步骤**并置 `blocked: true`；
+  `medium`（如妊娠）只告警不中断
 
 ## 3. 切换 / 启用真实 LLM
 
@@ -158,7 +260,19 @@ active: [inspection, listening, inquiry, palpation, differentiation, safety, tre
 
 ## 4. 常见问题
 
-- **为什么有时中途直接结束？** 若为 `referred`，说明出现红旗症状，系统优先保障安全并引导线下就医。
-- **为什么只问了很少几轮？** 当候选证候置信度达标（Top1≥0.55 且领先≥0.15）或接近兼证时即收敛，避免无谓打扰。
-- **方案里出现西医检查？** 这是"更快更彻底痊愈"的主动设计：用西医手段明确诊断、排除器质病变，与中医方案互补。
-- **孕期/备孕提示？** 方案阶段会追问，若选"孕期/备孕"则中药项会附加安全提示，用药须由专业医师辨证。
+- **`/chat` 返回 `{"error": ...}`？** harness 的错误体**也用 HTTP 200** 返回，
+  调用方必须检查 `error` 字段。最常见原因是 LLM 不可达（LM Studio 未启动或
+  `HARNESS_LLM_BASE_URL` 配错）——此时**所有**步骤都失败。
+  若只是个别步骤失败，响应会是 `partial: true` 且带 `failures[]`，已完成的步骤仍可用。
+- **为什么一次 `/chat` 要等很久？** 默认会把 7 个 Sub-Agent 各调一次 LLM（串行）。
+  减少步骤请改 `routing.yaml` 的 `active`（如只留 `differentiation`、`treatment`）。
+- **为什么没有「问诊追问 → 用户回答 → 再追问」的循环？** harness 没有服务端会话与收敛逻辑。
+  需要多轮时由调用方累积 `messages` 后重复 `POST /chat`。
+- **红旗症状会被中断吗？** 会。命中 `high`/`critical` 级红色警戒时，安全门之后的步骤
+  （默认即治疗步）直接跳过，响应返回 `blocked: true`、`block_reason` 与 `skipped[]`，
+  调用方应据此引导就医。`medium` 级（如妊娠）只在输出里给出 `[severity] advice` 告警，
+  不中断流程。
+- **方案里出现西医检查？** 这是「更快更彻底痊愈」的主动设计：用西医手段明确诊断、
+  排除器质病变，与中医方案互补。相关要求写在 `resources/prompts.yaml` 的 `treatment` 段。
+- **孕期/备孕用药安全？** 调用时在 `payload` 传 `{"herbs": [...], "pregnant": true}`，
+  安全门会做妊娠禁忌与十八反十九畏校验。

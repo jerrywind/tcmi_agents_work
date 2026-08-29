@@ -8,4 +8,4 @@ pub mod treatments;
 
 pub use herb_safety::{check_herb_safety, HerbSafetyHit};
 pub use ppg::parse_ppg;
-pub use treatments::{find_formula, find_care};
+pub use treatments::{find_care, find_formula};

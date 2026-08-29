@@ -6,8 +6,8 @@
 pub mod builtin;
 pub mod toolcall;
 
-pub use builtin::{build_default_registry, mount_mcp};
-pub use toolcall::{dispatch, http_skill, mcp_skill, Skill, SkillFn};
+pub use builtin::{build_default_registry, mount_mcp, mount_mcp_clients};
+pub use toolcall::{dispatch, http_skill, mcp_skill, mcp_skill_named, Skill, SkillFn};
 
 use crate::model::Capability;
 use std::collections::HashMap;
@@ -20,7 +20,9 @@ pub struct SkillRegistry {
 
 impl SkillRegistry {
     pub fn new() -> Self {
-        Self { map: HashMap::new() }
+        Self {
+            map: HashMap::new(),
+        }
     }
 
     pub fn register(&mut self, skill: Skill) {
@@ -31,8 +33,14 @@ impl SkillRegistry {
         self.map.get(name)
     }
 
+    /// 全部技能，**按名称稳定排序**后返回。
+    ///
+    /// 内部用 HashMap 存储，直接 `values().collect()` 会得到不稳定的顺序，
+    /// 导致 `GET /skills` 每次进程启动返回顺序都可能不同（同 `Registry::capabilities`）。
     pub fn all(&self) -> Vec<Skill> {
-        self.map.values().cloned().collect()
+        let mut list: Vec<Skill> = self.map.values().cloned().collect();
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        list
     }
 
     /// 返回某 capability 可用（专属或全局）的技能

@@ -14,6 +14,7 @@ pub struct ResourceBundle {
     pub syndromes: Vec<Syndrome>,
     pub questions: Vec<QuestionItem>,
     pub keyword_evidence: Vec<KeywordEvidence>,
+    pub contradictions: Vec<Contradiction>,
     pub red_flags: Vec<RedFlag>,
     pub transformations: Vec<Transformation>,
     pub formulas: Vec<Formula>,
@@ -25,16 +26,16 @@ pub struct ResourceBundle {
 // ------------------------- 证候库 -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct Syndrome {
-    pub slug: String,            // 英文 slug，如 wind_cold_attack_lung
-    pub name: String,            // 中文名，如 风寒袭肺证
+    pub slug: String, // 英文 slug，如 wind_cold_attack_lung
+    pub name: String, // 中文名，如 风寒袭肺证
     #[serde(default)]
     pub meridian: Option<String>, // 涉及经络/脏腑
     #[serde(default)]
-    pub symptoms: Vec<String>,    // 典型症状
+    pub symptoms: Vec<String>, // 典型症状
     #[serde(default)]
-    pub tongue: Option<String>,   // 舌象
+    pub tongue: Option<String>, // 舌象
     #[serde(default)]
-    pub pulse: Option<String>,   // 脉象
+    pub pulse: Option<String>, // 脉象
     #[serde(default)]
     pub pathogenesis: Option<String>, // 病机
 }
@@ -42,49 +43,75 @@ pub struct Syndrome {
 // ------------------------- 问诊问题库 -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct QuestionItem {
-    pub slug: String,            // 英文 slug，如 fever
-    pub prompt: String,          // 向医生提问的中文文案
+    pub slug: String,   // 英文 slug，如 fever
+    pub prompt: String, // 向医生提问的中文文案
     #[serde(default)]
     pub category: Option<String>, // 分组：寒热/汗出/头身/二便...
     #[serde(default)]
     pub evidence_keys: Vec<String>, // 命中后关联的证据 key
     #[serde(default)]
-    pub priority: u8,            // 优先级（越小越先问）
+    pub priority: u8, // 优先级（越小越先问）
 }
 
 // ------------------------- 关键词证据映射 -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct KeywordEvidence {
-    pub slug: String,            // 证据 key，如 wind_cold
-    pub label: String,           // 中文标签，如 风寒
+    pub slug: String,  // 证据 key，如 wind_cold
+    pub label: String, // 中文标签，如 风寒
     #[serde(default)]
-    pub keywords: Vec<String>,   // 触发关键词
+    pub keywords: Vec<String>, // 触发关键词
     #[serde(default)]
-    pub syndromes: Vec<String>,  // 指向的证候 slug
+    pub syndromes: Vec<String>, // 指向的证候 slug
     #[serde(default)]
-    pub note: Option<String>,    // 说明
+    pub note: Option<String>, // 说明
 }
 
 // ------------------------- 红色警戒（安全门） -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedFlag {
-    pub slug: String,            // 英文 slug，如 chest_pain
-    pub label: String,           // 中文标签，如 胸痛
+    pub slug: String,  // 英文 slug，如 chest_pain
+    pub label: String, // 中文标签，如 胸痛
     #[serde(default)]
-    pub keywords: Vec<String>,   // 触发关键词
+    pub keywords: Vec<String>, // 触发关键词
     #[serde(default)]
-    pub advice: String,          // 给用户的警示文案
+    pub advice: String, // 给用户的警示文案
     #[serde(default)]
-    pub severity: String,        // low | medium | high | critical
+    pub severity: String, // low | medium | high | critical
+}
+
+// ------------------------- 相反表现（矛盾证据，T4.1） -------------------------
+#[derive(Debug, Clone, Deserialize)]
+pub struct Contradiction {
+    pub slug: String, // 英文 slug，如 sweat
+    pub a: String,    // 互斥表现之一，如 无汗
+    pub b: String,    // 互斥表现之二，如 有汗
+    #[serde(default)]
+    pub note: Option<String>, // 说明
+}
+
+impl Contradiction {
+    /// 给定已命中的表现 `term`，返回与之矛盾**且确实出现在语料中**的表现。
+    ///
+    /// 判定双向：命中 a 且语料出现 b，或命中 b 且语料出现 a。
+    /// 语料里没有相反表现时返回 `None`——没有出现过的表现不构成矛盾证据。
+    pub fn opposite_in<'a>(&'a self, term: &str, text: &str) -> Option<&'a str> {
+        if term == self.a && text.contains(self.b.as_str()) {
+            Some(self.b.as_str())
+        } else if term == self.b && text.contains(self.a.as_str()) {
+            Some(self.a.as_str())
+        } else {
+            None
+        }
+    }
 }
 
 // ------------------------- 传变（疾病发展） -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct Transformation {
-    pub slug: String,            // 英文 slug
-    pub from: String,            // 来源证候 slug
-    pub to: String,              // 目标证候 slug
-    pub label: String,           // 中文描述
+    pub slug: String,  // 英文 slug
+    pub from: String,  // 来源证候 slug
+    pub to: String,    // 目标证候 slug
+    pub label: String, // 中文描述
     #[serde(default)]
     pub probability: Option<String>, // 概率/条件说明
 }
@@ -92,34 +119,34 @@ pub struct Transformation {
 // ------------------------- 方剂库 -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct Formula {
-    pub slug: String,            // 英文 slug，如 ma_xing_gan_shi
-    pub name: String,            // 中文名，如 麻杏甘石汤
+    pub slug: String, // 英文 slug，如 ma_xing_gan_shi
+    pub name: String, // 中文名，如 麻杏甘石汤
     #[serde(default)]
     pub for_syndromes: Vec<String>, // 适用证候 slug
     #[serde(default)]
-    pub composition: Vec<String>,   // 组成（药名）
+    pub composition: Vec<String>, // 组成（药名）
     #[serde(default)]
-    pub usage: Option<String>,      // 用法
+    pub usage: Option<String>, // 用法
     #[serde(default)]
-    pub caution: Option<String>,    // 禁忌/注意
+    pub caution: Option<String>, // 禁忌/注意
 }
 
 // ------------------------- 调护方案 -------------------------
 #[derive(Debug, Clone, Deserialize)]
 pub struct CarePlan {
-    pub slug: String,            // 英文 slug，如 wind_cold_care
-    pub label: String,           // 中文标签
+    pub slug: String,  // 英文 slug，如 wind_cold_care
+    pub label: String, // 中文标签
     #[serde(default)]
     pub for_syndromes: Vec<String>, // 适用证候 slug
     #[serde(default)]
-    pub items: Vec<String>,      // 调护条目（饮食/起居/情志）
+    pub items: Vec<String>, // 调护条目（饮食/起居/情志）
 }
 
 // ------------------------- 提示词包 -------------------------
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct PromptBundle {
     #[serde(default)]
-    pub system: String,          // 总系统提示
+    pub system: String, // 总系统提示
     #[serde(default)]
     pub inspection: String,
     #[serde(default)]
@@ -140,7 +167,7 @@ pub struct PromptBundle {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Routing {
     #[serde(default)]
-    pub active: Vec<String>,     // 激活的 capability slug 列表，按问诊顺序
+    pub active: Vec<String>, // 激活的 capability slug 列表，按问诊顺序
     #[serde(default)]
     pub default: Option<String>, // 默认入口 capability
 }

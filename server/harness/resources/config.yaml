@@ -1,5 +1,6 @@
 # harness 运行配置
 # 运维可调：端口、LLM 网关地址；中医一般无需修改本文件。
+# 全部字段均可用同名大写环境变量覆盖（前缀 HARNESS_），见 docs/development.md。
 listen: "0.0.0.0:8011"          # 监听地址
 llm_base_url: "http://localhost:11223/v1"  # 上游 LLM 网关（lmstudio / llm_server）
 llm_api_key: ""                  # 若网关开启 Key 校验则填写
@@ -7,3 +8,23 @@ model: "google/gemma-4-12b-qat" # 默认模型
 resources_dir: "resources"      # YAML 资源目录
 llm_timeout_secs: 120            # 单次 LLM 调用超时（秒）
 hot_reload: false                # 是否允许 /reload 热重载 YAML
+
+# 工具调用最大轮数：模型可在工具结果之上继续查证，每轮 = 一次带工具的 LLM 调用。
+# 达到上限后不再给工具，改为一次纯汇总调用以拿到最终文本。
+# 设为 1 即退化为「1 次带工具 + 1 次汇总」的旧行为。
+max_tool_rounds: 3
+
+# LLM 调用失败重试（仅对超时/连接失败/5xx/429 生效；4xx 语义错误不重试）
+llm_max_retries: 2
+llm_retry_backoff_ms: 500        # 第 n 次重试等待 base * 2^n（上限 16 倍）
+
+# 可选 RAG 检索端点（留空则 tcm-rag 技能返回提示）
+# rag_endpoint: "http://127.0.0.1:8080/rag/retrieve/text"
+
+# 外部 MCP server（可选）：启动时逐个 tools/list，把工具挂成 mcp__<name>__<tool>
+# 单个 server 不可达只告警、不影响启动。
+# mcp_clients:
+#   - name: kb                                  # 客户端名，同时作为技能名前缀
+#     url: "http://127.0.0.1:9000/mcp"          # MCP Streamable HTTP 端点
+#     enabled: true                             # false 可临时停用而不删配置
+#     tools: []                                 # 白名单；留空表示挂载全部工具

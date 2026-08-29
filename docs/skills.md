@@ -1,266 +1,195 @@
 # SKILL 工具集（LLM 可调用技能）
 
-> SKILL = 一组 **LLM 可调用工具（function calling）**。每个技能是一个独立模块，
-> 声明一份清单 `SKILL` 与对应的处理函数 `HANDLERS`，装载后其工具即可被
-> 「诊疗方案 / 辨证」等 LLM Agent 在推理时按需调用。
+> SKILL = 一个 **LLM 可调用的工具（function calling）**。harness 启动时把 11 个内置技能
+> 注册进全局 `SkillRegistry`，再按 `config.yaml` 的 `mcp_clients` 挂载外部 MCP 工具；
+> 各 Sub-Agent 在推理时只能看到「自己专属的 + 全局的」工具。
 
-## 1. 架构总览
+- 实现：`server/harness/src/skills/`（`mod.rs` 注册表 / `toolcall.rs` 技能定义与分发 / `builtin.rs` 内置技能）
+- 消费方：`server/harness/src/agents/base.rs::chat_with_tools`
+- 查询：`GET /skills`；执行：`POST /skills`
 
-```
-app/skills/
-├── __init__.py          # 暴露 skill_registry / run_tool_loop / 装载函数
-├── types.py             # SkillManifest / ToolSpec / SkillError
-├── registry.py          # 全局单例 registry：注册/卸载/按能力过滤/执行
-├── loader.py            # discover_skills / load_skill_by_name / load_skill_from_path
-├── toolcall.py          # run_tool_loop：多轮工具调用循环
-├── tcm-kb/              # 内置技能：中医知识库（施治调用）
-│   └── __init__.py
-├── tcm-reference/       # 内置技能：证候典型表现检索（辨证调用）
-│   └── __init__.py
-├── tcm-vision/          # 内置技能：望诊图文理解（google/gemma-4-12b-qat 多模态，望诊调用）
-│   └── __init__.py
-├── tcm-diet/            # 内置技能：辨证食疗/膳食调护（施治调用）
-│   └── __init__.py
-├── tcm-auscultation/    # 内置技能：闻诊声/嗅术语参照（闻诊调用）
-│   └── __init__.py
-├── tcm-palpation/       # 内置技能：切诊脉/腹诊术语参照（切诊调用）
-│   └── __init__.py
-├── tcm-safety/          # 内置技能：红旗信号分诊指引（安全调用）
-│   └── __init__.py
-├── tcm-inquiry/         # 内置技能：问诊追问聚焦（问诊调用）
-│   └── __init__.py
-└── tcm-rag/             # 内置技能：多模态 RAG 检索（望/辨/施/问共享）
-    └── __init__.py
+---
+
+## 1. 数据模型
+
+```rust
+pub struct Skill {
+    pub name: String,             // 工具名（LLM 看到的 function name）
+    pub description: String,      // 工具描述（决定是否被调用，写清楚"何时调用"）
+    pub parameters: Value,        // JSON Schema 形式的入参定义
+    pub owner: Option<Capability>,// Some(cap) = 仅该 Sub-Agent 可见；None = 全局可见
+    pub executor: SkillFn,        // 异步执行体
+}
+pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 ```
 
-- **Registry（单例）**：进程内唯一，保存「技能 → 工具」映射，提供
-  `register_skill / unload / tools_for(capability) / run_tool / list_skills / list_tools`。
-- **Loader**：从文件系统发现并导入技能模块；支持
-  - `discover_skills(dir)`：启动自动发现；
-  - `load_skill_by_name(name, skills_dir)` / `load_skill_from_path(path)`：运行时热装载。
-- **Tool-calling Loop**：`run_tool_loop(provider, messages, model, capability)`。
-  当某能力下注册了工具时，驱动 LLM 多轮调用工具，最后以 `json_mode` 产出结构化结果；
-  **无工具时退化为单次 `json_mode` 调用，与既有行为完全兼容**。
+注册表 `SkillRegistry::for_capability(cap)` 的可见性规则：
+**`owner.is_none()`（全局）或 `owner == Some(cap)`（专属）**。
+因此每个 Sub-Agent 实际可见的是「专属技能（treatment 为 2 个，其余各 1 个）+ 3 个全局技能
++ 全部 `mcp__*` 外部工具」。
 
-## 2. 技能模块契约
+---
 
-一个技能模块（包或 `.py` 文件）必须定义：
+## 2. 内置技能清单（11 个）
 
-```python
-from app.skills.types import SkillManifest, ToolSpec
+| 技能 | owner | 入参 | 行为 |
+|---|---|---|---|
+| `tcm-vision` | `inspection` | `{"text": string}` | 以 `text` 为输入**重跑望诊 Agent**，返回其输出 |
+| `tcm-auscultation` | `listening` | `{"text": string}` | 重跑闻诊 Agent |
+| `tcm-inquiry` | `inquiry` | `{"text": string}` | 重跑问诊 Agent |
+| `tcm-palpation` | `palpation` | `{"text": string}` | 重跑切诊 Agent |
+| `tcm-reference` | `differentiation` | `{"text": string}` | 重跑辨证 Agent |
+| `tcm-safety` | `safety` | `{"text": string}` | 重跑安全门 Agent |
+| `tcm-kb` | 全局 | `{"query": string}` | 在 `syndromes.yaml` 中按 slug/中文名子串匹配，返回 `{name, pathogenesis}`（未命中为 `null`） |
+| `tcm-diet` | 全局 | `{"syndrome": string}` | 按证候 slug 或中文名解析出 slug，返回 `care.yaml` 的调护条目 |
+| `tcm-rag` | 全局 | `{"query": string, "top_k"?: number}` | `POST` `{"query": ..., "top_k"?: N}` 到 `HARNESS_RAG_ENDPOINT`；未配置时返回提示串而非报错 |
+| `tcm-formula` | `treatment` | `{"syndrome": string}` | 按证候 slug 或中文名查 `formulas.yaml`，返回方剂的名称/组成/用法/禁忌 |
+| `tcm-care` | `treatment` | `{"syndrome": string}` | 按证候查 `care.yaml` 的调护条目（饮食/起居/情志） |
 
-SKILL = SkillManifest(
-    name="my-skill",
-    version="0.1.0",
-    description="一句话说明这个技能能做什么",
-    tools=[
-        ToolSpec(
-            name="lookup_xxx",
-            description="LLM 看到的自然语言描述（要清晰说明何时调用）",
-            parameters={            # JSON Schema
-                "type": "object",
-                "properties": {"q": {"type": "string", "description": "查询参数"}},
-                "required": ["q"],
-            },
-            capability="treatment.plan",   # 该工具可被哪个能力调用；"" = 全部能力
-        ),
-    ],
-)
+> **专属技能的实现细节**：6 个专属技能由 `agent_skill_executor` 统一构造，内部用**空的
+> `SkillRegistry`** 重跑对应 Agent（`builtin.rs` 第 52 行），因此技能调用 Agent、Agent 再调技能
+> **不会递归**。
 
-async def lookup_xxx(q: str) -> dict:
-    return {"ok": True, "result": ...}
+### 2.1 各 Capability 可见的工具
 
-HANDLERS = {"lookup_xxx": lookup_xxx}
-```
+| capability | 可见工具 |
+|---|---|
+| `inspection` | `tcm-vision` + `tcm-kb`、`tcm-diet`、`tcm-rag` |
+| `listening` | `tcm-auscultation` + 3 个全局 |
+| `inquiry` | `tcm-inquiry` + 3 个全局 |
+| `palpation` | `tcm-palpation` + 3 个全局 |
+| `differentiation` | `tcm-reference` + 3 个全局 |
+| `safety` | `tcm-safety` + 3 个全局 |
+| `treatment` | `tcm-formula`、`tcm-care` + 3 个全局 |
 
-要点：
-- `SKILL.tools` 中每个 `name` 必须在 `HANDLERS` 中有对应可调用对象，否则装载抛 `SkillError`。
-- 处理函数可为同步或 `async`；`run_tool` 会自动 `await`。
-- `capability` 为空字符串表示对所有能力开放；否则仅对指定 `Capability` 值（如
-  `treatment.plan`、`diagnosis.differentiation`）开放。**也支持 `list[str]`**，
-  表示该工具对列表中任一能力开放（如 RAG 检索工具被多个能力共享）。
-- **技能模块使用绝对导入**（`from app.skills.types import ...`），以便装载器从任意路径
-  用 `importlib` 加载时相对导入不会失效。
+> 若 `config.yaml` 配了 `mcp_clients`，上表每个 capability 还会额外看到全部 `mcp__*` 工具。
 
-## 3. 内置技能 `tcm-kb`（施治调用）
+---
 
-随系统启动自动装载，演示工具调用：
+## 3. LLM 如何调用技能
 
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_syndrome_treatment` | `treatment.plan` | 按证候名返回推荐的多模态诊疗方案（方剂/针灸/外治/检查/调护） |
-| `lookup_herb` | `treatment.plan` | 按中药名查询性味归经与功效主治 |
+7 个 Sub-Agent **全部**通过 `LlmCaller::chat_with_tools` 调用模型
+（`ctx.caller()` 取得，2026-08-29 已接线；此前它们都调用无工具版本的 `chat_completion`，
+导致技能在推理中完全不起作用）。
 
-当 LLM（诊疗方案 Agent）在 `treatment.plan` 能力下运行时，会自动获得这两个工具，
-可在生成方案前先查证知识库，从而产出更可靠的方案。
+`chat_with_tools`（`agents/base.rs`）的流程：
 
-### 3.1 内置技能 `tcm-reference`（辨证调用）
+1. 取 `skills.for_capability(cap)`；**为空则退化为普通 `chat`**（无工具调用）。
+2. 把工具声明作为 `tools` 发给 LLM，`tool_choice: "auto"`，`temperature: 0.3`，`stream: false`。
+3. 若返回 `tool_calls`：**一次性执行全部调用**（`dispatch` 逐个执行，异常转为 `{"error": ...}`），
+   以 `role: "tool"` 回填对话，然后把**带工具**的请求再发一轮。
+4. 循环第 2~3 步，最多 `max_tool_rounds` 轮（默认 3，见 `config.yaml`）。
+5. 达到轮数上限、或模型不再请求工具时，发一次**不带 tools 的汇总调用**拿到最终文本。
 
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_syndrome_patterns` | `diagnosis.differentiation` | 按证候名返回典型四诊表现（`category/value` 列表），用于校准辨证结论 |
+> 即多轮 ReAct 循环（T2.2 已实现）：模型可在工具结果之上继续查证。
+> `max_tool_rounds: 1` 即退化为此前的「1 次带工具 + 1 次汇总」行为。
+>
+> 每轮 LLM 请求都走同一套**重试**（超时 / 连接失败 / 5xx / 429，次数与退避见
+> `llm_max_retries` / `llm_retry_backoff_ms`），并把耗时、token、工具名写入步骤埋点。
 
-「辨证」LLM 在 `diagnosis.differentiation` 能力下运行时会自动获得该工具，可查询某证候
-（如 `肝郁脾虚`、`脾胃湿热`）的典型表现以校验候选证候与支撑证据，减少臆造。
+---
 
-### 3.2 内置技能 `tcm-vision`（望诊调用，依赖 `google/gemma-4-12b-qat` 多模态端点）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `analyze_tongue_image` | `diagnosis.inspection` | 分析舌象图片，返回舌体/舌苔/舌态客观观察 |
-| `analyze_face_image` | `diagnosis.inspection` | 分析面象/神色图片，返回面色/神色客观观察 |
-
-该技能走 **`google/gemma-4-12b-qat`** 原生多模态端点（文本+视觉共用同一模型，无独立视觉服务，无需 mmproj）：处理函数把图片以 data-URL
-形式发送到视觉端点并取回描述文字。「望诊」LLM（`llm_vision`）在推理时可决定对哪张图片调用
-`analyze_tongue_image` / `analyze_face_image`，再综合成结构化望诊结论。无视觉模型时
-处理函数返回错误标记，由望诊 Agent 降级为 `skip`。详见 [`llm_server.md`](./llm_server.md)。
-
-### 3.3 内置技能 `tcm-diet`（施治调用）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_diet_therapy` | `treatment.plan` | 按证候名返回食疗/膳食调护建议（宜食、忌口、机理）；命中不到时回退通用原则 |
-
-为「施治」LLM 提供个性化饮食建议的检索支撑；提示文案标明食疗为养生参考，具体体质须经执业中医师辨证。
-
-### 3.4 内置技能 `tcm-auscultation`（闻诊调用）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_voice_pattern` | `diagnosis.listening` | 检索语声/呼吸/咳嗽相关标准术语与病机 |
-| `lookup_odor_pattern` | `diagnosis.listening` | 检索气味相关标准术语与病机 |
-
-把口语化描述映射到标准中医术语，帮助「闻诊」LLM 输出一致、可解释的证据取值（支持字符重叠模糊匹配）。
-
-### 3.5 内置技能 `tcm-palpation`（切诊调用）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_pulse_pattern` | `diagnosis.palpation` | 检索脉象相关标准术语与主病/含义 |
-| `lookup_abdomen_pattern` | `diagnosis.palpation` | 检索腹诊/触诊相关标准术语与含义 |
-
-把脉感、腹诊、肢体温度等口语描述映射为标准中医术语，校准「切诊」证据。
-
-### 3.6 内置技能 `tcm-safety`（安全调用）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_redflag` | `diagnosis.safety` | 把红旗信号映射为分级（warning/urgent）、建议就诊科室与处置要点 |
-
-让「安全」LLM 的告警更具可操作性；未命中具体信号时回退为通用就医提示（不漏报）。
-
-### 3.7 内置技能 `tcm-inquiry`（问诊调用）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `lookup_inquiry_focus` | `diagnosis.inquiry` | 按候选证候返回最值得追问的特征（问题文案、选项、典型取值） |
-| `suggest_followup` | `diagnosis.inquiry` | 按已采集症状反推候选证候并建议下一个最具鉴别力的追问 |
-
-帮助「问诊」LLM 收敛提问方向、避免重复采集。
-
-### 3.8 内置技能 `tcm-rag`（望/辨/施/问共享，依赖 RAG 服务）
-
-| 工具 | 能力 | 说明 |
-|---|---|---|
-| `rag_text_retrieve` | `diagnosis.differentiation` + `treatment.plan` + `diagnosis.inquiry` | 文本检索（以文搜文） |
-| `rag_image_retrieve` | `diagnosis.inspection` + `diagnosis.differentiation` | 图像检索（以图搜图） |
-| `rag_paired_retrieve` | `diagnosis.differentiation` + `treatment.plan` + `diagnosis.inspection` | 图文联合检索（以文搜图/以图搜文） |
-
-对接 `llm_server` 中已构建的 RAG 服务（见 [`rag.md`](./rag.md)），为多个子智能体提供可检索的
-多模态中医知识库。通过 `TCM_RAG_BASE_URL` 配置服务地址；**服务不可用时工具优雅降级**
-（`ok=false`、空结果），不阻断诊疗流程。
-
-## 4. 装载方式
-
-> **harness（Rust）为内置注册**：9 个技能在 `server/harness/src/skills/builtin.rs` 中
-> 于启动时注册到 `SkillRegistry`，**不支持**原 backend 的目录扫描发现与运行时热装载/卸载。
-> 新增技能需修改 `builtin.rs` 后重新构建（`cargo build -p harness`）。
-> 扩展知识库的推荐方式是改 `resources/*.yaml`，或用 `HARNESS_RAG_ENDPOINT` 接入自有 RAG。
-
-### 4.1 启动注册
-harness 启动时把内置技能注册进全局注册表，四诊/辨证/安全门各自绑定专属技能
-（其余为全局可用）。查询当前技能：`GET /skills`。
-
-### 4.2 运行时热装载 / 卸载（原 backend 行为，harness 已移除）
-原 backend 支持无需重启增删技能：
+## 4. REST 端点
 
 ```bash
-# 列出当前已装载技能与工具
-GET /api/skills
+# 列出（返回技能的 name / description / owner；owner 为空时展示为"全局"）
+curl http://localhost:8011/skills
 
-# 按名称装载 skills/ 下的技能
-POST /api/skills/load
-{ "name": "tcm-kb" }
+# 只看某个 capability 用得到的工具（专属 + 全局 + mcp__*）
+curl 'http://localhost:8011/skills?owner=treatment'     # 也可用中文名 owner=治疗
 
-# 按文件路径装载（目录或 .py；支持绝对/相对路径）
-POST /api/skills/load
-{ "path": "/abs/path/to/skill" }
+# 执行（arguments 见上表）
+curl -X POST http://localhost:8011/skills \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"tcm-kb","arguments":{"query":"脾胃湿热"}}'
+# -> {"result":{"name":"脾胃湿热","pathogenesis":"..."}}
 
-# 卸载技能（移除其全部工具）
-POST /api/skills/unload
-{ "name": "tcm-kb" }
+curl -X POST http://localhost:8011/skills \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"tcm-diet","arguments":{"syndrome":"脾胃湿热"}}'
 ```
 
-- 装载失败（清单缺失、工具无 handler、模块导入错误）返回 `400` 并给出原因；
-- 卸载不存在的技能返回 `404`。
-- 同名技能热装载会先卸载旧版再注册新版（避免工具残留）。
-- 前端「管理技能 / SKILL」页（`pages/skills/index`）已封装上述接口。
+**owner 过滤**：`POST /skills` 与 `GET /skills` 都接受可选 `owner`（slug 或中文名）。
+带上即把可调用范围限制为「该 capability 的专属技能 + 全局技能」，越界调用返回
+`{"error":"未知技能: xxx"}`；不带则不过滤（保持旧行为）。这保证 REST 侧与 LLM 侧
+（`for_capability`）看到的是同一套权限。
 
-### 4.3 接入外部 MCP Server 的工具
+错误统一为 `{"error": "..."}`（**HTTP 状态码仍是 200**，调用方须检查 `error` 字段）。
 
-除本地技能外，还可把**外部 MCP Server** 的工具接入本系统。连接成功后，
-其工具会以 `mcp__<连接名>__<工具名>` 注册进同一个 SKILL 注册表，
-对 LLM 而言与本地技能完全一致（默认对所有 capability 开放）。
+---
 
-```bash
-# 运行时接入
-POST /api/mcp/clients
-{ "name": "weather", "transport": "http", "url": "http://localhost:9001/mcp" }
+## 5. 扩展方式
 
-# 断开并卸载其全部工具
-DELETE /api/mcp/clients/weather
+### 5.1 补充中医知识（首选，无需写代码）
+
+方剂、食疗、调护、证候、红旗规则全部在 `server/harness/resources/*.yaml`，改完
+`POST /reload`（需 `config.yaml` 中 `hot_reload: true`）或重启即可。
+详见根 [`README.md`](../README.md)「流程与数据分离」。
+
+### 5.2 新增一个技能（需改 Rust + 重新构建）
+
+在 `src/skills/builtin.rs::build_default_registry` 中追加：
+
+```rust
+reg.register(
+    Skill::new(
+        "my-skill",
+        "一句话说清这个技能做什么、何时该调用它",
+        json!({
+            "type": "object",
+            "properties": { "q": {"type":"string","description":"查询参数"} },
+            "required": ["q"]
+        }),
+        Arc::new(move |args: &Value| { /* ... */ Box::pin(async move { Ok(json!(...)) }) }),
+    )
+    .with_owner(Capability::Inquiry),   // 省略 with_owner 则为全局可见
+);
 ```
 
-也可写进 `routing.yaml` 的 `mcp.clients` 随应用启动自动连接。
-详见 [`MCP 集成`](./mcp.md)。
+然后 `cargo build -p harness` 并重启，`GET /skills` 可见。
 
-## 5. LLM 如何调用技能
+### 5.3 挂载外部 MCP 工具（已接线）
 
-全部 7 个子智能体的 LLM 实现（望 `InspectionVisionAgent`、闻 `ListeningLLMAgent`、问 `InquiryLLMAgent`、
-切 `PalpationLLMAgent`、辨证 `DifferentiationLLMAgent`、安全 `SafetyLLMAgent`、施治 `TreatmentLLMAgent`）
-在生成结果前调用 `run_tool_loop(provider, [user_msg], model, capability)`：
+`config.yaml` 声明即可，无需改代码：
 
-1. `tools = skill_registry.tools_for(capability)`；无工具则单次 `json_mode` 调用（兼容旧行为）。
-2. 有工具则把工具声明传给 `provider.chat(..., tools=tools)`，解析返回的 `tool_calls`。
-3. 对每个 `tool_call` 调用 `skill_registry.run_tool(name, args)`，将结果以 `role: "tool"`
-   回填对话，再让 LLM 继续；直到无工具调用或达到 `max_tool_rounds`（默认 3）。
-4. 最后以 `json_mode=True` 产出最终结构化结果。
+```yaml
+mcp_clients:
+  - name: kb                            # 工具以 mcp__kb__<tool> 注册
+    url: "http://127.0.0.1:9000/mcp"
+    enabled: true                       # false 可临时停用而不删配置
+    tools: []                           # 白名单，留空 = 挂载全部
+```
 
-> 各能力可调用哪些技能见 `app/agents/skills_map.py`（与 [`sub_agents.md`](./sub_agents.md) 一致）：
-> - `diagnosis.inspection` → `tcm-vision`、`tcm-rag`
-> - `diagnosis.listening` → `tcm-auscultation`
-> - `diagnosis.inquiry` → `tcm-inquiry`、`tcm-rag`
-> - `diagnosis.palpation` → `tcm-palpation`
-> - `diagnosis.differentiation` → `tcm-reference`、`tcm-rag`
-> - `diagnosis.safety` → `tcm-safety`
-> - `treatment.plan` → `tcm-kb`、`tcm-diet`、`tcm-rag`
+启动时对每个 server 发一次 `tools/list`，把工具逐个注册为**全局**技能
+（`owner` 为空，所有 capability 可见）；server 不可达只告警、不阻断启动。
 
-> 工具执行异常会被捕获并作为 `{"error": ...}` 回填，不会击穿整个流程。
+| 构造器 | 作用 | 状态 |
+|---|---|---|
+| `mount_mcp_clients(&mut reg, cfg, client)` | 按配置批量挂载（**启动时的调用方**） | 已接线 |
+| `mcp_skill_named(name, remote_tool, desc, params, url, client)` | 显示名与远端工具名不同时使用 | 已接线 |
+| `mcp_skill(name, desc, params, mcp_url, client)` | 显示名 = 远端工具名 | 已实现，供手工注册 |
+| `http_skill(name, desc, params, endpoint, client)` | 把调用转发到外部 HTTP 端点 | 已实现，供手工注册 |
 
-## 6. 编写你自己的技能（harness）
+详见 [`mcp.md`](./mcp.md)。
 
-1. 在 `server/harness/src/skills/builtin.rs` 中用 `reg.register(Skill::new(...))` 注册，
-   指定 `name`、`description`、`owner`（`Some(Capability::Inquiry)` 表示专属某 agent，
-   `None` 表示全局）；
-2. 实现异步执行体 `SkillFn`（返回 `serde_json::Value`）；
-3. `cargo build -p harness` 后重启服务，`GET /skills` 可见新技能。
+---
 
-> 若只是补充中医知识（方剂、食疗、调护、证候），**无需写代码**，
-> 直接改 `resources/*.yaml` 即可。
+## 6. 已知缺口
+
+1. **无热装载**：内置技能在编译期注册、MCP 工具在启动时挂载，运行时不能增删
+   （`POST /reload` 只重载 YAML 资源，不重建技能注册表）。
+2. **`GET /skills`、`GET /agents` 的顺序是刻意稳定的**：两者内部都用 `HashMap` 存储，
+   直接遍历会得到**每次进程启动都可能不同**的顺序（Rust 的 HashMap 用随机化哈希）。
+   `SkillRegistry::all()` 已按名称排序、`Registry::capabilities()` 已按
+   望→闻→问→切→辨证→安全门→治疗 的规范顺序输出，新增遍历时请勿绕过。
+
+---
 
 ## 7. 测试
 
-- `cd server && cargo test -p harness`：技能注册、能力过滤（`owner`）、同步执行与错误分支。
-- 手工验证：`GET /skills` 列出技能；`POST /skills {"name":"tcm-kb","arguments":{...}}` 执行。
-- 案例回归 `cargo test -p harness --test cases` 会校验 `tcm-kb` / `tcm-diet` 等
-  依赖的资源数据完整性。
+- `tests/behavior.rs`：技能归属（`treatment` 专属方剂/调护工具、专属技能不泄漏到其他
+  capability）、`Capability::from_name` 中英文解析、`mcp_clients` 配置解析、埋点累加。
+- `cd server && cargo test -p harness`：技能注册、`for_capability` 的 owner 过滤、同步执行与错误分支。
+- 案例回归 `cargo test -p harness --test cases` 会校验 `tcm-kb` / `tcm-diet` 所依赖的
+  `syndromes.yaml` / `care.yaml` 数据完整性（每个基准证候必须有方剂或调护数据）。
+- 手工验证：`GET /skills` + `POST /skills`（见第 4 节）。

@@ -1,0 +1,72 @@
+name: LLM Eval
+
+# T4.4：辨证质量自动评分。
+#
+# 与 PR 门禁（test.yml）分开的原因：评分需要**真实 LLM**，耗时与成本都不可控，
+# 结果还有随机性，塞进 PR 门禁只会让绿灯变碰运气。故：
+# - nightly 定时跑（UTC 18:00 = 北京时间次日 02:00）；
+# - workflow_dispatch 可手动触发，指定条数与门槛；
+# - 跑在 **self-hosted** runner 上：GitHub 托管 runner 访问不到本地 LM Studio。
+#
+# 前置：runner 需装好 Docker，且 LLM 网关可达。仓库变量（Settings → Variables）
+# 可覆盖：HARNESS_LLM_BASE_URL、HARNESS_MODEL。
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '评测病例条数'
+        required: false
+        default: '20'
+      min_score:
+        description: '总分门槛（低于该值则任务失败）'
+        required: false
+        default: '0'
+
+concurrency:
+  group: llm-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_IMAGE: rust:1.98-bookworm
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  HARNESS_EVAL: '1'
+  HARNESS_EVAL_LIMIT: ${{ github.event.inputs.limit || '20' }}
+  HARNESS_EVAL_MIN_SCORE: ${{ github.event.inputs.min_score || '0' }}
+  # 容器内访问宿主机的 LM Studio：Linux 上需把 host.docker.internal 指向 host-gateway
+  HARNESS_LLM_BASE_URL: ${{ vars.HARNESS_LLM_BASE_URL || 'http://host.docker.internal:11223/v1' }}
+  HARNESS_MODEL: ${{ vars.HARNESS_MODEL || '' }}
+
+jobs:
+  eval:
+    name: 辨证质量评分（需真实 LLM）
+    runs-on: self-hosted
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run LLM eval (Docker)
+        # 评测在容器内跑：后端一律走 Docker，不用 runner 本地 cargo 产物。
+        # 报告写到 CARGO_TARGET_TMPDIR（/build/target/tmp），随宿主目录带出。
+        run: |
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -v "$GITHUB_WORKSPACE/server:/build" -w /build \
+            -e HARNESS_EVAL \
+            -e HARNESS_EVAL_LIMIT \
+            -e HARNESS_EVAL_MIN_SCORE \
+            -e HARNESS_LLM_BASE_URL \
+            -e HARNESS_MODEL \
+            "$RUST_IMAGE" \
+            cargo test -p harness --test llm_eval -- --nocapture
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-eval-report
+          path: server/target/tmp/llm_eval_report.json
+          if-no-files-found: warn

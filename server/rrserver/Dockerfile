@@ -1,22 +1,47 @@
-# rrserver 运行镜像（直接打包预编译的 Linux 二进制，不在容器内编译）。
+# rrserver 运行镜像 —— 多阶段构建，**在 Docker 内完成编译**。
 #
 # 【构建上下文】必须是 workspace 根（server/），而非本文件所在目录：
-#     docker build -f rrserver/Dockerfile ..      # 或由 deploy/docker-compose.yml 编排
-# 因为 rrserver 与 harness 同属一个 workspace，release 产物统一落在
-# **server/target/release/**，子 crate 没有独立 target/。
-# 上下文裁剪由 server/.dockerignore 负责。
+#     cd server && docker build -f rrserver/Dockerfile -t tcm-rrserver:local .
 #
-# 【为什么要预编译】Docker 构建容器内网络会损坏 crates.io 下载（manifest 解析失败，
-# exit 101），无法在容器内 `cargo build`。改为在 **WSL2** 的 Linux 环境预先编译：
-#     wsl -e bash -c '. "$HOME/.cargo/env"; cd /mnt/d/labs/windblue_tech/tcm_work/server && cargo build --release'
-# 或使用仓库脚本：pwsh scripts/build-release.ps1
-# 生成的 Linux 二进制 server/target/release/rrserver 即被本 Dockerfile 使用。
+# 【为什么在 Docker 内编译】后端**完全依赖 Docker** 构建、运行与验证，
+# 不使用宿主机/WSL2 的本地产物。
 #
-# TLS 全部走 rustls（reqwest / tokio-tungstenite 均用 *-tls），运行时【无需系统 OpenSSL】。
-# 以非 root 用户（uid 10001）运行，降低被攻陷后的影响面。
+# 【glibc 兼容性】构建镜像 rust:1.98-bookworm（glibc 2.36）→ 运行镜像
+# ubuntu:24.04（glibc 2.39），向前兼容，不会出现 "GLIBC_2.39 not found"。
+#
+# TLS 全部走 rustls（reqwest / tokio-tungstenite 均用 *-tls），
+# 运行时【无需系统 OpenSSL】。
 
-# ubuntu:24.04 的 glibc 2.39 与 WSL2 编译环境一致（debian:bookworm 为 2.36，会报
-# "GLIBC_2.39 not found"）。
+# ---------------- 构建阶段 ----------------
+FROM rust:1.98-bookworm AS builder
+
+WORKDIR /build
+
+# 1) 只复制清单文件（依赖未变动时整层命中缓存）
+COPY Cargo.toml Cargo.lock ./
+COPY harness/Cargo.toml ./harness/
+COPY rrserver/Cargo.toml ./rrserver/
+
+# 2) 占位源码：让 cargo 能解析 workspace 并预编译依赖
+RUN mkdir -p harness/src rrserver/src \
+    && printf '' > harness/src/lib.rs \
+    && printf 'fn main() {}\n' > harness/src/main.rs \
+    && printf '' > rrserver/src/lib.rs \
+    && printf 'fn main() {}\n' > rrserver/src/main.rs
+
+# 3) 预编译依赖
+RUN cargo build --release -p rrserver
+
+# 4) 复制真实源码
+COPY harness/src ./harness/src
+COPY harness/resources ./harness/resources
+COPY rrserver/src ./rrserver/src
+
+# 5) 重新构建（依赖已缓存，只重编自身）
+RUN touch rrserver/src/main.rs rrserver/src/lib.rs \
+    && cargo build --release -p rrserver
+
+# ---------------- 运行阶段 ----------------
 FROM ubuntu:24.04
 
 # rustls 不需要 OpenSSL；ca-certificates 用于对外 TLS 握手。
@@ -27,8 +52,7 @@ RUN apt-get update \
 
 WORKDIR /data
 
-# 预编译的 Linux release 二进制（路径相对于 workspace 根上下文）
-COPY target/release/rrserver /usr/local/bin/rrserver
+COPY --from=builder /build/target/release/rrserver /usr/local/bin/rrserver
 
 # 默认配置：使镜像不挂载配置文件也能启动（便于 `docker run` 快速试用）。
 # 安全处理：把模板里的示例 token 清空——未配置 token 的隧道无法被注册，

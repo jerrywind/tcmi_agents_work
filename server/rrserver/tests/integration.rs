@@ -14,7 +14,7 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use rrserver::client::{forward_local, run_client};
-use rrserver::llmsrv::{Backend, BackendConfig, DeploymentConfig, Deployer, RrClientConfig};
+use rrserver::llmsrv::{Backend, BackendConfig, Deployer, DeploymentConfig, RrClientConfig};
 use rrserver::protocol::{ClientToServer, ServerToClient};
 use rrserver::server::{build_router, AppState, TunnelAuth};
 use rrserver::skill::{ConstState, JudgeEngine, SkillRule, SkillSet};
@@ -100,14 +100,14 @@ async fn run_home(ws_url: String, local: String) {
                     Ok(ServerToClient::Request(req)) => {
                         let resp = forward_local(&local, &req).await;
                         let out = serde_json::to_string(&ClientToServer::Response(resp)).unwrap();
-                        if w.send(Message::Text(out.into())).await.is_err() {
+                        if w.send(Message::Text(out)).await.is_err() {
                             break;
                         }
                     }
                     Ok(ServerToClient::Ping) => {
                         // 云端心跳，家庭端需回 Pong
                         let out = serde_json::to_string(&ClientToServer::Pong).unwrap();
-                        if w.send(Message::Text(out.into())).await.is_err() {
+                        if w.send(Message::Text(out)).await.is_err() {
                             break;
                         }
                     }
@@ -341,7 +341,10 @@ async fn query_string_is_preserved_to_local() {
     wait_for_tunnel_connected(&addr).await;
 
     let resp = reqwest::Client::new()
-        .get(format!("http://{}/t/home/v1/chat?model=gpt&stream=true", addr))
+        .get(format!(
+            "http://{}/t/home/v1/chat?model=gpt&stream=true",
+            addr
+        ))
         .send()
         .await
         .unwrap();
@@ -386,7 +389,10 @@ async fn tunnels_are_isolated_by_name() {
         .unwrap();
     assert_eq!(resp.status(), 200);
     let body = resp.text().await.unwrap();
-    assert!(body.starts_with("GET|/whoami|"), "should hit other tunnel's local, got: {body}");
+    assert!(
+        body.starts_with("GET|/whoami|"),
+        "should hit other tunnel's local, got: {body}"
+    );
 
     home.abort();
     other.abort();
@@ -407,7 +413,9 @@ async fn pong_is_sent_in_response_to_ping() {
         let ws = accept_async(stream).await.unwrap();
         let (mut w, mut r) = ws.split();
         // 下发 ping
-        w.send(WsMsg::Text(r#"{"type":"ping"}"#.into())).await.unwrap();
+        w.send(WsMsg::Text(r#"{"type":"ping"}"#.into()))
+            .await
+            .unwrap();
         // 等待 Pong
         while let Some(Ok(msg)) = r.next().await {
             if let WsMsg::Text(t) = msg {
@@ -597,14 +605,20 @@ async fn streaming_response_reassembled_across_chunks() {
 async fn cors_preflight_options_returns_204() {
     let (addr, sh) = start_server().await;
     let resp = reqwest::Client::new()
-        .request(reqwest::Method::OPTIONS, format!("http://{}/t/home/v1/chat", addr))
+        .request(
+            reqwest::Method::OPTIONS,
+            format!("http://{}/t/home/v1/chat", addr),
+        )
         .header("Origin", "https://example.com")
         .header("Access-Control-Request-Method", "POST")
         .send()
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
-    assert_eq!(resp.headers().get("access-control-allow-origin").unwrap(), "*");
+    assert_eq!(
+        resp.headers().get("access-control-allow-origin").unwrap(),
+        "*"
+    );
     sh.abort();
 }
 
@@ -619,7 +633,10 @@ async fn cors_actual_request_carries_allow_origin() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 502);
-    assert_eq!(resp.headers().get("access-control-allow-origin").unwrap(), "*");
+    assert_eq!(
+        resp.headers().get("access-control-allow-origin").unwrap(),
+        "*"
+    );
     sh.abort();
 }
 
@@ -938,7 +955,10 @@ async fn cors_preflight_options_returns_204_with_full_headers() {
         )
         .header("Origin", "https://example.com")
         .header("Access-Control-Request-Method", "POST")
-        .header("Access-Control-Request-Headers", "authorization,content-type")
+        .header(
+            "Access-Control-Request-Headers",
+            "authorization,content-type",
+        )
         .send()
         .await
         .unwrap();

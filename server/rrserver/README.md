@@ -17,7 +17,7 @@
                                      └────────────────────────────┘
                                             │ 外部请求
                                             ▼
-                                    本项目 backend (TCM_LLM_BASE_URL)
+                                    本项目 harness (HARNESS_LLM_BASE_URL)
 ```
 
 ## 工作原理
@@ -215,15 +215,26 @@ rrserver llm-server --config config/llm_server.toml
 ## 与本项目的对接
 
 家庭内运行本仓库的 `llm_server`（OpenAI 兼容，基址 `http://127.0.0.1:8080/v1`）。
-本项目 backend 通过环境变量指向云端隧道：
+本项目 harness 通过环境变量指向云端隧道：
 
 ```bash
-export TCM_LLM_BASE_URL=https://<你的域名>/rr/t/home/v1
-export TCM_LLM_API_KEY=sk-xxx
+export HARNESS_LLM_BASE_URL=https://<你的域名>/rr/t/home/v1
+export HARNESS_LLM_API_KEY=sk-xxx
 ```
 
-这样 backend 的所有 LLM 调用会被隧道转发到家庭内的 `llm_server`，
+这样 harness 的所有 LLM 调用会被隧道转发到家庭内的 `llm_server`，
 在家庭 GPU 机器上跑大模型、在云端廉价服务器上做中转，既省钱又能用上本地算力。
+
+> 前缀是 **`HARNESS_`**；`TCM_LLM_*` 是已废弃的旧写法，harness 不会读取。
+
+harness 也可不经独立 client 进程、直接内置隧道暴露自身：
+
+```bash
+cd server/harness
+../target/release/harness --listen 0.0.0.0:8011 \
+  --tunnel-server wss://<域名>/rr --tunnel-name tcm --tunnel-token <TOKEN>
+# 等价环境变量：HARNESS_TUNNEL_SERVER / HARNESS_TUNNEL_NAME / HARNESS_TUNNEL_TOKEN
+```
 
 ## 配置项
 

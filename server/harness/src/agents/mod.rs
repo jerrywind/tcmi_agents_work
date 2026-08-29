@@ -8,19 +8,58 @@
 
 pub mod base;
 pub mod differentiation;
-pub mod inspection;
 pub mod inquiry;
+pub mod inspection;
 pub mod listening;
 pub mod palpation;
 pub mod safety;
 pub mod treatment;
 
-pub use base::{AgentContext, SubAgent};
-pub use base::{chat_completion, chat_with_tools};
+pub use base::{AgentContext, LlmCaller, SubAgent};
 
 use crate::model::Capability;
+use crate::resources::model::RedFlag;
+use crate::resources::ResourceBundle;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+/// 规范顺序：望 → 闻 → 问 → 切 → 辨证 → 安全门 → 治疗
+///
+/// `Registry` 内部用 HashMap 存储，**迭代顺序不稳定**（Rust 的 HashMap
+/// 使用随机化哈希，每次进程启动顺序都可能不同）。对外暴露能力清单时必须
+/// 按此顺序，否则 `GET /agents` 每次重启返回的顺序都会变，
+/// 前端分步展示与契约测试都会被随机顺序打乱。
+const CAPABILITY_ORDER: [Capability; 7] = Capability::ALL;
+
+/// 触发**中断**的红色警戒级别（T3.3）
+///
+/// high/critical 意味着需立即就医，此时继续输出治疗建议有延误风险，
+/// 故安全门命中后直接终止后续步骤，并把结构化 `blocked` 标记回给调用方。
+pub const BLOCKING_SEVERITIES: [&str; 2] = ["high", "critical"];
+
+/// 该红色警戒是否需要中断流程
+pub fn is_blocking(rf: &RedFlag) -> bool {
+    BLOCKING_SEVERITIES.contains(&rf.severity.trim().to_lowercase().as_str())
+}
+
+/// 在文本中匹配 `resources/safety.yaml` 的红色警戒，返回命中条目（按资源顺序）
+///
+/// 供 `SafetyAgent` 与 `orchestrator` 共用：前者据此生成警示文案，
+/// 后者据此决定是否中断后续步骤——两处必须是同一套判定，
+/// 否则会出现「安全门告警了但流程照跑到治疗」的不一致。
+pub fn detect_red_flags<'a>(res: &'a ResourceBundle, text: &str) -> Vec<&'a RedFlag> {
+    res.red_flags
+        .iter()
+        .filter(|rf| rf.keywords.iter().any(|kw| text.contains(kw.as_str())))
+        .collect()
+}
+
+/// 取最高危的、需要中断的红色警戒（无则返回 None）
+pub fn blocking_red_flag<'a>(res: &'a ResourceBundle, text: &str) -> Option<&'a RedFlag> {
+    detect_red_flags(res, text)
+        .into_iter()
+        .find(|rf| is_blocking(rf))
+}
 
 /// agent 注册表：capability -> 实例
 #[derive(Clone)]
@@ -31,11 +70,17 @@ pub struct Registry {
 impl Registry {
     pub fn new() -> Self {
         let mut map: HashMap<Capability, Arc<dyn SubAgent>> = HashMap::new();
-        map.insert(Capability::Inspection, Arc::new(inspection::InspectionAgent));
+        map.insert(
+            Capability::Inspection,
+            Arc::new(inspection::InspectionAgent),
+        );
         map.insert(Capability::Listening, Arc::new(listening::ListeningAgent));
         map.insert(Capability::Inquiry, Arc::new(inquiry::InquiryAgent));
         map.insert(Capability::Palpation, Arc::new(palpation::PalpationAgent));
-        map.insert(Capability::Differentiation, Arc::new(differentiation::DifferentiationAgent));
+        map.insert(
+            Capability::Differentiation,
+            Arc::new(differentiation::DifferentiationAgent),
+        );
         map.insert(Capability::Safety, Arc::new(safety::SafetyAgent));
         map.insert(Capability::Treatment, Arc::new(treatment::TreatmentAgent));
         Self { map }
@@ -45,8 +90,13 @@ impl Registry {
         self.map.get(&cap).cloned()
     }
 
+    /// 已注册的能力列表，**按规范顺序返回**（不依赖 HashMap 迭代顺序）。
     pub fn capabilities(&self) -> Vec<Capability> {
-        self.map.keys().copied().collect()
+        CAPABILITY_ORDER
+            .iter()
+            .copied()
+            .filter(|c| self.map.contains_key(c))
+            .collect()
     }
 }
 
@@ -58,16 +108,10 @@ impl Default for Registry {
 
 /// 在用户文本中匹配 `keywords.yaml` 的证据，返回命中的中文标签列表。
 /// 供各四诊 agent 叠加「规则证据」，与 LLM 结论互相印证。
-pub fn match_keywords(
-    res: &crate::resources::ResourceBundle,
-    text: &str,
-) -> Vec<String> {
+pub fn match_keywords(res: &crate::resources::ResourceBundle, text: &str) -> Vec<String> {
     let mut hits = Vec::new();
     for ke in &res.keyword_evidence {
-        let matched = ke
-            .keywords
-            .iter()
-            .any(|kw| text.contains(kw.as_str()));
+        let matched = ke.keywords.iter().any(|kw| text.contains(kw.as_str()));
         if matched {
             let syndrome_names: Vec<String> = ke
                 .syndromes
@@ -109,6 +153,7 @@ pub fn infer_syndrome_slug(
         }
     }
     let mut ranked: Vec<(String, usize)> = score.into_iter().filter(|(_, n)| *n > 0).collect();
-    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    // 按得分降序：Reverse 配合 sort_by_key 比 sort_by 闭包更清晰
+    ranked.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
     ranked.into_iter().map(|(slug, _)| slug).collect()
 }

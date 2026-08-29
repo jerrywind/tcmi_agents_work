@@ -7,9 +7,8 @@
 **LM Studio** 提供，并以 `llm_server`（网关 + Agent 中间层）为中间层；家庭算力经
 `rrserver` 反向隧道上云。
 
-> 后端已由 Python（原 `backend/`）重写为 Rust（现 `server/harness`），原 Python 实现
-> 归档于 `_useless/backend/`；Rust 隧道服务位于 `server/rrserver/`。二者同属
-> `server/` Cargo workspace，统一 `cargo build` 构建。
+> 后端为 Rust 实现 `server/harness`，隧道服务为 `server/rrserver`，
+> 二者同属 `server/` Cargo workspace，统一 `cargo build` 构建。
 
 ---
 
@@ -38,21 +37,31 @@
 | 组件 | 路径 | 角色 | 默认端口 |
 |---|---|---|---|
 | 前端 | `frontend/` | Taro 多端（H5 / 微信小程序），dev `:10086`、build `:8080` | 10086 / 8080 |
-| 后端 | `server/harness/` | **Rust** 编排 7 个 Sub-Agent，暴露 `/chat`、`/agents`、`/skills`、`/health`（nginx 以 `/api` 前缀代理） | 8011 |
+| 后端 | `server/harness/` | **Rust** 编排 7 个 Sub-Agent，暴露 `/chat`、`/agents`、`/skills`、`/mcp`、`/health`（nginx 以 `/api` 前缀代理） | 8011 |
 | LLM 网关 | `llm_server/` | 纯 LM Studio 网关 + Agent 中间层（**不托管模型**） | 8000 |
 | 模型推理 | 宿主机 LM Studio | 默认 `http://localhost:11223/v1`，模型 `google/gemma-4-12b-qat`（文本+视觉共用） | 11223 |
 | 反向隧道 | `server/rrserver/` | Rust 中继：云端 server `:8088`（deploy nginx→容器`:8080`）+ 家庭端 client `:9000` | 8088 / 9000 |
-| 统一入口 | `deploy/` | 独立 nginx：前端静态托管 + 反代 /api、/uploads、/rr（TLS 终止），后端服务容器不含 nginx | 80 / 443 / 8080 |
+| 统一入口 | `deploy/` | 独立 nginx：前端静态托管 + 反代 `/api`、`/rr`（TLS 终止），后端服务容器不含 nginx | 80 / 443 / 8080 |
 
 > **关键事实**（各文档一致引用，避免歧义）：
-> - `llm_server` **不托管/内置任何模型**，模型由 LM Studio 提供；v1 的 llama.cpp 内置方案已废弃。
-> - 模型统一为 **`google/gemma-4-12b-qat`**（原生多模态，文本与视觉共用同一端点），不再是 `qwen3.6-9B` / `Qwen3-VL-8B`。
-> - **流程与数据分离**：harness 的可改内容（证候、问诊问题、方剂、调护、安全规则）全部在
->   `server/harness/resources/*.yaml`，**字段 key 为英文 slug、值为中文并附中文注释**，
->   中医专业人士无需改代码即可维护；程序逻辑在 `src/`，改 YAML 后重启或调用 `/reload` 生效。
-> - 无 LM Studio 时：llm_server `/healthz` 返回 `degraded`、`/v1/models` 返回 503；
->   harness 的**只读端点**（`/health`、`/agents`、`/skills`）仍可用，但问诊推进需真实 LLM
+> - 🔒 **后端完全依赖 Docker**：`server/harness` 与 `server/rrserver` 的构建、运行、验证
+>   一律在 Docker 内完成，**不使用宿主机本地 `cargo build` 的产物**。
+>   镜像为多阶段构建，在容器内编译；宿主机构建机无需安装 Rust 工具链。
+> - `llm_server` **不托管/内置任何模型**，模型由宿主机 LM Studio 提供（默认 `:11223`）。
+> - 模型统一为 **`google/gemma-4-12b-qat`**（原生多模态，文本与视觉共用同一端点）。
+> - **harness 是无状态服务**：一次 `POST /chat` 串行跑完 `routing.yaml` 中全部激活步骤后返回，
+>   **没有服务端多轮循环**，多轮由调用方累积 `messages` 实现。
+> - 单步失败不中断整体：返回已完成步骤 + `failures` + `partial`；全部失败才返回 `{"error"}`。
+> - **流程与数据分离**：可改内容（证候、问诊问题、方剂、调护、安全规则、相反表现、Prompt）
+>   全部在 `server/harness/resources/*.yaml`，**字段 key 为英文 slug、值为中文并附中文注释**；
+>   改完 `POST /reload` 或重启生效。
+> - **辨证结论是结构化的**：主证 / 兼证 + 置信度 + 支持/矛盾证据随 `structured` 返回，
+>   由规则层确定性产出（不经过 LLM）。
+> - **无 LLM 时**：llm_server `/healthz` 返回 `degraded`、`/v1/models` 返回 503；
+>   harness 的**只读端点**（`/health`、`/agents`、`/skills`）仍可用，但 `/chat` 会返回错误
 >   （harness 未提供 MockProvider；确定性逻辑可用 `cargo test -p harness` 验证）。
+> - **当前未接线**：MCP（仅 client 库、无调用方）、LLM 工具调用（7 个 Agent 均不调技能）、
+>   调用级可观测性（无 trace / token 埋点）。详见 [`docs/tasks.md`](./docs/tasks.md)。
 
 ---
 
@@ -145,13 +154,26 @@ cargo build --release                       # 需先构建二进制
 
 ## 4. 测试
 
-- **harness（Rust）**：`cd server && cargo test -p harness`。其中 `--test cases` 以
-  `server/harness/cases.jsonl`（源自 backend 的真实案例基准）做**确定性回归**：
-  校验关键词证据匹配、证候推断（支持兼证）、方剂/调护检索与 YAML 资源完整性，
-  **不依赖 LLM**。
-- **前端**：`frontend/`（vitest）。详见 [`docs/testing.md`](./docs/testing.md)。
+- **后端（harness + rrserver，Rust）**：**一律在 Docker 内编译执行**，不使用本地 `cargo build` 产物。
+
+  ```powershell
+  # 单测 + 案例回归（cases.jsonl 93 条真实病例，不依赖 LLM）
+  docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm cargo test --workspace
+
+  # lint：fmt + clippy 严格门禁
+  docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
+    bash -c "rustup component add rustfmt clippy && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings"
+
+  # 一键出镜像（多阶段，镜像内编译）
+  pwsh scripts\build-release.ps1
+  ```
+
+  其中 `--test cases` 以 `server/harness/cases.jsonl` 做**确定性回归**：
+  校验关键词证据匹配、证候推断（支持兼证）、方剂/调护检索与 YAML 资源完整性。
+- **前端**：`cd frontend && npm run test`（vitest，当前 **29 个用例全绿**；
+  契约测试在后端不可达时自动 skip）。详见 [`docs/testing.md`](./docs/testing.md)。
 - **全链路 E2E**（rrserver / llm_server / harness）：`e2e_tests/` 下 pytest，一键编排
-  `run_full_chain_e2e.ps1`（默认排除已归档的 backend 契约用例与前端契约用例）。
+  `run_full_chain_e2e.ps1`（默认不含 rrserver 与前端；`-WithRrserver` / `-WithFrontend` 开启）。
   详见 [`docs/e2e.md`](./docs/e2e.md)。
 
 ---
@@ -164,10 +186,17 @@ AI 健康参考，非医疗诊断。上线前需完成合规复核（免责强�
 
 ## 6. 目录说明
 
-- 核心组件：`server/`（Rust workspace：诊断编排 `harness/` + 反向隧道 `rrserver/`）、
-  `frontend/`（Taro 多端）、`llm_server/`（LM Studio 网关）、`deploy/`（统一 nginx 入口）、
-  `e2e_tests/`（全链路 E2E）、`scripts/`（工具脚本）。
-- `server/harness/resources/*.yaml`：中医专业人员维护的可改数据（流程与数据分离）。
-- `_useless/`：归档的废弃/未完成/临时残留文件，**含后端 Python 原实现 `_useless/backend/`**
-  （已由 `server/harness` 取代，仅留档备查），不参与构建与部署。
-  详见 [`_useless/README.md`](./_useless/README.md)。
+| 路径 | 说明 |
+|---|---|
+| `server/harness/` | 诊断编排后端（Rust）：`src/` 程序逻辑、`resources/*.yaml` 可改数据、`cases.jsonl` 回归基准 |
+| `server/rrserver/` | 反向隧道（Rust）：云端 server + 家庭端 client + 模型部署包装 |
+| `frontend/` | Taro 多端（H5 / 微信小程序） |
+| `llm_server/` | LM Studio 网关 + Agent 中间层（Python），`rag/` 为可选子组件 |
+| `deploy/` | 统一 nginx 入口（静态托管 + 反代 /api、/rr + TLS 终止）与 compose 编排 |
+| `e2e_tests/` | 全链路 E2E（harness → rrserver → llm_server） |
+| `scripts/` | `build-release.ps1`（WSL2 预编译）、`cleanup.ps1`（清理） |
+| `docs/` | 文档，见 [`docs/README.md`](./docs/README.md) |
+
+> **流程与数据分离**：证候、问诊问题、方剂、调护、安全规则、System Prompt 全部在
+> `server/harness/resources/*.yaml`（英文 slug key + 中文值 + 中文注释），
+> 中医专业人员无需改代码即可维护；改完 `POST /reload` 或重启生效。

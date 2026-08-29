@@ -84,4 +84,28 @@ describe.skipIf(!up)('harness 契约（需本地 harness :8011）', () => {
   it('POST /skills 调用未知技能时返回可识别错误', async () => {
     await expect(h.callSkill('__not_exist__', {})).rejects.toThrow()
   })
+
+  // T4.5：MCP Server 对外暴露 7 个能力。只读调用（tools/list、
+  // list_agent_capabilities）不需要 LLM，故可纳入契约测试。
+  it('POST /mcp tools/list 暴露 7 个 agent_* 工具', async () => {
+    const r = await h.listMcpTools()
+    expect(r.error).toBeUndefined()
+    const tools = r.result?.tools ?? []
+    const names: string[] = tools.map((t: any) => t.name)
+    for (const cap of [
+      'inspection', 'listening', 'inquiry', 'palpation',
+      'differentiation', 'safety', 'treatment',
+    ]) {
+      expect(names).toContain(`agent_${cap}`)
+    }
+    expect(names).toContain('run_agent')
+    expect(names).toContain('list_agent_capabilities')
+  })
+
+  it('POST /mcp tools/call 可调用 list_agent_capabilities', async () => {
+    const r = await h.mcpRpc('tools/call', { name: 'list_agent_capabilities', arguments: {} }, 2)
+    expect(r.id).toBe(2)
+    expect(r.result?.isError).toBe(false)
+    expect(String(r.result?.content?.[0]?.text)).toContain('differentiation')
+  })
 })

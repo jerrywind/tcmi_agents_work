@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
 import Taro, { useRouter } from '@tarojs/taro'
-import { View, Text, Input, Textarea, Picker, Image } from '@tarojs/components'
-import { createConsultation, getFamily, uploadImage } from '../../services/api'
+import { View, Text, Input, Textarea, Picker } from '@tarojs/components'
+import { chat } from '../../services/harness'
+import { getMember } from '../../services/members'
+import { getMessages, pushMessage, setResult, startSession } from '../../services/session'
+import type { PatientProfile } from '../../types'
 import './index.scss'
 
 const GENDERS = ['男', '女', '未知']
-
-interface LocalImage { type: 'tongue' | 'face' | 'lesion' | 'palm_left' | 'palm_right'; path: string }
-
-const GENDER_IDX: Record<string, number> = { '男': 0, '女': 1, '未知': 2 }
+const GENDER_IDX: Record<string, number> = { 男: 0, 女: 1, 未知: 2 }
 
 export default function ProfilePage() {
   const router = useRouter()
-  const fid = router.params.fid || ''
   const mid = router.params.mid || ''
+
   const [region, setRegion] = useState('')
   const [height, setHeight] = useState('')
   const [weight, setWeight] = useState('')
@@ -21,78 +21,54 @@ export default function ProfilePage() {
   const [genderIdx, setGenderIdx] = useState(2)
   const [heartRate, setHeartRate] = useState('')
   const [complaint, setComplaint] = useState('')
-  const [images, setImages] = useState<LocalImage[]>([])
   const [submitting, setSubmitting] = useState(false)
 
-  const pickImage = async (type: LocalImage['type']) => {
-    try {
-      const res = await Taro.chooseImage({ count: 1, sizeType: ['compressed'] })
-      if (res.tempFilePaths?.length) {
-        setImages(prev => [...prev.filter(i => i.type !== type),
-          { type, path: res.tempFilePaths[0] }])
-      }
-    } catch { /* 用户取消 */ }
-  }
-
-  const imgOf = (type: LocalImage['type']) => images.find(i => i.type === type)
-
-  // 从家庭档案进入时，预填成员体质档案
+  // 从家庭档案进入时，用本地成员档案预填
   useEffect(() => {
-    if (!fid || !mid) return
-    ;(async () => {
-      try {
-        const f = await getFamily(fid)
-        const m = f.members.find(x => x.id === mid)
-        if (!m) return
-        setRegion(m.patient.region || '')
-        setHeight(m.patient.height_cm ? String(m.patient.height_cm) : '')
-        setWeight(m.patient.weight_kg ? String(m.patient.weight_kg) : '')
-        setAge(m.patient.age ? String(m.patient.age) : '')
-        setGenderIdx(GENDER_IDX[m.patient.gender] ?? 2)
-      } catch { /* 忽略预填错误 */ }
-    })()
-  }, [fid, mid])
+    if (!mid) return
+    const m = getMember(mid)
+    if (!m) return
+    setRegion(m.patient.region || '')
+    setHeight(m.patient.height_cm ? String(m.patient.height_cm) : '')
+    setWeight(m.patient.weight_kg ? String(m.patient.weight_kg) : '')
+    setAge(m.patient.age ? String(m.patient.age) : '')
+    setGenderIdx(GENDER_IDX[m.patient.gender] ?? 2)
+  }, [mid])
 
   const canSubmit = complaint.trim().length >= 5 && !submitting
 
   const submit = async () => {
     if (!canSubmit) return
     setSubmitting(true)
-    Taro.showLoading({ title: '创建档案中...' })
+    Taro.showLoading({ title: '问诊中，请稍候…' })
     try {
-      const state = await createConsultation({
-        region,
-        height_cm: parseFloat(height) || 0,
-        weight_kg: parseFloat(weight) || 0,
-        age: parseInt(age) || 0,
-        gender: GENDERS[genderIdx]
-      }, complaint.trim(), heartRate ? { heart_rate: parseFloat(heartRate) } : {},
-        fid, mid)
-
-      for (const img of images) {
-        await uploadImage(state.id, img.type, img.path)
+      const profile: PatientProfile = {
+        region: region.trim() || undefined,
+        height_cm: parseFloat(height) || undefined,
+        weight_kg: parseFloat(weight) || undefined,
+        age: parseInt(age, 10) || undefined,
+        gender: GENDERS[genderIdx],
+        heart_rate: heartRate ? parseFloat(heartRate) : undefined,
       }
+
+      // harness 无状态：由前端持有 messages，每次携带完整对话历史
+      startSession(profile)
+      pushMessage({ role: 'user', content: complaint.trim() })
+
+      const r = await chat(getMessages(), profile)
+      setResult(r)
+
       Taro.hideLoading()
-      Taro.navigateTo({ url: `/pages/consult/index?id=${state.id}` })
+      Taro.navigateTo({ url: '/pages/consult/index' })
     } catch (e: any) {
       Taro.hideLoading()
-      Taro.showToast({ title: e?.message || '创建失败', icon: 'none' })
+      Taro.showToast({
+        title: e?.message || '问诊失败，请确认后端已启动且 LLM 可用',
+        icon: 'none',
+      })
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const renderUploader = (type: LocalImage['type'], label: string, tip: string) => {
-    const img = imgOf(type)
-    return (
-      <View className='uploader' onClick={() => pickImage(type)}>
-        {img
-          ? <Image className='uploader-img' src={img.path} mode='aspectFill' />
-          : <View className='uploader-plus'>＋</View>}
-        <Text className='uploader-label'>{label}</Text>
-        <Text className='uploader-tip'>{tip}</Text>
-      </View>
-    )
   }
 
   return (
@@ -135,37 +111,27 @@ export default function ProfilePage() {
 
       <View className='card'>
         <View className='card-title'>病情自述 *</View>
-        <Textarea className='complaint-input' maxlength={500}
-          placeholder='请描述您的不适症状、持续时间、诱因等（不少于5个字）'
+        <Textarea className='complaint-input' maxlength={2000}
+          placeholder='请描述您的不适症状、持续时间、诱因等（不少于 5 个字）'
           value={complaint} onInput={e => setComplaint(e.detail.value)} />
-      </View>
-
-      <View className='card'>
-        <View className='card-title'>照片采集（选填）</View>
-        <View className='uploader-row'>
-          {renderUploader('tongue', '舌象', '自然光下伸舌')}
-          {renderUploader('face', '面相', '正面免冠')}
-          {renderUploader('lesion', '患处', '如有皮损等')}
-        </View>
-        <View className='uploader-row'>
-          {renderUploader('palm_left', '左手掌纹', '掌心朝上平铺')}
-          {renderUploader('palm_right', '右手掌纹', '掌心朝上平铺')}
-        </View>
-        <Text className='card-note'>中医手诊：掌色、掌纹、指形可辅助判断气血盛衰与脏腑状态，建议双手都拍。</Text>
+        <Text className='card-note'>
+          建议一并写上舌象（如「舌红苔黄腻」）、二便、寒热、睡眠等信息，
+          四诊 Agent 会据此直接取证。
+        </Text>
       </View>
 
       <View className='submit-wrap'>
         <View className={`btn-primary ${canSubmit ? '' : 'disabled'}`} onClick={submit}>
-          开始问诊
+          {submitting ? '问诊中…' : '开始问诊'}
         </View>
         <Text className='disclaimer'>本服务由 AI 提供健康参考，不构成医疗诊断</Text>
       </View>
 
       <View className='skills-entry' onClick={() => Taro.navigateTo({ url: '/pages/family/index' })}>
-        家庭档案 / 家庭成员管理
+        家庭档案 / 成员管理（仅存本机）
       </View>
       <View className='skills-entry' onClick={() => Taro.navigateTo({ url: '/pages/skills/index' })}>
-        管理技能 / SKILL
+        技能 / SKILL 一览
       </View>
     </View>
   )

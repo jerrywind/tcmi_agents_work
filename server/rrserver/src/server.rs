@@ -1,10 +1,11 @@
 //! 云端中继服务器核心。
 //!
 //! 职责：
-//! 1. `POST /api/register`  —— 家庭端带 `name` + `token` 注册，返回其应连接的 `ws_url`。
-//! 2. `GET  /ws/:name`     —— 家庭端维持的持久控制连接（WebSocket，需 token）。
-//! 3. `ANY  /t/:name/*rest`—— 外部调用方访问某个隧道，server 通过对应 WS 把请求转给家庭端，
-//!                            再把家庭端回传的响应返回给调用方。
+//!  1. `POST /api/register` —— 家庭端带 `name` + `token` 注册，返回其应连接的 `ws_url`。
+//!  2. `GET /ws/:name` —— 家庭端维持的持久控制连接（WebSocket，需 token）。
+//!  3. `ANY /t/:name/*rest` —— 外部调用方访问某个隧道，server 通过对应 WS 把请求转给家庭端，
+//!     再把家庭端回传的响应返回给调用方。
+//!
 //! nginx 通常作为 TLS 终端与反代前置在本服务之前。
 
 use std::collections::HashMap;
@@ -118,11 +119,18 @@ mod tests {
     async fn healthz_returns_ok() {
         let app = build_router(test_state());
         let resp = app
-            .oneshot(Request::builder().uri("/healthz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         assert_eq!(&body[..], b"ok");
     }
 
@@ -158,9 +166,12 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let v: serde_json::Value =
-            serde_json::from_slice(&axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap())
-                .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         let ws_url = v["ws_url"].as_str().expect("ws_url present");
         assert!(ws_url.starts_with("ws://127.0.0.1/rr/ws/home"));
         assert!(ws_url.contains("token=s3cr3t"));
@@ -414,11 +425,21 @@ pub async fn run_server(listen: String, state: AppState) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn register_handler(State(state): State<AppState>, Json(req): Json<RegisterReq>) -> impl IntoResponse {
+async fn register_handler(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterReq>,
+) -> impl IntoResponse {
     if !state.auth.check(&req.name, &req.token) {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "bad token"}))).into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "bad token"})),
+        )
+            .into_response();
     }
-    let ws_url = format!("{}/ws/{}?token={}", state.external_ws_base, req.name, req.token);
+    let ws_url = format!(
+        "{}/ws/{}?token={}",
+        state.external_ws_base, req.name, req.token
+    );
     (
         StatusCode::OK,
         Json(serde_json::json!({ "name": req.name, "ws_url": ws_url })),
@@ -462,7 +483,7 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, name: String, reg: 
                             let msg = ServerToClient::Request(r);
                             match serde_json::to_string(&msg) {
                                 Ok(s) => {
-                                    if sender.send(Message::Text(s.into())).await.is_err() {
+                                    if sender.send(Message::Text(s)).await.is_err() {
                                         break;
                                     }
                                 }
@@ -577,7 +598,10 @@ async fn proxy_handler(
                 }
                 Err(JudgeError::UnknownSkill(name)) => {
                     warn!("skill gate blocked: unknown skill `{}`", name);
-                    return (StatusCode::BAD_REQUEST, format!("unknown skill: `{}`", name))
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("unknown skill: `{}`", name),
+                    )
                         .into_response();
                 }
                 Err(JudgeError::Internal(m)) => {
@@ -603,7 +627,11 @@ async fn proxy_handler(
     let hdr_list: Vec<(String, String)> = headers
         .iter()
         .filter(|(k, _)| !is_hop_by_hop_str(k.as_str()))
-        .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.as_str().to_string(), s.to_string())))
+        .filter_map(|(k, v)| {
+            v.to_str()
+                .ok()
+                .map(|s| (k.as_str().to_string(), s.to_string()))
+        })
         .collect();
 
     let req_id = uuid::Uuid::new_v4().to_string();
@@ -732,14 +760,16 @@ impl Stream for ChunkStream {
                 Poll::Ready(Some(c)) => {
                     if c.done {
                         if c.chunk.is_empty() {
-                            // 流正常结束：回收可能遗留的 oneshot 与流式通道
-                            let _ = this.reg.cancel_pending(&this.req_id);
-                            let _ = this.reg.cancel_stream(&this.req_id);
+                            // 流正常结束：回收可能遗留的 oneshot 与流式通道。
+                            // 必须用 *_sync 变体：这里是同步的 poll 上下文，无法 await；
+                            // 写成 `let _ = reg.cancel_pending(..)` 只会丢弃 future、清理不执行。
+                            this.reg.cleanup_pending_sync(&this.req_id);
+                            this.reg.cleanup_stream_sync(&this.req_id);
                             return Poll::Ready(None);
                         }
                         // 末片携带数据：吐出数据并清理通道（cancel_stream 已在 push_chunk(done) 执行，
                         // 这里再次保险清理 oneshot 等待）
-                        let _ = this.reg.cancel_pending(&this.req_id);
+                        this.reg.cleanup_pending_sync(&this.req_id);
                         return Poll::Ready(Some(Ok(Bytes::from(c.chunk))));
                     } else if c.chunk.is_empty() {
                         continue; // 跳过空的非末片
@@ -749,8 +779,8 @@ impl Stream for ChunkStream {
                 }
                 Poll::Ready(None) => {
                     // 隧道断开 / 流异常结束：回收可能遗留的等待与通道，避免泄漏
-                    let _ = this.reg.cancel_pending(&this.req_id);
-                    let _ = this.reg.cancel_stream(&this.req_id);
+                    this.reg.cleanup_pending_sync(&this.req_id);
+                    this.reg.cleanup_stream_sync(&this.req_id);
                     return Poll::Ready(None);
                 }
                 Poll::Pending => return Poll::Pending,

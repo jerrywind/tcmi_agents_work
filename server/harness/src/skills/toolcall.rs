@@ -29,12 +29,7 @@ pub struct Skill {
 }
 
 impl Skill {
-    pub fn new(
-        name: &str,
-        description: &str,
-        parameters: Value,
-        executor: SkillFn,
-    ) -> Self {
+    pub fn new(name: &str, description: &str, parameters: Value, executor: SkillFn) -> Self {
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -87,15 +82,19 @@ pub fn http_skill(
     Skill::new(name, description, parameters, exec)
 }
 
-/// 构造一个通过 MCP 调用的技能
-pub fn mcp_skill(
+/// 构造一个通过 MCP 调用的技能（显示名与远端工具名不同时使用）
+///
+/// MCP server 挂载出来的工具统一命名为 `mcp__<client>__<tool>`，
+/// 但调用远端时仍须用**原始工具名**，故两者分开传。
+pub fn mcp_skill_named(
     name: &str,
+    remote_tool: &str,
     description: &str,
     parameters: Value,
     mcp_url: String,
     client: reqwest::Client,
 ) -> Skill {
-    let tool = name.to_string();
+    let tool = remote_tool.to_string();
     let exec: SkillFn = Arc::new(move |args: &Value| {
         let mcp_url = mcp_url.clone();
         let client = client.clone();
@@ -107,4 +106,15 @@ pub fn mcp_skill(
         })
     });
     Skill::new(name, description, parameters, exec)
+}
+
+/// 构造一个通过 MCP 调用的技能（显示名 = 远端工具名）
+pub fn mcp_skill(
+    name: &str,
+    description: &str,
+    parameters: Value,
+    mcp_url: String,
+    client: reqwest::Client,
+) -> Skill {
+    mcp_skill_named(name, name, description, parameters, mcp_url, client)
 }

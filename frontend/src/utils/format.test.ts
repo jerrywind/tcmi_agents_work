@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  confidencePercent, categoryClass, isReferred, isFinished, TREATMENT_CATEGORY_ORDER,
+  confidencePercent, categoryClass, truncate, TREATMENT_CATEGORY_ORDER,
+  syndromeSummary,
 } from './format'
 
 describe('confidencePercent', () => {
@@ -23,11 +24,39 @@ describe('categoryClass', () => {
   })
 })
 
-describe('status predicates', () => {
-  it('detects referred / finished', () => {
-    expect(isReferred({ status: 'referred' } as any)).toBe(true)
-    expect(isReferred({ status: 'finished' } as any)).toBe(false)
-    expect(isFinished({ status: 'finished' } as any)).toBe(true)
+describe('truncate', () => {
+  it('keeps short text as-is', () => {
+    expect(truncate('短文本')).toBe('短文本')
+  })
+  it('truncates long text with ellipsis', () => {
+    expect(truncate('a'.repeat(200), 10)).toBe('aaaaaaaaaa…')
+  })
+  it('handles empty input', () => {
+    expect(truncate('')).toBe('')
+  })
+})
+
+// T4.2：兼证要在报告里与主证并列呈现，不能被当成备选项折叠掉
+describe('syndromeSummary', () => {
+  it('renders primary with its confidence', () => {
+    expect(syndromeSummary({ name: '风寒感冒', confidence: 0.6 })).toBe('风寒感冒 60%')
+  })
+
+  it('joins concurrent syndromes with plus sign', () => {
+    const r = syndromeSummary(
+      { name: '风寒感冒', confidence: 0.6 },
+      [{ name: '肝郁气滞', confidence: 0.4 }],
+    )
+    expect(r).toBe('风寒感冒 60% + 肝郁气滞 40%')
+  })
+
+  it('returns empty string when there is no primary syndrome', () => {
+    expect(syndromeSummary(null)).toBe('')
+    expect(syndromeSummary(undefined, [{ name: '肝郁气滞', confidence: 0.4 }])).toBe('')
+  })
+
+  it('treats missing confidence as 0', () => {
+    expect(syndromeSummary({ name: '风寒感冒' })).toBe('风寒感冒 0%')
   })
 })
 

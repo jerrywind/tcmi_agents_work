@@ -251,7 +251,7 @@ mod tests {
 
         // 缺省字段应回退：非首片不传 status/headers 仍可反序列化
         let minimal = r#"{"type":"ResponseChunk","req_id":"r6","chunk":"","done":true}"#;
-        let c = serde_json::from_str::<ClientToServer>(&minimal).unwrap();
+        let c = serde_json::from_str::<ClientToServer>(minimal).unwrap();
         match c {
             ClientToServer::ResponseChunk(c) => {
                 assert_eq!(c.status, 0);
@@ -265,7 +265,8 @@ mod tests {
     #[test]
     fn invalid_base64_body_fails_to_deserialize() {
         // body 字段如果不是合法 base64，反序列化必须报错而非静默损坏
-        let json = r#"{"req_id":"x","method":"GET","path":"/p","headers":[],"body":"@@not base64@@"}"#;
+        let json =
+            r#"{"req_id":"x","method":"GET","path":"/p","headers":[],"body":"@@not base64@@"}"#;
         let res = serde_json::from_str::<RequestMsg>(json);
         assert!(res.is_err());
     }

@@ -1,111 +1,138 @@
-# Sub-Agent 设计：职责、System Prompt 与技能
+# Sub-Agent 设计：职责、实现与 Prompt
 
-本文档说明各 Sub-Agent 的角色边界、面向 **`google/gemma-4-12b-qat`（文本+视觉共用，原生多模态）** 设计的 system prompt，
-以及每个 agent 可调用的 **skill（工具）**。
+本文档描述 7 个 Sub-Agent 各自的职责边界、**规则层与 LLM 层的组合方式**，
+以及 prompt 与知识数据的维护位置。
 
-后端已由 Python（原 `backend/`，归档于 `_useless/backend/`）重写为 Rust **harness**：
-- 各 agent 实现：`server/harness/src/agents/*.rs`（`inspection.rs`、`listening.rs`、
-  `inquiry.rs`、`palpation.rs`、`differentiation.rs`、`safety.rs`、`treatment.rs`）
-- system prompt：`server/harness/resources/prompts.yaml`（**可改，中文维护**）
-- 技能映射：`server/harness/src/skills/builtin.rs`（内置注册 9 个技能）
+- 实现：`server/harness/src/agents/*.rs`
+- System Prompt：`server/harness/resources/prompts.yaml`（**中文，可改**）
+- 规则数据：`server/harness/resources/*.yaml`
 - 流程顺序：`server/harness/resources/routing.yaml`
+- 协议：[`agent-protocol.md`](./agent-protocol.md)；技能：[`skills.md`](./skills.md)
 
-> 关键约束：harness 中各 agent 统一走 **LLM** 实现（无 rule/mock 切换开关），
-> 因此 `/chat` 需要真实 LLM（LM Studio 或 llm_server 网关）。
-> 确定性逻辑（关键词证据匹配、证候推断、配伍禁忌、方剂调护检索）不依赖 LLM，
-> 由 `cargo test -p harness --test cases` 覆盖。
+> **共同实现模式**：每个 Agent 都是「**可选规则前置/后置 + 一次 LLM 调用**」，
+> 统一走 `ctx.caller().chat_with_tools(...)`（`agents/base.rs` 的 `LlmCaller`），
+> 固定 `temperature: 0.3`、`stream: false`。
+>
+> `LlmCaller` 集中处理三件事：
+> - **多轮工具调用**：最多 `max_tool_rounds` 轮（默认 3），达上限后转一次纯汇总调用；
+> - **失败重试**：超时/连接失败/5xx/429 重试 `llm_max_retries` 次（默认 2），指数退避；
+> - **埋点**：耗时、token、工具调用名、错误写入步骤 `TraceHandle`，由编排器汇总为 `trace[]`。
+>
+> **没有 rule/mock 实现**：LLM 不可用时该 Agent 返回 `Err`。但编排器**不会因此中断整个
+> `/chat`**：失败步骤记入 `failures[]` 并置 `partial: true`，已完成的步骤照常返回。
+
+---
 
 ## 总览
 
-| 能力 (Capability) | 角色 | LLM 实现类 | 默认 impl | 专属技能 |
+| capability | 角色 | 实现类 | 规则层 | 可见技能 |
 |---|---|---|---|---|
-| `diagnosis.inspection` | 望诊 | `InspectionVisionAgent` (`llm_vision`) | rule | `tcm-vision`、`tcm-rag` |
-| `diagnosis.listening` | 闻诊 | `ListeningLLMAgent` (`llm`) | rule | `tcm-auscultation` |
-| `diagnosis.inquiry` | 问诊 | `InquiryLLMAgent` (`llm`) | rule | `tcm-inquiry`、`tcm-rag` |
-| `diagnosis.palpation` | 切诊 | `PalpationLLMAgent` (`llm`) | rule | `tcm-palpation` |
-| `diagnosis.differentiation` | 辨证 | `DifferentiationLLMAgent` (`llm`) | rule | `tcm-reference`、`tcm-rag` |
-| `diagnosis.safety` | 安全 | `SafetyLLMAgent` (`llm`) | rule | `tcm-safety`（叠加规则兜底） |
-| `treatment.plan` | 诊疗方案 | `TreatmentLLMAgent` (`llm`) | rule | `tcm-kb`、`tcm-diet`、`tcm-rag` |
+| `inspection` | 望诊 | `InspectionAgent` | 后置：关键词证据叠加 | `tcm-vision` + 3 全局 |
+| `listening` | 闻诊 | `ListeningAgent` | 后置：关键词证据叠加 | `tcm-auscultation` + 3 全局 |
+| `inquiry` | 问诊 | `InquiryAgent` | 后置：`questions.yaml` 未覆盖问题去重取 top6 | `tcm-inquiry` + 3 全局 |
+| `palpation` | 切诊 | `PalpationAgent` | 后置：`parse_ppg` 体检数值解析 | `tcm-palpation` + 3 全局 |
+| `differentiation` | 辨证 | `DifferentiationAgent` | **前置**：证候库结构化打分（主证/兼证 + 置信度 + 支持/矛盾证据）+ 传变提示；并产出 `structured` | `tcm-reference` + 3 全局 |
+| `safety` | 安全门 | `SafetyAgent` | **前置**（强制）：红旗扫描 + 用药禁忌 | `tcm-safety` + 3 全局 |
+| `treatment` | 治疗 | `TreatmentAgent` | **前置**：方剂/调护检索 + 用药安全 | `tcm-formula`、`tcm-care` + 3 全局 |
 
-> 每个能力现都至少绑定一个技能；`tcm-rag` 为多模态检索技能，由望/辨/施/问共享。
-> 全部 LLM 实现均已接入 `run_tool_loop`，可在推理时调用各自技能。
+「3 全局」= `tcm-kb`、`tcm-diet`、`tcm-rag`；若 `config.yaml` 配了 `mcp_clients`，
+每个 Agent 还会额外看到全部 `mcp__*` 工具。见 [`skills.md`](./skills.md) 第 2.1 节。
 
-## 各 Sub-Agent 设计
+> **工具调用已在链路中生效**：7 个 Agent 全部走 `chat_with_tools`，上表「可见技能」
+> 即推理中模型真正能调用的工具，调用轨迹见 `/chat` 响应的 `trace[].tool_calls`。
+> 另：`safety` 命中 `high`/`critical` 红旗时，编排器会**跳过其后的步骤**（默认即
+> `treatment`），见下文安全门一节与 [`usage.md`](./usage.md) 2.3。
 
-### 望诊 `diagnosis.inspection`
-- **职责**：解读用户上传的舌象/面象/患处图片。
-- **与模型关系**：唯一走 `llm_vision` 的能力；图片由 **`google/gemma-4-12b-qat`** 原生多模态端点理解（文本+视觉共用同一模型，无独立视觉服务），无需 mmproj。
-- **System Prompt 要点**：仅描述可见事实（舌体/舌苔/舌态/面色/神/患处），不做诊断结论；
-  输出契约 `{findings:[{part,value,confidence}], summary}`。
-- **技能 `tcm-vision`**：模型可调用 `analyze_tongue_image(path)` / `analyze_face_image(path)`，
-  由技能内部再次向 `llm_server` 发送图片并取回客观描述，再综合成结论。
-- **降级**：无视觉模型时返回 `skip`，提示自然光下重拍舌象，由后续问诊补全。
+---
 
-### 闻诊 `diagnosis.listening`
+## 各 Sub-Agent 详解
+
+### 望诊 `inspection`
+- **职责**：解读舌象/面象/患处的文字描述，输出客观观察。
+- **实现**：`chat_with_tools(system=prompts.inspection, cap=inspection)` → 取最后一条 user 消息跑
+  `match_keywords()`，命中则追加 `[望诊证据] ...`。
+- **图片**：harness 不落盘、不上传。多模态图片需由调用方以 base64/URL 形式随
+  `messages` 传入，由模型端点自行理解（默认 `google/gemma-4-12b-qat` 原生多模态）。
+
+### 闻诊 `listening`
 - **职责**：从口语化自述中抽取声、嗅、咳、息线索。
-- **System Prompt 要点**：输出 `{evidences:[{category,value,confidence}], notes}`，
-  category 限定 `voice/odor/cough/breathing`，用中医习语（声低息微、口气酸臭等）。
-- **降级**：抽取失败/无模型时回退到规则关键词（`KEYWORD_EVIDENCE`）。
-- **技能 `tcm-auscultation`**：`lookup_voice_pattern(query)` / `lookup_odor_pattern(query)` 把口语化
-  描述映射到声/嗅标准术语与病机，校准输出取值。
+- **实现**：`chat_with_tools(system=prompts.listening, cap=listening)` → `match_keywords()` 追加 `[闻诊证据]`。
 
-### 问诊 `diagnosis.inquiry`
-- **职责**：基于已收集证据，提出下一个最有助于鉴别的问题并给选项。
-- **System Prompt 要点**：category 限定 `sleep/diet/stool/fever/sweat/pain/emotion/menstruation/other`；
-  优先追问能区分高概率候选证候的证据缺口；选项 2~6 个互斥。
-- **技能 `tcm-inquiry`**：`lookup_inquiry_focus(syndrome)` 按候选证候给出最值得追问的特征；
-  `suggest_followup(symptoms)` 按已采集症状反推候选证候并建议下一个最具鉴别力的追问。
-  另可调用 `tcm-rag` 的 `rag_text_retrieve` 检索相似主诉以辅助收敛。
+### 问诊 `inquiry`
+- **职责**：提出下一个最有助于鉴别的问题。
+- **实现**：
+  1. 规则层：把 `questions.yaml` 中 `evidence_keys` 未被对话文本覆盖的题目过滤出来，
+     按 `priority` 升序取前 6 条，拼成 `【建议追问】`；
+  2. LLM 层：`chat_with_tools(system=prompts.inquiry, cap=inquiry)` 生成自然语言追问；
+  3. 输出 = LLM 部分 + `【建议追问】`。
 
-### 切诊 `diagnosis.palpation`
-- **职责**：把用户自述的脉率、脉感、腹诊、肢体温度转写为证据。
-- **System Prompt 要点**：category 限定 `pulse.rate/pulse.quality/abdomen/limb_temp`；
-  对不准确表述做合理推断并标注置信度。
-- **降级**：无模型时回退到自测心率规则（`PalpationRuleAgent`）。
-- **技能 `tcm-palpation`**：`lookup_pulse_pattern(query)` / `lookup_abdomen_pattern(query)` 把脉感、
-  腹诊、肢体温度等口语描述映射为标准中医术语与病机，校准输出取值。
+### 切诊 `palpation`
+- **职责**：脉象描述 + 体检数值结构化。
+- **实现**：`chat_with_tools(system=prompts.palpation, cap=palpation)` → 对最后一条 user 消息跑
+  `knowledge::parse_ppg()`，解析出收缩压/舒张压/体温/心率/血糖等，追加 `[体检数据解析] {...}`。
 
-### 辨证 `diagnosis.differentiation`
-- **职责**：综合四诊证据给出候选证候及置信度（支持兼证）。
-- **System Prompt 要点**：输出 JSON 数组 `{syndrome,confidence,evidence[]}`；
-  证候用标准中医术语；只列置信度 ≥ 0.3 的候选。
-- **技能 `tcm-reference`**：`lookup_syndrome_patterns(syndrome)` 查询某证候典型四诊表现，
-  用于校准候选与支撑证据，减少臆造。
+### 辨证 `differentiation`
+- **职责**：综合四诊给出候选证候（主证 + 兼证，各带置信度与证据链）。
+- **实现**：
+  1. **前置规则（结构化，`assess()` 纯函数，T4.1/T4.2）**：
+     - 对 `syndromes.yaml` 每个证候统计证据量：症状命中 +1，舌象/脉象命中 +1
+       （短语按「，」拆段匹配），命中的关键词证据 +0.5，每条矛盾证据 −0.5；
+     - 置信度 = `min(1, 证据量 / 5)`，保留两位小数；
+     - **矛盾证据**：命中表现的**相反表现**若出现在语料中即计入，
+       相反表现表在 `resources/contradictions.yaml`（中医可维护）；
+     - 主证 = 证据量最高者（同分保持证候库顺序）；
+       **兼证** = 其余候选中置信度 ≥ 0.2 且证据量 ≥ 主证 60% 者，按证据量降序；
+     - 传变提示：按主证 slug 查 `transformations.yaml` 的 `from`。
+  2. **LLM 层**：`chat_with_tools(system=prompts.differentiation + 初筛摘要, cap=differentiation)`
+     ——把结构化初筛结论附进系统提示，让模型有据可依而非凭空起证名；
+  3. **输出**：正文 = 结构化小节（`【结构化辨证】` 主证/兼证/置信度/支持/矛盾 + 传变提示）
+     + LLM 结论；同时经 `structured()` 把同一份结构化结论随响应返回
+     （`/chat` 的 `structured.differentiation`、`POST /agents` 的 `structured`）。
+- **契约要点**：结构化部分是**确定性**的（同一语料必得同一结论、不依赖 LLM），
+  因此可写回归测试，前端也可直接按字段渲染。
 
-### 安全 `diagnosis.safety`（双重兜底）
-- **职责**：识别红旗（red-flag）信号，提示线下就医。
-- **设计要点**：**规则关键词扫描永远执行**作为强制安全网；LLM 在其上叠加语义识别
-  （如「咯血」「剧烈胸痛」的口语化表述），二者合并去重。无模型时仅保留规则结果，绝不漏报。
-- **输出契约**：`{safe, alerts:[{level:warning|urgent, signal, detail}]}`。
-- **技能 `tcm-safety`**：`lookup_redflag(signal)` 把识别到的红旗信号映射为分级、建议就诊科室与处置要点，
-  使告警更可操作；未命中具体信号时回退为通用就医提示（不漏报）。
+### 安全门 `safety`（**唯一强制规则前置**）
+- **职责**：红旗识别 + 用药安全校验。
+- **实现**：
+  1. **红旗扫描（永远执行）**：遍历 `safety.yaml` 的 `red_flags`，命中关键词即产出
+     `[{severity}] {advice}`；
+  2. **用药安全（条件执行）**：仅当 `payload.herbs` 为字符串数组时，调用
+     `knowledge::check_herb_safety(herbs, payload.pregnant)`，
+     校验十八反（15 组）/十九畏（9 组）/妊娠禁忌（16 味）；
+  3. 两者皆空 → 直接返回「未触发红色警戒」，**不调用 LLM**；
+  4. 否则调用 `chat_with_tools(system=prompts.safety, cap=safety)` 追加解释（prompt 为空则跳过）；
+  5. 末尾追加结构化回执：`{"red_flags":[{slug,label,severity,advice}], "herb_safety":[...], "blocked": bool, "severity": string}`。
+- **中断契约**：`severity` 为 `high`/`critical` 时回执里 `blocked: true`；编排器用**同一套判定**
+  （`agents::blocking_red_flag`）跳过其后的步骤，并在 `/chat` 响应置 `blocked`/
+  `block_reason`/`skipped[]`。`medium`（如妊娠）只告警不中断。
+- **payload 字段**：`herbs: string[]`、`pregnant: bool`（均可选）。
 
-### 诊疗方案 `treatment.plan`
-- **职责**：基于证候生成调治建议（中药/针灸/西医检查/生活调护）。
-- **System Prompt 要点**：输出 `{herbs, acupuncture, western, advice, questions}`；
-  明确区分养生调护与需执业中医师处方的部分。
-- **技能 `tcm-kb`**：`lookup_syndrome_treatment(syndrome)` / `lookup_herb(herb)` 查询知识库，
-  优先据此给出有据可循的方案（见 [`skills.md`](./skills.md)）。
-- **技能 `tcm-diet`**：`lookup_diet_therapy(syndrome)` 按证候返回食疗/膳食调护建议（宜食、忌口、机理）。
-- **技能 `tcm-rag`**：`rag_text_retrieve` / `rag_paired_retrieve` 可检索治法/方剂出处或相关病例，
-  进一步支撑方案生成。
+### 治疗 `treatment`
+- **职责**：产出方剂 / 调护 / 外治 / 生活调摄建议。
+- **实现**：
+  1. 证候定位：`payload.syndrome`，缺省时用 `infer_syndrome_slug()` 取首位；
+  2. 规则检索：`find_formula()` 拼 `【推荐方剂】`、`find_care()` 拼 `【调护建议】`；
+  3. 用药安全：若 `payload.herbs` 存在，同上校验并拼 `【用药安全】`；
+  4. LLM 综合：`chat_with_tools(system=prompts.treatment, cap=treatment)`；
+  5. 输出 = LLM 部分 + 规则部分。
+- **payload 字段**：`syndrome: string`、`herbs: string[]`、`pregnant: bool`（均可选）。
 
-## 如何调整诊断流程
+---
 
-编辑 `server/harness/resources/routing.yaml` 的 `active` 列表，即可增删诊断步骤
-（删除某行即跳过该能力）：
+## 维护入口
 
-```yaml
-active:
-  - inspection        # 望诊（多模态，与文本共用 google/gemma-4-12b-qat）
-  - listening         # 闻诊
-  - inquiry           # 问诊
-  - palpation         # 切诊
-  - differentiation   # 辨证
-  - safety            # 安全门
-  - treatment         # 治疗
-default: inspection
-```
+| 想改什么 | 改哪里 | 是否需重启 |
+|---|---|---|
+| System Prompt（7 段） | `resources/prompts.yaml` | `POST /reload` 或重启 |
+| 证候库（症状/病机） | `resources/syndromes.yaml` | 同上 |
+| 问诊题库 | `resources/questions.yaml` | 同上 |
+| 方剂 | `resources/formulas.yaml` | 同上 |
+| 调护/食疗 | `resources/care.yaml` | 同上 |
+| 红旗规则 | `resources/safety.yaml` | 同上 |
+| 关键词→证据/证候映射 | `resources/keywords.yaml` | 同上 |
+| 证候传变 | `resources/transformations.yaml` | 同上 |
+| 流程顺序 | `resources/routing.yaml` | 同上 |
+| Agent 逻辑 | `src/agents/*.rs` | 需 `cargo build` |
 
-改完调用 `POST /reload` 生效（需 `resources/config.yaml` 中 `hot_reload: true`），
-或重启 harness。
+改完数据建议跑 `cd server && cargo test -p harness --test cases`
+（93 条真实病例基准，会校验证候是否缺失、方剂/调护是否存在）。

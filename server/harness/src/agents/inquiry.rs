@@ -3,7 +3,7 @@
 //! 复刻 backend `app/agents/inquiry.py`：依据 `resources/questions.yaml`
 //! 生成结构化问诊问题；依据已收集证据去重，逐步追问寒热/汗出/头身/二便等。
 
-use crate::agents::base::{chat_completion, AgentContext, SubAgent};
+use crate::agents::base::{AgentContext, SubAgent};
 use crate::model::{Capability, Message};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -47,17 +47,12 @@ impl SubAgent for InquiryAgent {
             }
         }
 
-        // 2) LLM 层：综合生成自然语言问诊
+        // 2) LLM 层：综合生成自然语言问诊（可用 tcm-inquiry 等技能）
         let system = &ctx.resources.prompts.inquiry;
-        let llm_part = chat_completion(
-            &ctx.llm,
-            &ctx.config.llm_base_url,
-            &ctx.config.llm_api_key,
-            &ctx.config.model,
-            system,
-            messages,
-        )
-        .await?;
+        let llm_part = ctx
+            .caller()
+            .chat_with_tools(system, messages, Capability::Inquiry)
+            .await?;
 
         Ok(format!("{llm_part}\n{rule_part}"))
     }

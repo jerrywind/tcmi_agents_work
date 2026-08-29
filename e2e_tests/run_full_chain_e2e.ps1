@@ -1,68 +1,52 @@
-<#
+﻿<#
 .SYNOPSIS
   风蓝科技 TCM 全链路端到端测试一键编排脚本。
 
 .DESCRIPTION
-  依次启动：llm_server（可选）、harness（Rust 重写后的后端），
-  并运行：
-    1) pytest 集成测试：rrserver 隧道 / llm_server 网关
-       （backend 的 Python 契约用例 test_backend_llm_integration_e2e.py 已随
-        backend 归档到 _useless/，默认排除；harness 的回归测试请用
-        `cargo test -p harness`，其案例基准来自 cases.jsonl）
-    2) 前端 vitest 函数级 e2e（默认跳过：前端 api.ts 仍按旧 backend 契约，
-       需完成契约对齐后用 -WithFrontend 开启）
+  用 **Docker** 起 harness（后端完全依赖 Docker，不使用宿主机 cargo 产物），并运行：
+    1) pytest 集成测试：llm_server 网关（默认）+ rrserver 隧道（-WithRrserver）
+       （harness 内部的确定性回归请用 Docker 内 `cargo test --workspace`，
+         其案例基准来自 cases.jsonl，不依赖 LLM）
+    2) 前端契约测试（默认开启）：frontend/src/services/harness.contract.test.ts
+       直连真实 harness 校验 /health、/agents、/skills、-WithFrontend 之外，
+       后端不可达时该用例会自动 skip，因此无 Docker 环境也不会误报失败。
 
   注意：harness 无 MockProvider，问诊推进需要真实 LLM（LM Studio）；
   仅 /health、/agents、/skills 等只读端点可在无 LLM 下验证。
 
-.PARAMETER SkipRrserver
-  跳过 rrserver 隧道测试（需要本地 Rust 编译产物，默认跳过除非传入 -WithRrserver）。
+.PARAMETER SkipBuild
+  跳过 harness 镜像构建，直接使用已存在的 -ImageName 镜像。
 
 .PARAMETER WithRrserver
-  包含 rrserver 隧道测试（需先 cargo build rrserver）。
+  包含 rrserver 隧道测试（需 TCM_RRSERVER_BIN 指向已编译二进制，默认跳过）。
 
 .PARAMETER SkipFrontend
-  跳过前端 vitest e2e。
+  跳过前端契约测试。
+
+.PARAMETER ImageName
+  harness 镜像名，默认 tcm-harness:e2e。
 
 .EXAMPLE
-  .\run_full_chain_e2e.ps1                 # 跑 llm + backend + 前端（不含 rrserver）
+  .\run_full_chain_e2e.ps1                 # harness(镜像) + pytest + 前端契约
+  .\run_full_chain_e2e.ps1 -SkipFrontend   # 只跑 pytest
   .\run_full_chain_e2e.ps1 -WithRrserver   # 额外包含 rrserver 隧道测试
 #>
 param(
-  [switch]$SkipRrserver,
+  [switch]$SkipBuild,
   [switch]$WithRrserver,
   [switch]$SkipFrontend,
-  [switch]$WithFrontend
+  [switch]$WithFrontend,
+  [string]$ImageName = 'tcm-harness:e2e'
 )
 
 $ErrorActionPreference = 'Continue'
 $ROOT = Split-Path $PSScriptRoot -Parent          # tcm_work
 $E2E  = $PSScriptRoot                              # tcm_work/e2e_tests
-# backend 已归档至 _useless/backend，其后继为 Rust 实现 server/harness
-$HARNESS = Join-Path $ROOT 'server/harness'
-$LLM     = Join-Path $ROOT 'llm_server'
-$FRONT   = Join-Path $ROOT 'frontend'
-$RRS     = Join-Path $ROOT 'server/rrserver'
+$SERVER = Join-Path $ROOT 'server'                 # Cargo workspace 根（构建上下文）
+$FRONT = Join-Path $ROOT 'frontend'
 
 $HARNESS_PORT = 8011
-$LLM_PORT     = 8002
-$SHUTDOWN = [System.Collections.ArrayList]::new()
-
-function Start-Background {
-  param($Name, $Exe, $Args, $Cwd, $Env)
-  $psi = New-Object System.Diagnostics.ProcessStartInfo
-  $psi.FileName = $Exe
-  $psi.Arguments = $Args
-  $psi.UseShellExecute = $false
-  $psi.RedirectStandardOutput = $true
-  $psi.RedirectStandardError = $true
-  if ($Cwd) { $psi.WorkingDirectory = $Cwd }
-  foreach ($k in $Env.Keys) { $psi.Environment[$k] = $Env[$k] }
-  $p = [System.Diagnostics.Process]::Start($psi)
-  [void]$SHUTDOWN.Add($p)
-  Write-Host "[e2e] 启动 $Name (pid=$($p.Id))" -ForegroundColor Cyan
-  return $p
-}
+$CONTAINER = 'tcm-harness-e2e'
 
 function Wait-Healthy {
   param($Url, $Timeout = 60)
@@ -77,51 +61,56 @@ function Wait-Healthy {
   return $false
 }
 
-function Stop-All {
-  foreach ($p in $SHUTDOWN) {
-    try { if (-not $p.HasExited) { $p.Kill() } } catch {}
-  }
+function Stop-Container {
+  docker rm -f $CONTAINER 2>$null | Out-Null
 }
 
 # ---------- 0. 准备样例图片 ----------
 python "$E2E/_make_sample_image.py"
 
-# ---------- 1. 启动 harness（Rust 后端；只读端点无需 LLM） ----------
-Write-Host "`n[e2e] === 启动 harness（server/harness）===" -ForegroundColor Yellow
-$harnessExe = Join-Path $HARNESS 'target/debug/harness.exe'
-if (-not (Test-Path $harnessExe)) { $harnessExe = Join-Path $HARNESS 'target/release/harness.exe' }
-if (-not (Test-Path $harnessExe)) {
-  Write-Host "[e2e] 未找到 harness 二进制，请先：`cargo build -p harness`（在 server/ 目录）" -ForegroundColor Red
-  Stop-All; exit 1
+# ---------- 1. 构建 harness 镜像（Docker 内多阶段编译） ----------
+if (-not $SkipBuild) {
+  Write-Host "`n[e2e] === 构建 harness 镜像 $ImageName ===" -ForegroundColor Yellow
+  Push-Location $SERVER
+  docker build -f harness/Dockerfile -t $ImageName .
+  $buildExit = $LASTEXITCODE
+  Pop-Location
+  if ($buildExit -ne 0) {
+    Write-Host "[e2e] 镜像构建失败" -ForegroundColor Red
+    exit 1
+  }
 }
-$harnessEnv = @{
-  # harness 读 HARNESS_* 前缀；未配置 LLM 时仅只读端点（/health、/agents、/skills）可用
-  HARNESS_LLM_BASE_URL = "${env:HARNESS_LLM_BASE_URL}"
-  HARNESS_LLM_API_KEY  = "${env:HARNESS_LLM_API_KEY}"
-}
-Start-Background -Name 'harness' -Exe $harnessExe `
-  -Args "--listen 127.0.0.1:$HARNESS_PORT" `
-  -Cwd $HARNESS -Env $harnessEnv
 
-# harness 的只读端点为 /health（前端经 nginx 以 /api 前缀代理到此）
+# ---------- 2. 启动 harness 容器 ----------
+Write-Host "`n[e2e] === 启动 harness 容器（端口 $HARNESS_PORT）===" -ForegroundColor Yellow
+Stop-Container
+$runArgs = @('run','-d','--name',$CONTAINER,'-p',"$($HARNESS_PORT):8011")
+foreach ($k in @('HARNESS_LLM_BASE_URL','HARNESS_LLM_API_KEY','HARNESS_MODEL','HARNESS_RAG_ENDPOINT')) {
+  $v = [Environment]::GetEnvironmentVariable($k)
+  if ($v) { $runArgs += @('-e', "$k=$v") }
+}
+$runArgs += $ImageName
+& docker @runArgs | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "[e2e] harness 容器启动失败" -ForegroundColor Red
+  exit 1
+}
+
 if (-not (Wait-Healthy "http://127.0.0.1:$HARNESS_PORT/health" 90)) {
-  Write-Host "[e2e] harness 未就绪，终止" -ForegroundColor Red
-  Stop-All; exit 1
+  Write-Host "[e2e] harness 未就绪，终止；容器日志：" -ForegroundColor Red
+  docker logs --tail 30 $CONTAINER
+  Stop-Container
+  exit 1
 }
 Write-Host "[e2e] harness 已就绪（端口 $HARNESS_PORT）" -ForegroundColor Green
 
-# ---------- 2. 运行 pytest 集成测试 ----------
+# ---------- 3. 运行 pytest 集成测试 ----------
 Write-Host "`n[e2e] === pytest 集成测试 ===" -ForegroundColor Yellow
-# 默认排除 rrserver（需 Rust 编译产物）与 backend（Python 契约用例已随 backend 归档）
-$pytestArgs = @(
-  '-q'
-  "-k", "not rrserver and not backend"
-)
-if ($WithRrserver -and -not $SkipRrserver) {
-  $pytestArgs = @('-q', '-k', 'not backend')   # 包含 rrserver
+$pytestArgs = @('-q', '-k', 'not rrserver')
+if ($WithRrserver) {
+  $pytestArgs = @('-q')                          # 全部（含 rrserver）
 }
 $env:TCM_HARNESS_BASE = "http://127.0.0.1:$HARNESS_PORT"
-$env:TCM_BACKEND_LLM_BASE = 'http://127.0.0.1:9/none'
 Push-Location $E2E
 $pytestExit = 0
 try {
@@ -130,30 +119,33 @@ try {
 } catch { $pytestExit = 1 }
 Pop-Location
 
-# ---------- 3. 前端 vitest e2e ----------
-# 前端 src/services/api.ts 仍按旧 backend 契约（/api/consultations 等），
-# 与 harness 端点尚未对齐，故默认跳过；完成契约对齐后用 -WithFrontend 开启。
+# ---------- 4. 前端契约测试（默认开启） ----------
+# 跑真实 harness 的只读端点契约；后端不可达时用例自动 skip，不会误报失败。
 $frontExit = 0
-if ($WithFrontend -and -not $SkipFrontend) {
-  Write-Host "`n[e2e] === 前端 vitest e2e ===" -ForegroundColor Yellow
-  $env:TCM_API_BASE = "http://127.0.0.1:$HARNESS_PORT"
+if (-not $SkipFrontend) {
+  Write-Host "`n[e2e] === 前端契约测试（真实 harness）===" -ForegroundColor Yellow
+  $env:VITE_API_BASE = "http://127.0.0.1:$HARNESS_PORT"
   Push-Location $FRONT
   try {
-    & npx vitest run src/services/api.e2e.test.ts
+    & npx vitest run src/services/harness.contract.test.ts
     $frontExit = $LASTEXITCODE
   } catch { $frontExit = 1 }
   Pop-Location
 } else {
-  Write-Host "`n[e2e] 跳过前端 vitest e2e（契约未对齐；加 -WithFrontend 强制开启）" -ForegroundColor DarkYellow
+  Write-Host "`n[e2e] 跳过前端契约测试（-SkipFrontend 已指定）" -ForegroundColor DarkYellow
+}
+# 兼容旧参数：-WithFrontend 曾是开启开关，现为默认行为
+if ($WithFrontend -and $SkipFrontend) {
+  Write-Host "[e2e] -WithFrontend 与 -SkipFrontend 同时传入，以 -SkipFrontend 为准" -ForegroundColor DarkYellow
 }
 
 # ---------- 收尾 ----------
-Stop-All
+Stop-Container
 Write-Host "`n[e2e] 结果：pytest=$pytestExit  frontend=$frontExit" -ForegroundColor Cyan
 if ($pytestExit -eq 0 -and $frontExit -eq 0) {
-  Write-Host "[e2e] 全链路 e2e 通过 ✅" -ForegroundColor Green
+  Write-Host "[e2e] 全链路 e2e 通过" -ForegroundColor Green
   exit 0
 } else {
-  Write-Host "[e2e] 存在失败用例 ❌" -ForegroundColor Red
+  Write-Host "[e2e] 存在失败用例" -ForegroundColor Red
   exit 1
 }

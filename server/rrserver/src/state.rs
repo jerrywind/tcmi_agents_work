@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::protocol::{RequestMsg, ResponseChunkMsg, ResponseMsg};
 
@@ -40,6 +40,25 @@ impl Registry {
             tunnels: Arc::new(Mutex::new(HashMap::new())),
             pending: Arc::new(Mutex::new(HashMap::new())),
             streams: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// 同步清理某个请求遗留的等待项与流式通道。
+    ///
+    /// 供 `Stream::poll_next` 这类**不可 await** 的上下文使用。
+    ///
+    /// ⚠️ 切勿写成 `let _ = self.cancel_pending(id);`——`cancel_pending` 是 `async fn`，
+    /// 那只创建 future 随即丢弃，清理**永远不会执行**
+    /// （clippy: `non-binding let on a future`），会导致 `pending` / `streams` 泄漏。
+    ///
+    /// 临界区极短（仅 `HashMap::remove`，内部无 await），故 `try_lock` 基本必然成功。
+    /// 清理是幂等的。
+    pub fn cleanup_pending_sync(&self, req_id: &str) {
+        if let Ok(mut p) = self.pending.try_lock() {
+            p.remove(req_id);
+        }
+        if let Ok(mut s) = self.streams.try_lock() {
+            s.remove(req_id);
         }
     }
 
@@ -112,6 +131,13 @@ impl Registry {
         rx
     }
 
+    /// 同步清理某个请求的流式通道（语义同上，只清 `streams`）。
+    pub fn cleanup_stream_sync(&self, req_id: &str) {
+        if let Ok(mut s) = self.streams.try_lock() {
+            s.remove(req_id);
+        }
+    }
+
     /// 家庭端回传一个响应分片。若是末片（`done=true`），清理流式通道；
     /// 但**不要**在这里移除 `pending`（oneshot）——流式路径下 oneshot 不会被 `resolve` 使用，
     /// 其清理交由 `ChunkStream` 结束时调用 `cancel_pending`，否则会与 `proxy_handler` 的
@@ -131,6 +157,12 @@ impl Registry {
     /// 显式关闭流式通道（超时等场景下调用）。
     pub async fn cancel_stream(&self, req_id: &str) {
         self.streams.lock().await.remove(req_id);
+    }
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -281,7 +313,7 @@ mod tests {
         reg.register("home", tx1).await;
         reg.register("home", tx2).await;
         drop(rx1); // 旧通道已断开
-        // 应能经新通道成功下发命令
+                   // 应能经新通道成功下发命令
         assert!(reg.send_request("home", sample_req("r1")).await);
     }
 

@@ -3,7 +3,7 @@
 //! 复刻 backend `app/agents/palpation.py`：脉象由 LLM 描述，体检报告（PPG）
 //! 由 `knowledge::ppg` 规则解析为数值并回灌。
 
-use crate::agents::base::{chat_completion, AgentContext, SubAgent};
+use crate::agents::base::{AgentContext, SubAgent};
 use crate::model::{Capability, Message};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -24,15 +24,10 @@ impl SubAgent for PalpationAgent {
         _payload: &serde_json::Value,
     ) -> Result<String> {
         let system = &ctx.resources.prompts.palpation;
-        let mut out = chat_completion(
-            &ctx.llm,
-            &ctx.config.llm_base_url,
-            &ctx.config.llm_api_key,
-            &ctx.config.model,
-            system,
-            messages,
-        )
-        .await?;
+        let mut out = ctx
+            .caller()
+            .chat_with_tools(system, messages, Capability::Palpation)
+            .await?;
 
         // PPG 解析：若用户消息含体检数值，结构化回灌
         if let Some(last) = messages.iter().rev().find(|m| m.role == "user") {

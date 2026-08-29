@@ -4,7 +4,7 @@
 //! 从 `resources/formulas.yaml` / `care.yaml` 检索方剂与调护，做用药安全校验，
 //! 再经 LLM 综合成药膳食疗/方剂/外治方案。
 
-use crate::agents::base::{chat_completion, AgentContext, SubAgent};
+use crate::agents::base::{AgentContext, SubAgent};
 use crate::model::{Capability, Message};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -28,7 +28,11 @@ impl SubAgent for TreatmentAgent {
             .get("syndrome")
             .and_then(|s| s.as_str())
             .map(|s| s.to_string())
-            .or_else(|| crate::agents::infer_syndrome_slug(&ctx.resources, messages).into_iter().next());
+            .or_else(|| {
+                crate::agents::infer_syndrome_slug(&ctx.resources, messages)
+                    .into_iter()
+                    .next()
+            });
 
         let mut rule_part = String::new();
         if let Some(slug) = &syndrome_slug {
@@ -56,10 +60,7 @@ impl SubAgent for TreatmentAgent {
                 for c in &cares {
                     if let Some(items) = c.get("items").and_then(|v| v.as_array()) {
                         for it in items {
-                            rule_part.push_str(&format!(
-                                "- {}\n",
-                                it.as_str().unwrap_or("")
-                            ));
+                            rule_part.push_str(&format!("- {}\n", it.as_str().unwrap_or("")));
                         }
                     }
                 }
@@ -85,17 +86,12 @@ impl SubAgent for TreatmentAgent {
             }
         }
 
-        // 3) LLM 综合
+        // 3) LLM 综合（可用专属 tcm-formula / tcm-care，以及全局 tcm-kb / tcm-diet / tcm-rag）
         let system = &ctx.resources.prompts.treatment;
-        let llm = chat_completion(
-            &ctx.llm,
-            &ctx.config.llm_base_url,
-            &ctx.config.llm_api_key,
-            &ctx.config.model,
-            system,
-            messages,
-        )
-        .await?;
+        let llm = ctx
+            .caller()
+            .chat_with_tools(system, messages, Capability::Treatment)
+            .await?;
 
         Ok(format!("{llm}\n{rule_part}"))
     }

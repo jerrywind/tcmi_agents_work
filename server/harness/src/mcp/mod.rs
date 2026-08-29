@@ -1,7 +1,11 @@
-//! MCP（Model Context Protocol）客户端：Streamable HTTP 传输
+//! MCP（Model Context Protocol）
 //!
-//! 复刻 backend `app/mcp/`：以 JSON-RPC over HTTP 对接 MCP server。
-//! 提供 `call_tool` 直接调用远端工具。
+//! 两个方向：
+//! - **client**（本文件）：以 JSON-RPC over HTTP 对接外部 MCP server，
+//!   把外部工具接进来给 Sub-Agent 用（T2.4）；
+//! - **server**（[`server`] 模块）：把本系统的 7 个能力暴露给外部 MCP 客户端（T4.5）。
+
+pub mod server;
 
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -48,10 +52,7 @@ pub async fn call_tool(
         .or_else(|_| serde_json::from_str::<Value>(&format!("{{\"result\":{text}}}")))
         .unwrap_or(json!({"result": null}));
 
-    Ok(v
-        .get("result")
-        .cloned()
-        .unwrap_or(json!(null)))
+    Ok(v.get("result").cloned().unwrap_or(json!(null)))
 }
 
 /// 列出 MCP server 提供的工具
@@ -72,7 +73,6 @@ pub async fn list_tools(client: &reqwest::Client, url: &str) -> Result<Value> {
         .await?
         .error_for_status()?;
     let text = resp.text().await?;
-    let v: Value = serde_json::from_str(text.trim())
-        .unwrap_or(json!({"result": []}));
+    let v: Value = serde_json::from_str(text.trim()).unwrap_or(json!({"result": []}));
     Ok(v.get("result").cloned().unwrap_or(json!([])))
 }

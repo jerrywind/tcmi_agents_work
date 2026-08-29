@@ -32,10 +32,9 @@
 2. Developer → Local Server 开启，默认端口 `11223`；
 3. 记录 Server Settings 中的 API Key（关闭校验则任意非空值）。
 
-> **模型事实（单一来源）**：当前默认 `routing.llm.yaml` 中文本与视觉（望诊）**共用同一个
-> `google/gemma-4-12b-qat` 多模态端点**，不单独部署视觉模型。系统仍保留「经
-> `TCM_LLM_VISION_BASE_URL` / `TCM_LLM_VISION_MODEL` 把视觉能力独立部署到专属端点」的
-> 可选能力（非默认）。无上游时
+> **模型事实（单一来源）**：harness 只有一个模型配置（`config.model`，默认
+> `google/gemma-4-12b-qat`），文本与视觉**共用同一个多模态端点**，不单独部署视觉模型，
+> 也没有「视觉专属端点」的独立配置项。无上游时
 > llm_server `/healthz` 返回 `degraded`、`/v1/models` 返回 503。
 > harness **无 MockProvider**：LLM 不可用时 `/chat` 会返回错误，只读端点不受影响。
 

@@ -9,6 +9,7 @@
 //! - `knowledge`  PPG 解析 / 用药安全 / 方剂检索
 //! - `skills`    工具调用（MCP / HTTP）
 //! - `mcp`       MCP client/server
+//! - `trace`     调用级埋点（耗时 / token / 工具 / 错误）
 //! - `http`      axum HTTP 服务
 
 pub mod agents;
@@ -20,10 +21,11 @@ pub mod model;
 pub mod orchestrator;
 pub mod resources;
 pub mod skills;
+pub mod trace;
 
+use anyhow::Context;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::Context;
 
 use crate::config::HarnessConfig;
 use crate::resources::ResourceBundle;
@@ -60,8 +62,11 @@ impl AppState {
 
         let registry = agents::Registry::new();
 
-        // 技能注册表：内置 9 个工具，按需挂载外部 MCP
-        let skills = skills::build_default_registry(&config, &resources, llm.clone());
+        // 技能注册表：内置工具（9 个 + treatment 专属 2 个），再按配置挂载外部 MCP
+        let mut skills = skills::build_default_registry(&config, &resources, llm.clone());
+        if !config.mcp_clients.is_empty() {
+            skills::mount_mcp_clients(&mut skills, &config, &llm).await;
+        }
 
         Ok(Self {
             config: Arc::new(config),

@@ -17,5 +17,6 @@ active:
   - safety
   - treatment
 
-# 默认入口（前端直接发起诊断时的起点）
-default: inspection
+# 说明：本文件只决定「激活哪些步骤及其顺序」。
+# `POST /chat` 会按 active 顺序**串行跑完全部**步骤后一次性返回，
+# 没有「从某一步开始」的入口概念，因此不再保留 default 字段。

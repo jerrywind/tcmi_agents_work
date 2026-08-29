@@ -13,8 +13,8 @@ use std::time::Duration;
 use anyhow::{anyhow, Context};
 use futures::{Sink, SinkExt, StreamExt};
 use serde_json::json;
-use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, info, warn};
 
 use crate::protocol::{
@@ -93,7 +93,9 @@ async fn run_once(cfg: ClientConfig) -> anyhow::Result<()> {
             }
             Message::Binary(b) => {
                 if let Ok(t) = String::from_utf8(b) {
-                    if let Ok(ServerToClient::Request(r)) = serde_json::from_str::<ServerToClient>(&t) {
+                    if let Ok(ServerToClient::Request(r)) =
+                        serde_json::from_str::<ServerToClient>(&t)
+                    {
                         // 以流式方式转发，支持 LLM 增量输出
                         if !forward_to_ws(&mut write, &http, &local, &r).await {
                             break;
@@ -173,7 +175,12 @@ pub async fn forward_local_with(
 /// 末片 `done = true` 结束。这样 LLM 的增量输出（流式 / SSE）能被原样透传。
 ///
 /// 返回 `false` 表示写向隧道失败（调用方应断开隧道）。
-async fn forward_to_ws<W>(write: &mut W, client: &reqwest::Client, local_base: &str, req: &RequestMsg) -> bool
+async fn forward_to_ws<W>(
+    write: &mut W,
+    client: &reqwest::Client,
+    local_base: &str,
+    req: &RequestMsg,
+) -> bool
 where
     W: Sink<Message> + Unpin,
 {
@@ -430,7 +437,13 @@ mod tests {
     #[tokio::test]
     async fn forward_local_with_reuses_shared_client_pool() {
         // 验证共享连接池路径：用同一个 reqwest::Client 连续转发多次，行为等价于 forward_local。
-        use axum::{body::Bytes, http::{HeaderMap, Method}, response::IntoResponse, routing::any, Router};
+        use axum::{
+            body::Bytes,
+            http::{HeaderMap, Method},
+            response::IntoResponse,
+            routing::any,
+            Router,
+        };
         async fn sink(_m: Method, _h: HeaderMap, _b: Bytes) -> impl IntoResponse {
             (axum::http::StatusCode::OK, "ok")
         }

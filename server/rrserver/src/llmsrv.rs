@@ -194,10 +194,7 @@ impl Deployer {
                 let child = cmd
                     .spawn()
                     .with_context(|| format!("spawn backend `{}`", program))?;
-                info!(
-                    "backend process spawned (pid {:?})",
-                    child.id()
-                );
+                info!("backend process spawned (pid {:?})", child.id());
                 let local_url = match listen_url {
                     Some(u) => u.clone(),
                     None => derive_base(health_url)?,
@@ -279,9 +276,7 @@ pub async fn start_info_server(
         .route("/healthz", get(|| async { "ok" }))
         .route(
             "/v1/models",
-            get(move || async move {
-                Json(serde_json::json!({ "object": "list", "data": data }))
-            }),
+            get(move || async move { Json(serde_json::json!({ "object": "list", "data": data })) }),
         );
     let bind: (String, u16) = match port {
         Some(p) => ("0.0.0.0".to_string(), p),
@@ -389,12 +384,9 @@ mod tests {
             let _ = axum::serve(listener, app).await;
         });
         let d = Deployer::new(static_cfg("x"));
-        d.wait_until_ready(
-            &format!("http://{}/healthz", addr),
-            Duration::from_secs(5),
-        )
-        .await
-        .unwrap();
+        d.wait_until_ready(&format!("http://{}/healthz", addr), Duration::from_secs(5))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

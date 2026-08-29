@@ -6,13 +6,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use toml::Value;
 
-use rrserver::{client, llmsrv, server, state};
 use rrserver::skill::{ConstState, JudgeEngine, SkillRule, SkillSet};
+use rrserver::{client, llmsrv, server, state};
 
 use server::{AppState, TunnelAuth};
 
 #[derive(Parser)]
-#[command(name = "rrserver", about = "Reverse relay server for home LLM tunneling")]
+#[command(
+    name = "rrserver",
+    about = "Reverse relay server for home LLM tunneling"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -37,7 +40,11 @@ enum Command {
         name: String,
         #[arg(long, help = "隧道 token（与云端配置一致）")]
         token: String,
-        #[arg(long, default_value = "http://127.0.0.1:8080", help = "本地 llm 服务基址")]
+        #[arg(
+            long,
+            default_value = "http://127.0.0.1:8080",
+            help = "本地 llm 服务基址"
+        )]
         local: String,
     },
     /// 模型部署包装：启动/接入本地模型服务，并注册到 rrserver 隧道
@@ -53,9 +60,10 @@ enum Command {
     },
 }
 
-fn load_config(
-    path: Option<&str>,
-) -> anyhow::Result<(Vec<(String, String)>, String, Option<Arc<SkillSet>>)> {
+/// `load_config` 的返回：`(隧道 name/token 列表, external_ws_base, 可选技能集)`
+type LoadedConfig = (Vec<(String, String)>, String, Option<Arc<SkillSet>>);
+
+fn load_config(path: Option<&str>) -> anyhow::Result<LoadedConfig> {
     let path = match path {
         Some(p) => p,
         None => return Ok((vec![], String::new(), None)),
@@ -65,8 +73,16 @@ fn load_config(
     let mut tokens = vec![];
     if let Some(arr) = doc.get("tunnels").and_then(|v: &Value| v.as_array()) {
         for t in arr {
-            let name = t.get("name").and_then(|v: &Value| v.as_str()).unwrap_or("").to_string();
-            let token = t.get("token").and_then(|v: &Value| v.as_str()).unwrap_or("").to_string();
+            let name = t
+                .get("name")
+                .and_then(|v: &Value| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let token = t
+                .get("token")
+                .and_then(|v: &Value| v.as_str())
+                .unwrap_or("")
+                .to_string();
             if !name.is_empty() {
                 tokens.push((name, token));
             }
@@ -89,7 +105,10 @@ fn load_config(
                 .get("skill_budget")
                 .and_then(|v: &Value| v.as_integer())
                 .unwrap_or(1_000_000) as u64;
-            let engine = Arc::new(JudgeEngine::new(budget, Arc::new(ConstState("idle".into()))));
+            let engine = Arc::new(JudgeEngine::new(
+                budget,
+                Arc::new(ConstState("idle".into())),
+            ));
             let set = Arc::new(SkillSet::new(engine));
             for s in arr {
                 let name = s
@@ -102,10 +121,7 @@ fn load_config(
                 }
                 let cooldown_secs = s
                     .get("cooldown_secs")
-                    .and_then(|v: &Value| {
-                        v.as_float()
-                            .or_else(|| v.as_integer().map(|i| i as f64))
-                    })
+                    .and_then(|v: &Value| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
                     .unwrap_or(0.0);
                 let cost = s
                     .get("cost")

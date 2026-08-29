@@ -1,39 +1,17 @@
 # Docker 构建上下文排除表（context = server/，即 Cargo workspace 根）
 #
-# 背景：harness 与 rrserver 同属一个 workspace，`cargo build --release` 的产物统一
-# 落在 **server/target/release/**（子 crate 没有独立 target/）。因此两个镜像的构建
-# 上下文都必须是 workspace 根（compose 里 `context: ../server` + `dockerfile:` 子路径），
-# 否则 Dockerfile 的 `COPY target/release/xxx` 找不到文件、构建必失败。
-#
-# 代价：上下文会包含整个 target/（debug 产物常达数百 MB）。故本文件采用
-# 「先排除一切、再逐层放行」的白名单策略——Docker 规则要求放行某个文件时，
-# 必须同时放行它的所有父目录。
-#
-# 放行清单（部署镜像实际需要的全部内容）：
-#   target/release/harness      预编译 Linux 二进制
-#   target/release/rrserver     预编译 Linux 二进制
-#   harness/resources/**        可改的 YAML 资源（打进镜像，运行时可被挂载覆盖）
-#   两个 Dockerfile
+# 镜像**在 Docker 内编译**，因此源码必须进入上下文；
+# 只需排除庞大的构建产物与版本库元数据。
+# 依赖未变动时，Dockerfile 里的「清单 + 占位源码预编译依赖」层会命中缓存。
 
-# 1) 排除一切
-**
+# Rust 构建产物（常达数 GB，且镜像内会重新编译，必须排除）
+**/target/
 
-# 2) 逐层放行：预编译二进制
-!target/
-!target/release/
-!target/release/harness
-!target/release/rrserver
+# 版本库元数据
+.git/
+.gitignore
 
-# 3) 逐层放行：harness 的 Dockerfile 与 YAML 资源
-!harness/
-!harness/Dockerfile
-!harness/resources/
-!harness/resources/**
-
-# 4) 逐层放行：rrserver 的 Dockerfile 与默认配置模板
-#    （模板打进镜像作为 /etc/rrserver.toml 默认值，使镜像不挂载也能启动；
-#     生产由 docker-compose 挂载真实配置覆盖）
-!rrserver/
-!rrserver/Dockerfile
-!rrserver/config/
-!rrserver/config/rrserver.toml.example
+# 编辑器 / 系统噪声
+.vscode/
+.idea/
+**/.DS_Store

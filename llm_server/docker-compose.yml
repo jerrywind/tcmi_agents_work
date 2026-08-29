@@ -4,9 +4,9 @@
 #
 # 启动：
 #   cd llm_server && docker compose up --build
-# 与 backend 联调（backend 的 TCM_LLM_BASE_URL 指向本服务）：
-#   $env:TCM_LLM_BASE_URL = "http://localhost:8000/v1"   （本地）
-#   $env:TCM_LLM_BASE_URL = "http://llm_server:8000/v1"  （同一 docker 网络）
+# 与 harness 联调（harness 的 HARNESS_LLM_BASE_URL 指向本服务）：
+#   $env:HARNESS_LLM_BASE_URL = "http://localhost:8000/v1"   （本地）
+#   $env:HARNESS_LLM_BASE_URL = "http://llm_server:8000/v1"  （同一 docker 网络）
 #
 # 可选：通过 MCP_CLIENTS 接入外部 MCP Server（JSON 数组）：
 #   $env:MCP_CLIENTS = '[{"name":"kb","url":"http://host:port/mcp","headers":{"Authorization":"Bearer xxx"}}]'
@@ -19,7 +19,7 @@ services:
       - "22010:8000"           # 宿主机 22010 -> 容器 8000（业务端口区间 22000-22200）
     environment:
       LMSTUDIO_BASE_URL: "http://host.docker.internal:11223/v1"
-      LMSTUDIO_API_KEY: "${TCM_LLM_API_KEY:-sk-noauth}"
+      LMSTUDIO_API_KEY: "${LMSTUDIO_API_KEY:-sk-noauth}"
       DEFAULT_MODEL: "google/gemma-4-12b-qat"
       LLM_HOST: "0.0.0.0"
       LLM_PORT: "8000"

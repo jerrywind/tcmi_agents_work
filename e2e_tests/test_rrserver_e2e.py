@@ -28,11 +28,17 @@ import httpx
 import pytest
 
 # 候选二进制位置（debug 优先，构建更快）
+#
+# 路径随 rrserver 迁入 server/ 工作区而修正；此前仍指向迁移前的
+# tcm_work/rrserver，导致即使已构建也一律跳过（静默「假绿」）。
+# 后端本身只在 Docker 内构建，故这里额外支持 TCM_RRSERVER_BIN 显式指定。
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RR_CANDIDATES = [
-    r"d:/labs/windblue_tech/tcm_work/rrserver/target/debug/rrserver.exe",
-    r"d:/labs/windblue_tech/tcm_work/rrserver/target/release/rrserver.exe",
-    r"d:/labs/windblue_tech/tcm_work/rrserver/target/debug/rrserver",
-    r"d:/labs/windblue_tech/tcm_work/rrserver/target/release/rrserver",
+    os.environ.get("TCM_RRSERVER_BIN", ""),
+    os.path.join(_ROOT, "server", "rrserver", "target", "debug", "rrserver.exe"),
+    os.path.join(_ROOT, "server", "rrserver", "target", "release", "rrserver.exe"),
+    os.path.join(_ROOT, "server", "rrserver", "target", "debug", "rrserver"),
+    os.path.join(_ROOT, "server", "rrserver", "target", "release", "rrserver"),
 ]
 
 TUNNEL_NAME = "home"
