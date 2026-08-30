@@ -6,7 +6,7 @@
 
 ## 1. 产品使用流程（前端页面）
 
-> **前端已切到 harness 契约**：旧的会话式 `services/api.ts` 已下线，5 个页面改用
+> **前端已切到 harness 契约**：旧的会话式 `services/api.ts` 已下线，6 个页面改用
 > `services/harness.ts`，多轮 `messages` 由 `services/session.ts` 在前端维护。
 
 1. **新建问诊档案**（`pages/index`）
@@ -27,8 +27,13 @@
      （如「主证 脾胃湿热 80%｜支持：口苦、口臭…｜矛盾：（无）」），并给出基于主证的传变提示。
      兼证与主证是**并存**关系，不是备选方案。
    - 证候结论、辨证依据链（支持/矛盾证据）、调理建议、诊疗方案、免责声明，支持查看与分享。
-
-5. **技能管理**（`pages/skills`，可选）
+   - **存证与回查**（T5.1）：显示报告编号（服务端启用归档时），
+     「复制存证信息」把报告快照复制到剪贴板自行留存。
+5. **存证记录**（`pages/reports`）
+   - 列出服务端归档的报告（`GET /reports`），点开可回查完整快照（`GET /reports/:id`）。
+   - 用途：换设备后找回上次结论，或纠纷时自证「当时给了什么建议」。
+   - 服务端未启用持久化时列表为空并给出说明（不是错误）。
+6. **技能管理**（`pages/skills`，可选）
    - 列出当前可用技能及其归属（`GET /skills`）：`tcm-kb`、`tcm-diet`、`tcm-rag` 等共 11 个，
      外加 `config.yaml` 里 `mcp_clients` 挂载的 `mcp__*` 外部工具。
    - harness 的内置技能为**编译期注册**，不支持运行时按名装载/卸载；
@@ -236,17 +241,22 @@ curl http://localhost:8011/reports/20260830-101500-a1b2c3   # -> 完整快照（
 harness 的所有 Sub-Agent 统一走 LLM（无 rule/mock 切换开关）。配置优先级：
 `resources/config.yaml` → 环境变量 `HARNESS_*` → 命令行参数。
 
-### 3.1 用 LM Studio（最直接，无需权重/Docker）
+### 3.1 直连 LM Studio（最直接，无需下载权重）
 
 LM Studio 加载 `google/gemma-4-12b-qat`（文本与视觉共用同一原生多模态端点），
 开启本地服务器（默认 `http://localhost:11223/v1`），然后：
 
 ```powershell
-# PowerShell（前缀是 HARNESS_，不是 TCM_）
-$env:HARNESS_LLM_BASE_URL="http://localhost:11223/v1"
-$env:HARNESS_LLM_API_KEY="<LM Studio → Developer → Server Settings 中的 API Key>"
-$env:HARNESS_MODEL="google/gemma-4-12b-qat"
-cd server/harness && ../target/debug/harness --listen 127.0.0.1:8011
+# 前缀是 HARNESS_，不是 TCM_
+# 容器内访问宿主机用 host.docker.internal（写 localhost 会连到容器自己）
+$env:HARNESS_LLM_BASE_URL = "http://host.docker.internal:11223/v1"
+$env:HARNESS_LLM_API_KEY  = "<LM Studio → Developer → Server Settings 中的 API Key>"
+$env:HARNESS_MODEL        = "google/gemma-4-12b-qat"
+
+cd server
+docker build -f harness/Dockerfile -t tcm-harness:local .
+docker run -d --name tcm-harness-8011 -p 8011:8011 `
+  -e HARNESS_LLM_BASE_URL -e HARNESS_LLM_API_KEY -e HARNESS_MODEL tcm-harness:local
 ```
 
 等价于编辑 `server/harness/resources/config.yaml`：
@@ -267,8 +277,7 @@ $env:HARNESS_LLM_BASE_URL="http://localhost:8000/v1"
 详见 [`llm_server.md`](./llm_server.md)。
 
 > **无 LLM 时**：`/health`、`/agents`、`/skills` 仍可用，`/chat` 与 `POST /agents` 会返回错误
-> （harness 未提供 MockProvider）。确定性逻辑可离线验证：
-> `cd server && cargo test -p harness --test cases`。
+> （harness 未提供 MockProvider）。确定性逻辑可在 Docker 内离线回归（见 [`testing.md`](./testing.md)）。
 > 若 LM Studio 开启了 API Key 校验，必须填 `HARNESS_LLM_API_KEY`。
 
 ### 3.3 调整诊断流程顺序（不走 LLM 的纯编排改动）

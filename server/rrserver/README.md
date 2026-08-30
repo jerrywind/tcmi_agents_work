@@ -54,40 +54,35 @@ rrserver/
 
 ## 测试与质量
 
-```bash
-cargo test            # lib 70 + main 3 + integration 27 = 100 个测试
-cargo run --example e2e   # 多组件编排实证：云端 ↔ 隧道 ↔ 本地（含流式）
+```powershell
+# 后端一律在 Docker 内跑（不使用宿主机 cargo 产物）
+cd server
+docker run --rm -v "${PWD}:/build" -w /build rust:1.98-bookworm `
+  cargo test -p rrserver          # lib 70 + main 3 + integration 27 = 100 个测试
 ```
 
 集成测试覆盖：流式分片重组、非 2xx 状态透传、并发请求隔离、CORS（实际请求 +
 OPTIONS 预检）、技能闸门（429/409/402、多技能冷却隔离）、隧道断线重连、
 同名新连接替换旧隧道（守护 `unregister_if_same` 竞态修复）。
 
+全链路实证示例（真实 TCP + WS + 流式）：`docker run ... cargo run -p rrserver --example e2e`。
+
 ## 构建
 
-需要 Rust 1.82+ 工具链（依赖均用 rustls，无需系统 OpenSSL）。
+**完全依赖 Docker**：多阶段 `Dockerfile`（`rust:1.98-bookworm` 编译 → `ubuntu:24.04` 运行，
+glibc 向前兼容），构建机无需 Rust 工具链，也**不使用**本地 `cargo build` 产物。
+依赖层由 Docker 缓存复用（先复制清单 + 占位源码预编译依赖，再复制真实源码）。
 
 ```bash
-cd rrserver
-cargo build --release --locked   # 已提交 Cargo.lock，--locked 保证可复现构建
-# 产物：target/release/rrserver
+cd server                                   # 构建上下文必须是 workspace 根
+docker build -f rrserver/Dockerfile -t rrserver:local .
 ```
 
-> 2 核 2G 的服务器本地 `cargo build --release` 可能内存不足。推荐在开发机构建后拷贝二进制，
-> 或用 Docker 在更高配置机器 `docker build` 后拉取镜像。
+> 为什么上下文是 `server/`：rrserver 与 harness 同属一个 Cargo workspace，
+> 依赖清单与源码都要进上下文。
 
-## Docker 封装
-
-项目附带多阶段 `Dockerfile`（`rust:1.82-slim` 构建 + `debian:bookworm-slim` 运行）。
-因为本项目 TLS 全部走 **rustls**，**运行时不需要系统 OpenSSL**，镜像内仅安装 `ca-certificates`
-即可对外建立 TLS 连接；镜像以**非 root 用户**（`uid 10001`）运行。
-
-构建镜像：
-
-```bash
-cd rrserver
-docker build -t rrserver:local .
-```
+TLS 全部走 **rustls**，运行时不需要系统 OpenSSL，镜像内仅装 `ca-certificates`，
+并以**非 root 用户**（`uid 10001`）运行。
 
 三个子命令都基于同一个镜像，靠 `command` 区分：
 
@@ -229,11 +224,11 @@ export HARNESS_LLM_API_KEY=sk-xxx
 
 harness 也可不经独立 client 进程、直接内置隧道暴露自身：
 
-```bash
-cd server/harness
-../target/release/harness --listen 0.0.0.0:8011 \
-  --tunnel-server wss://<域名>/rr --tunnel-name tcm --tunnel-token <TOKEN>
-# 等价环境变量：HARNESS_TUNNEL_SERVER / HARNESS_TUNNEL_NAME / HARNESS_TUNNEL_TOKEN
+```powershell
+docker run -d --name tcm-harness-8011 -p 8011:8011 `
+  -e HARNESS_TUNNEL_SERVER=wss://<域名>/rr -e HARNESS_TUNNEL_NAME=tcm `
+  -e HARNESS_TUNNEL_TOKEN=<TOKEN> tcm-harness:local
+# 完整变量表见 docs/deployment.md 3.2
 ```
 
 ## 配置项

@@ -124,10 +124,9 @@ curl -X POST http://localhost:8080/rag/ingest \
 harness 经环境变量 `HARNESS_RAG_ENDPOINT` 指向本服务（前缀是 `HARNESS_`；
 留空时 `tcm-rag` 技能返回提示串而不报错）。
 
-> ⚠️ **契约尚未对齐**：`tcm-rag` 技能直接向该地址 POST `{"query": "..."}`，
-> 而本服务的检索端点是 `POST /rag/retrieve/text`（返回**数组**）。
-> 因此 `HARNESS_RAG_ENDPOINT` 需填写到具体端点路径，例如
-> `http://<rag-host>:8080/rag/retrieve/text`。对齐任务见 [`tasks.md`](./tasks.md) T2.1。
+> 契约已对齐（T2.1）：`HARNESS_RAG_ENDPOINT` 需填写到具体端点路径，例如
+> `http://<rag-host>:8080/rag/retrieve/text`；`tcm-rag` 技能 POST
+> `{"query": "...", "top_k"?: N}`，并把响应统一包成 `{"result": [...]}`。
 
 Sub-Agent 在执行时若需检索药典、医案、舌象图谱等资料，可调用 RAG 服务获得相关上下文后
 再生成结论；无 RAG 服务时不影响问诊流程（参见 `docs/sub_agents.md`、`docs/skills.md`）。

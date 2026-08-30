@@ -19,7 +19,8 @@ e2e_tests/
 ├── test_rrserver_e2e.py               # rrserver 隧道：server+client 启动、token 鉴权、/t/<name> 转发
 ├── test_llm_server_e2e.py             # llm_server 网关：/healthz(degraded/ok)、/v1/models、chat 透传
 ├── _make_sample_image.py              # 生成 1x1 样例 JPEG（素材）
-├── run_full_chain_e2e.ps1             # 一键编排：起 harness → pytest → 前端 vitest(默认跳过)
+├── run_full_chain_e2e.ps1             # 一键编排：起 harness → pytest → 前端契约测试
+├── run_manual_e2e.ps1                 # 人工验收：连真实 LLM 跑问诊并归档样例（T1.5）
 └── images/                            # 运行期生成的样例图片（gitignore）
 
 frontend/src/services/harness.contract.test.ts  # vitest：真实执行 harness.ts（Taro 适配层换成真实 fetch）
@@ -43,9 +44,9 @@ frontend/src/services/harness.contract.test.ts  # vitest：真实执行 harness.
 - llm_server / rrserver 用 **stub 上游**（Python 标准库 HTTP 服务）充当 LM Studio / 本地 llm，
 验证网关透传与隧道转发能力；
 - harness **不提供 MockProvider**，故只验证只读端点；问诊链路的确定性逻辑
-（证候推断、配伍禁忌、方剂检索）由 `cargo test -p harness --test cases` 覆盖。
+（证候推断、配伍禁忌、方剂检索）由 Docker 内的 `cargo test -p harness --test cases` 覆盖。
 
-各组件不可用时（缺 Rust 二进制、缺 fastapi 依赖）测试会**自动 skip** 而非失败。
+各组件不可用时（缺 rrserver 二进制、缺 fastapi 依赖）测试会**自动 skip** 而非失败。
 
 ---
 
@@ -134,5 +135,5 @@ $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'   # 若服务端开启了鉴权
   `server/rrserver/target/{debug,release}/rrserver[.exe]`；未找到时自动 `skip`
   并给出提示。后端只在 Docker 内构建，该用例属**可选**项，默认不跑。
 - llm_server 测试需要 Python 环境已安装 `fastapi` 等依赖；缺失时自动 `skip`。
-- 全链路 e2e 与 `cargo test -p harness` 是**互补**的两套：后者覆盖 harness 内部的确定性逻辑
+- 全链路 e2e 与后端单测是**互补**的两套：后者覆盖 harness 内部的确定性逻辑
   与 YAML 资源完整性（含案例回归），前者覆盖跨组件集成与前端契约对齐。

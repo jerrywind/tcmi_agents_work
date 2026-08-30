@@ -61,3 +61,6 @@ $env:HARNESS_LLM_BASE_URL = "http://llm_server:8000/v1"  # Docker 同网络
 | `ENABLE_MCP` / `MCP_CLIENTS` | `true` / `[]` | MCP 开关与客户端列表 |
 
 完整列表见 `.env.example` 与 [`docs/llm_server.md`](../docs/llm_server.md)。
+
+> ⚠️ 真实 Key 只写进 `.env`（已被 `.gitignore` 忽略），
+> **不要写进 `.env.example`**——它不受忽略规则保护，会被提交进仓库。

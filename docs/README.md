@@ -7,21 +7,21 @@
 
 | 文档 | 面向角色 | 回答的核心问题 | 权威内容（不重复，引用它） |
 |---|---|---|---|
-| `README.md`（仓库根） | 所有人 | 项目是什么、怎么跑起来、文档在哪 | 架构图、端口表、快速开始 |
-| `usage.md` | 使用者 / API 接入方 | 前端怎么用？REST API 怎么集成？ | 端点契约、payload 字段、切真实 LLM |
-| `deployment.md` | 运维 | 怎么部署四组件？端口/配置/网络？ | 端口映射、环境变量、compose 编排 |
-| `development.md` | 开发者 | 本地怎么开发调试？常见坑？ | 目录结构、本地启动、FAQ |
-| `agent-protocol.md` | 架构 / 扩展者 | Sub-Agent 的接口与注册方式？ | `Capability`、SubAgent trait、注册表 |
-| `sub_agents.md` | Agent 开发者 | 7 个 Agent 各管什么、怎么改？ | 各 Agent 的规则层 + LLM 层实现 |
-| `skills.md` | 技能开发者 | 9 个技能的入参与扩展方式？ | 技能清单、`Skill` 结构、工具调用流程 |
+| `README.md`（仓库根） | 所有人 | 项目是什么、怎么跑起来、文档在哪 | 架构图、端口表、快速开始、目录说明 |
+| `usage.md` | 使用者 / API 接入方 | 前端怎么用？REST API 怎么集成？ | 端点契约（含 `/chat`、`/mcp`、`/reports`）、payload 字段、切真实 LLM |
+| `deployment.md` | 运维 | 怎么部署四组件？端口/配置/网络？ | 端口映射、`HARNESS_*` 环境变量全表、compose 编排、上线检查清单 |
+| `development.md` | 开发者 | 本地怎么开发调试？常见坑？ | 目录结构、开发流程、FAQ |
+| `agent-protocol.md` | 架构 / 扩展者 | Sub-Agent 的接口与注册方式？ | `Capability`、SubAgent trait（`run` + `structured`）、编排规则、trace |
+| `sub_agents.md` | Agent 开发者 | 7 个 Agent 各管什么、怎么改？ | 各 Agent 的规则层 + LLM 层实现、资源维护入口 |
+| `skills.md` | 技能开发者 | 11 个技能的入参与扩展方式？ | 技能清单、`Skill` 结构、多轮工具调用流程 |
 | `mcp.md` | 集成方 | MCP 怎么接进来、怎么暴露出去？ | client 挂载（`mcp_clients`）、Server 端 `/mcp` 工具表与错误约定 |
 | `llm_server.md` | 网关运维 | llm_server 是什么、怎么跑？ | 网关架构、API、配置项 |
-| `rag.md` | RAG 运维 | 可选 RAG 服务怎么用？典籍怎么检索？ | 三类向量检索、环境变量、HTTP API、**典籍全文检索与跑分**（T4.3） |
-| `testing.md` | 测试 / CI | 各层测试怎么组织、怎么跑？ | 测试层级、命令、CI job |
+| `rag.md` | RAG 运维 | 可选 RAG 服务怎么用？典籍怎么检索？ | 三类向量检索、HTTP API、**典籍全文检索与跑分**（T4.3） |
+| `testing.md` | 测试 / CI | 各层测试怎么组织、怎么跑？ | 测试层级、Docker 内命令、CI job、评测基线 |
 | `e2e.md` | 测试 | 跨组件全链路怎么跑？ | e2e 套件结构、编排脚本、环境变量 |
-| `cleanup.md` | 开发者 | 临时文件/日志怎么清理？ | 命名约定、清理命令、规则 |
-| `plan.md` | 管理者 | 现状、下一步路线图、风险？ | 阶段目标、里程碑 |
-| [`samples/`](./samples/README.md) | 验收 / 回归对照 | 真实 LLM 跑出来的是什么样？ | 连真实模型的端到端样例（输入/输出/耗时/工具调用） |
+| `cleanup.md` | 开发者 | 临时文件/日志/密钥怎么管理？ | 命名约定、清理命令、规则 |
+| `plan.md` | 管理者 | 现状、下一步路线图、风险？ | 阶段目标、里程碑、问题清单 |
+| [`samples/`](./samples/README.md) | 验收 / 回归对照 | 真实 LLM 跑出来的是什么样？ | 端到端样例（输入/输出/耗时/工具调用 + 人工审阅意见） |
 | `tasks.md` | 管理者 | 具体任务清单与进度？ | issue 看板 |
 
 ## 跨文档一致的「单一事实源」
@@ -35,10 +35,12 @@
 3. **REST API 端点契约** → [`usage.md`](./usage.md) 第 2 节。
 4. **Capability 标识（7 个无前缀 slug）** → [`agent-protocol.md`](./agent-protocol.md) 第 1 节。
 5. **7 个 Sub-Agent 的实现细节** → [`sub_agents.md`](./sub_agents.md)。
-6. **9 个技能的入参与归属** → [`skills.md`](./skills.md) 第 2 节。
+6. **11 个技能的入参与归属** → [`skills.md`](./skills.md) 第 2 节。
 7. **MCP（client 挂载 + server `/mcp` 工具表）** → [`mcp.md`](./mcp.md)。
-8. **后端架构与 YAML 资源分离** → 根 [`README.md`](../README.md) 与
+8. **后端架构与 YAML 资源分离** → 根 [`README.md`](../README.md)「关键事实」与
    [`development.md`](./development.md) 第 2 节。
+9. **`HARNESS_*` 环境变量全表** → [`deployment.md`](./deployment.md) 3.2。
+10. **评测基线 / 测试数量** → [`testing.md`](./testing.md)。
 
 ## 阅读路径
 

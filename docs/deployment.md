@@ -1,278 +1,251 @@
 # 部署文档（Deployment）
 
-覆盖四组件的部署：**前端 / harness / llm_server / rrserver**，以及端口、配置、网络与全链路验证。
+四组件的部署：**前端 / harness / llm_server / rrserver**，以及端口、配置、网络与上线检查清单。
 
-> 后端为 Rust **harness**（`server/harness`），与 rrserver 同属 `server/` Cargo workspace，
-> 统一用 `cargo build` 构建。
-
-> 模型与降级事实的权威说明见 [`llm_server.md`](./llm_server.md)：`llm_server` 是纯 LM Studio
-> 网关（**不托管模型**），模型统一 `google/gemma-4-12b-qat`（文本+视觉共用，原生多模态），
-> LM Studio 默认 `http://localhost:11223/v1`。无上游时 llm_server `degraded`/`503`；
-> harness **无 MockProvider**，只读端点（`/health`、`/agents`、`/skills`）仍可用，
-> 但问诊推进（`/chat`）需真实 LLM。
+> **后端完全依赖 Docker**：harness 与 rrserver 的镜像都是多阶段构建（容器内编译），
+> 不使用宿主机 `cargo build` 产物，构建机无需 Rust 工具链。
+> 模型与降级事实见 [`llm_server.md`](./llm_server.md)：`llm_server` 是纯 LM Studio 网关
+> （**不托管模型**），模型 `google/gemma-4-12b-qat`，LM Studio 默认 `:11223`；
+> harness **无 MockProvider**，无 LLM 时只读端点可用、`/chat` 会失败。
 
 ---
 
 ## 1. 端口与地址（单一事实源）
 
-| 组件 | 容器/进程端口 | 对外/说明 |
+| 组件 | 端口 | 说明 |
 |---|---|---|
-| 前端（dev） | 10086 | `npm run dev:h5` |
-| 前端（build，nginx） | 8080 | 生产静态产物 |
-| harness | 8011 | `/chat`、`/agents`、`/skills`、`/health`、`/reload`（经 nginx 以 `/api` 前缀对外） |
-| llm_server | 8000 | `/healthz`、`/v1/*`（网关） |
-| LM Studio（宿主机） | 11223 | `http://localhost:11223/v1` |
-| rrserver server | 8088（deploy nginx→容器 8080） | `/healthz`、`/api/register`、WS `/ws/<name>`、隧道 `/t/<name>/*` |
-| rrserver client | 9000 | 家庭端隧道客户端（连 server 的 WS，转发 `--local`） |
-| RAG（可选） | 8080（默认 `RAG_PORT`） | `llm_server/rag`，详见 `rag.md` |
+| 前端 dev | 10086 | `npm run dev:h5` |
+| 前端生产（nginx） | 8080 | 静态产物托管 |
+| harness | 8011 | 容器内监听；nginx 以 `/api` 前缀对外并剥离后转发 |
+| llm_server | 8000 | `/healthz`、`/v1/*`（可选网关） |
+| LM Studio（宿主机） | 11223 | `http://localhost:11223/v1`；容器内用 `host.docker.internal` |
+| rrserver server | 容器内 8080（nginx 对外 8088） | `/healthz`、`/api/register`、WS `/ws/<name>`、隧道 `/t/<name>/*` |
+| rrserver client | 9000 | 家庭端隧道客户端 |
+| RAG（可选） | 8080（`RAG_PORT`） | `llm_server/rag`，见 `rag.md` |
 
-> 注意：rrserver 容器内监听 `8080`，经 `deploy/` 的统一 nginx 的 `8088` 对外；client 监听 `9000`。
-> 与早期文档的「server:8080 直连」不同，当前统一以 `8088` 为对外入口（由 `deploy/nginx/rrserver.conf` 提供）。
+> rrserver 对外入口统一为 `8088`（`deploy/nginx/rrserver.conf`），不是早期的 8080 直连。
+> RAG 与前端生产都用 8080，但分属不同容器/网络，不冲突。
 
 ---
 
 ## 2. 前端部署
 
-### 2.1 开发（H5）
 ```bash
-cd frontend && npm install && npm run dev:h5   # http://localhost:10086
+cd frontend
+npm install && npm run dev:h5        # 开发：http://localhost:10086
+npm run build:h5                     # 生产：产物在 dist/
 ```
-`apiBase` 由 `config/dev.ts`（或 `process.env.TCM_API_BASE`）指定，指向 harness。
 
-### 2.2 生产（H5 静态产物 + 统一 nginx）
-```bash
-cd frontend && npm run build:h5     # 产物在 dist/
-# 静态托管与反向代理统一由 deploy/ 的 nginx 完成（见 deploy/docker-compose.yml）：
-#   - deploy/nginx/frontend.conf：托管 dist/（SPA 回退）+ 反代 /api 到 harness（剥离前缀）
-#     （harness 不落盘图片，无 /uploads 目录，故不再反代该路径）
-#   - deploy/nginx/rrserver.conf：TLS 终止 + 反代 /rr 到 rrserver
-# 启动：docker compose -f deploy/docker-compose.yml up -d --build
-```
-微信小程序：微信开发者工具导入 `frontend/`，走小程序审核发布流程。
+- `apiBase` 由 `config/dev.ts`（或 `process.env.VITE_API_BASE`）指定，指向 harness。
+- 生产静态托管与反代统一由 `deploy/` 的 nginx 完成：
+  - `nginx/frontend.conf`：托管 `dist/`（SPA 回退）+ 反代 `/api` 到 harness（剥离前缀）。
+    harness 不落盘图片，无 `/uploads` 目录。
+  - `nginx/rrserver.conf`：TLS 终止 + 反代 `/rr` 到 rrserver。
+- 启动：`docker compose -f deploy/docker-compose.yml up -d --build`
+- 微信小程序：开发者工具导入 `frontend/`，走小程序审核发布流程（资质要求见第 7 节）。
 
 ---
 
 ## 3. harness 部署（Rust 后端）
 
-### 3.1 本地
-```bash
-cd server
-cargo build --release                       # 产物 server/target/release/harness(.exe)
-cd harness
-../target/release/harness --listen 0.0.0.0:8011
-```
-> **cwd 要点**：harness 默认按相对路径 `resources/` 加载 YAML（可用 `--resources` 覆盖），
-> 故须在 `server/harness` 目录下运行，否则资源加载失败。
-
-### 3.2 Docker Compose（与前端/rrserver 统一编排）
-```bash
-docker compose -f deploy/docker-compose.yml up -d --build   # nginx + harness + rrserver
-```
-`deploy/docker-compose.yml` 中 harness 服务：
-- 构建上下文 `../server/harness`，容器内监听 `0.0.0.0:8011`；
-- 挂载 `../server/harness/resources:/data/resources:ro`——**改 YAML 无需重建镜像**；
-- nginx 的 `frontend.conf` 把 `/api/` 剥离前缀后转发到 `harness:8011`
-  （harness 自身端点无 `/api` 前缀）。
-
-> 容器镜像打包的是 **WSL2 预编译二进制**（容器内 `cargo build` 会因网络损坏 crates.io
-> 下载而失败）；详见 `server/harness/Dockerfile`。
-
-#### 构建前置：先编译 release 二进制
+### 3.1 出镜像并运行
 
 ```powershell
-# 推荐：在 WSL 原生目录编译（快，约 90s），完成后自动拷回 server/target/release/
-powershell -NoProfile -File scripts\build-release.ps1
-# 磁盘空间不足时可改为就地编译（明显更慢）：... -InPlace
+cd server                                    # 构建上下文必须是 workspace 根
+docker build -f harness/Dockerfile -t tcm-harness:local .
+docker run -d --name tcm-harness-8011 -p 8011:8011 `
+  -e HARNESS_LLM_BASE_URL=http://host.docker.internal:11223/v1 `
+  -e HARNESS_LLM_API_KEY=<LM Studio 令牌> `
+  tcm-harness:local
+# 验证：http://127.0.0.1:8011/health 返回 ok
 ```
 
-> **为什么构建上下文必须是 `server/`（workspace 根）**
-> harness 与 rrserver 同属一个 Cargo workspace，`cargo build --release` 的产物统一落在
-> **`server/target/release/`**，子 crate 没有独立 `target/`。因此 compose 里写的是
-> `context: ../server` + `dockerfile: harness/Dockerfile`，Dockerfile 内则 COPY
-> `target/release/harness`。若把上下文设成 `server/harness`，COPY 会因找不到文件而失败。
->
-> 由于 `server/target/` 常达 **数 GB**，上下文裁剪由 `server/.dockerignore` 负责
-> （白名单策略：只放行两个二进制、YAML 资源与两个 Dockerfile）。
-> 生效时构建上下文约 **20 MB**；若该文件被误删，每次构建都会传输整个 target。
+一键出镜像（等价）：`pwsh scripts\build-release.ps1`。
 
-### 3.3 关键配置项
+- **为什么构建上下文必须是 `server/`**：harness 与 rrserver 同属一个 Cargo workspace，
+  且 harness 依赖 rrserver 的 lib，两者源码都要进上下文。
+- 镜像内默认 `--listen 0.0.0.0:8011 --resources /data/resources`；
+  改 YAML 无需重建镜像——compose 已挂载 `resources:/data/resources:ro`，
+  再 `POST /reload`（需 `hot_reload: true`）或重启即可。
+- 依赖层由 Docker 缓存复用（先复制清单 + 占位源码预编译依赖，再复制真实源码）。
 
-配置优先级（低→高）：`resources/config.yaml` → 环境变量 `HARNESS_*` → 命令行参数。
+### 3.2 配置
 
-**命令行参数**（仅 3 类，其余走环境变量/配置文件）：
+优先级（低→高）：`resources/config.yaml` → 环境变量 `HARNESS_*` → 命令行参数。
+
+**命令行参数**（仅 4 类，其余走配置/环境变量）：
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `--config` | `resources/config.yaml` | 配置文件路径 |
 | `--listen` | `0.0.0.0:8011` | 监听地址 |
-| `--resources` | `resources` | YAML 资源目录（证候/问诊/方剂/调护/安全规则等） |
-| `--tunnel-server` / `--tunnel-name` / `--tunnel-token` | 无 | 经 rrserver 隧道暴露本服务（见下节） |
+| `--resources` | `resources` | YAML 资源目录 |
+| `--tunnel-server` / `--tunnel-name` / `--tunnel-token` | 无 | 经 rrserver 隧道暴露本服务（见 5.3） |
 
 **环境变量**：
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `HARNESS_LISTEN` | `0.0.0.0:8011` | 监听地址 |
-| `HARNESS_LLM_BASE_URL` | `http://localhost:11223/v1` | LLM 端点：直连 LM Studio，或 `http://llm_server:8000/v1`（网关）、`http://host.docker.internal:11223/v1`（容器内直连宿主机） |
-| `HARNESS_LLM_API_KEY` | 空 | 上游 Key（LM Studio 开启 API Key 校验时必填） |
-| `HARNESS_MODEL` | `google/gemma-4-12b-qat` | 默认模型 |
+| `HARNESS_LLM_BASE_URL` | `http://localhost:11223/v1` | LLM 端点：直连 LM Studio、经网关 `http://llm_server:8000/v1`、容器内直连宿主机 `host.docker.internal` |
+| `HARNESS_LLM_API_KEY` | 空 | 上游 Key（LM Studio 开启校验时必填） |
+| `HARNESS_MODEL` | `google/gemma-4-12b-qat` | 模型 |
 | `HARNESS_RESOURCES_DIR` | `resources` | 资源目录 |
-| `HARNESS_RAG_ENDPOINT` | 无 | 可选 RAG 检索端点 |
-| `HARNESS_TUNNEL_SERVER` / `_NAME` / `_TOKEN` | 无 | 隧道（等价于 `--tunnel-*`） |
+| `HARNESS_LLM_TIMEOUT_SECS` | `120` | 单次 LLM 调用超时 |
+| `HARNESS_MAX_TOOL_ROUNDS` | `3` | 工具调用最大轮数（1 = 退化为一轮） |
+| `HARNESS_LLM_MAX_RETRIES` | `2` | LLM 重试次数（仅超时/连接失败/5xx/429） |
+| `HARNESS_LLM_RETRY_BACKOFF_MS` | `500` | 重试退避基数 |
+| `HARNESS_RAG_ENDPOINT` | 无 | 可选 RAG 检索端点，见 `rag.md` |
+| `HARNESS_MCP_CLIENTS` | 无 | 外部 MCP server：`name=kb,url=http://host/mcp;name=...,url=...`，见 `mcp.md` |
+| `HARNESS_STORE_DIR` | 无 | **报告持久化目录；不设置则不落盘**（harness 保持无状态，见 `usage.md` 2.8） |
+| `HARNESS_STORE_REDACT` | `true` | 落盘前脱敏（手机号/身份证/邮箱/长数字串） |
+| `HARNESS_STORE_LIST_LIMIT` | `20` | `GET /reports` 返回条数上限 |
+| `HARNESS_TUNNEL_SERVER` / `_NAME` / `_TOKEN` | 无 | 隧道（等价 `--tunnel-*`） |
 
-> 注意：变量名前缀是 **`HARNESS_`**（不是 `TCM_`）。
+> 变量名前缀是 **`HARNESS_`**（不是 `TCM_`）。
 
-> **无 LLM 时的可用性**：harness 未提供 MockProvider，`/chat` 问诊推进需要真实 LLM
-> （LM Studio 或 llm_server 网关）；`/health`、`/agents`、`/skills` 等只读端点不受影响。
-> 确定性逻辑（证候推断、配伍禁忌、方剂检索）的离线验证见
-> [`testing.md`](./testing.md) 的 `cargo test -p harness --test cases`。
+### 3.3 改完 YAML 如何生效
 
-### 3.4 修改 YAML 资源后生效
-- 重启 harness，或调用 `POST /reload` 热加载资源（需开启 `hot_reload`）。
-- 资源字段 **key 为英文 slug、值为中文并附中文注释**，供中医专业人员维护；
-  改完建议跑 `cargo test -p harness --test cases` 确认未破坏既有病例。
+重启，或 `POST /reload`（需 `hot_reload: true`）。改完建议跑一遍确定性回归
+确认未破坏既有病例（Docker 内执行，见 [`testing.md`](./testing.md)）。
 
 ---
 
-## 4. llm_server 部署
+## 4. llm_server 部署（可选网关）
 
-`llm_server/` 是纯 LM Studio 网关（**不托管模型**）。详见 [`llm_server.md`](./llm_server.md)。
+`llm_server/` 是纯 LM Studio 网关（**不托管模型**），详见 [`llm_server.md`](./llm_server.md)。
 
 ```bash
 cd llm_server
 pip install -r requirements.txt
 python -m app.main                       # 本地 :8000
-docker compose up --build                # 容器 :8000 -> 宿主机 22010
+
+# 或容器：把 .env.example 复制为 .env 后
+docker compose up --build                # 容器 :8000
 ```
+
 核心配置：`LMSTUDIO_BASE_URL`（Docker 内用 `host.docker.internal:11223/v1`）、
-`DEFAULT_MODEL=google/gemma-4-12b-qat`、`LLM_HOST/LLM_PORT`、`ENABLE_MCP`、`AGENT_MAX_ROUNDS`。
+`LMSTUDIO_API_KEY`、`DEFAULT_MODEL`、`LLM_HOST/LLM_PORT`、`ENABLE_MCP`、`AGENT_MAX_ROUNDS`。
+
+> ⚠️ **不要把真实 Key 写进 `.env.example`**——该文件不被 `.gitignore` 忽略，会被提交。
+> 真实 Key 放 `.env`（已被忽略，compose 直接读取）。
 
 ---
 
 ## 5. rrserver 部署（家庭算力上云，可选）
 
-`server/rrserver/` 为 Rust 反向隧道：云端 **server**（中继，`8088`） + 家庭端 **client**（连 server 的 WS，转发本地 LLM 到 `/t/<name>/*`）。
+Rust 反向隧道：云端 **server**（中继） + 家庭端 **client**（建 WS 隧道，把本地 LLM 暴露到 `/t/<name>/*`）。
 
-### 5.1 构建（需在 Linux/WSL 或本地 Rust 环境）
-```bash
+### 5.1 构建
+
+```powershell
 cd server
-cargo build --release -p rrserver     # 产物 server/target/release/rrserver（Windows 为 .exe）
+docker build -f rrserver/Dockerfile -t tcm-rrserver:local .
 ```
-> 镜像**在 Docker 内编译**（多阶段构建）：`rust:1.98-bookworm` 负责编译，
-> `ubuntu:24.04` 作为运行镜像。两者 glibc 向前兼容（2.36 编译 → 2.39 运行），
-> 不会出现 "GLIBC_2.39 not found"。
-> 宿主机构建机无需安装 Rust 工具链，也**不使用**本地 `cargo build` 产物。
-> 依赖层由 Docker 缓存复用（先复制清单 + 占位源码预编译依赖，再复制真实源码）。
+
+镜像内编译（`rust:1.98-bookworm` 编译 → `ubuntu:24.04` 运行，glibc 向前兼容），
+宿主机构建机无需 Rust 工具链。
 
 ### 5.2 启动
-```bash
-# 手动启动 server：
-rrserver server --listen 0.0.0.0:8080 --config config/rrserver.toml   # 容器内 8080，nginx 8088 对外
 
-# 家庭端 client（另一台机器 / 另一进程）：
-rrserver client --server https://rr.windblue.tech \
-               --name home --token <TOKEN> \
-               --local http://host.docker.internal:8900           # 家庭端本地 LLM 地址
+```bash
+# 云端 server（容器内监听 8080，nginx 8088 对外）
+docker run -d --name rrserver -p 8088:8080 `
+  -v $PWD/rrserver/config/rrserver.toml:/etc/rrserver.toml:ro `
+  tcm-rrserver:local server --listen 0.0.0.0:8080 --config /etc/rrserver.toml
+
+# 家庭端 client（另一台机器）
+docker run -d --name rrclient tcm-rrserver:local client `
+  --server https://rr.windblue.tech --name home --token <TOKEN> `
+  --local http://host.docker.internal:8900
 ```
+
 配置要点（`server/rrserver/config/rrserver.toml`）：`external_ws_base`（对外 WS 基址）、
-`[[tunnels]]`（`name`/`token`）；client 经 `/api/register` 用 token 换取 `ws_url` 并建立隧道。
+`[[tunnels]]`（`name`/`token`）；client 经 `/api/register` 用 token 换 `ws_url` 并建立隧道。
 
-> **配置文件**：镜像内已内置一份默认配置（由 `config/rrserver.toml.example` 生成，且
-> **示例 token 被清空**），因此 `docker run tcm-rrserver:local` 不带挂载也能启动。
-> 生产必须由 compose 挂载真实配置覆盖（`deploy/docker-compose.yml` 已配）：
-> `../server/rrserver/config/rrserver.toml:/etc/rrserver.toml:ro`，
-> 并把 `token` 与 `external_ws_base` 改成实际值。
->
-> ⚠️ `server/rrserver/start_rrserver.ps1` 中的路径仍指向已迁移前的 `tcm_work/rrserver`，
-> 当前不可用；请按上面的手动命令启动。修复见 [`tasks.md`](./tasks.md) T1.9。
+> 镜像内已内置一份默认配置（示例 token 已清空），不带挂载也能启动；
+> **生产必须由 compose 挂载真实配置覆盖**，并把 token 与 `external_ws_base` 改成实际值。
+> 本地一键启动也可用 `server/rrserver/start_rrserver.ps1`（路径已对齐当前仓库结构）。
 
-### 5.2.1 把 harness 经隧道暴露（无需额外家庭端进程）
+### 5.3 把 harness 经隧道暴露（无需额外家庭端进程）
 
-harness 内置了隧道客户端，启动时提供 `--tunnel-server` + `--tunnel-name` 即可：
+harness 内置隧道客户端，启动时提供 server + name 即可：
 
-```bash
-cd server/harness
-../target/release/harness --listen 0.0.0.0:8011 \
-  --tunnel-server ws://<云端 rrserver 地址> --tunnel-name tcm --tunnel-token <TOKEN>
-# 等价环境变量：HARNESS_TUNNEL_SERVER / HARNESS_TUNNEL_NAME / HARNESS_TUNNEL_TOKEN
+```powershell
+docker run -d --name tcm-harness-8011 -p 8011:8011 `
+  -e HARNESS_TUNNEL_SERVER=ws://<云端 rrserver> -e HARNESS_TUNNEL_NAME=tcm `
+  -e HARNESS_TUNNEL_TOKEN=<TOKEN> tcm-harness:local
 # 之后公网访问 https://<域名>/rr/t/tcm/* 即到达 harness
 ```
-> 直连 rrserver server（不经过 nginx 反代）时，`external_ws_base` 应设为
-> `ws://<host>:<port>`（**不含 `/rr` 前缀**）——`/rr` 前缀由 nginx 添加，
-> 否则 WS 握手会 404。
 
-### 5.3 防火墙与证书
-- 云端放通 `8088`（server 入口）、`443`（HTTPS/WSS，由 `deploy/` 的统一 nginx 前置 TLS）。
-- server 证书：`deploy/certs/fullchain.pem` + `privkey.pem`（自签名，WSL2 `openssl` 生成；
-  nginx 配置见 `deploy/nginx/rrserver.conf`）；缺失会导致 nginx 反复重启。
+> 直连 rrserver server（不经 nginx 反代）时，`external_ws_base` 应设为 `ws://<host>:<port>`
+> （**不含 `/rr` 前缀**）——`/rr` 由 nginx 添加，否则 WS 握手 404。
+
+### 5.4 防火墙与证书
+
+- 云端放通 `8088`（server 入口）、`443`（HTTPS/WSS，由 `deploy/` 的 nginx 前置 TLS）。
+- 证书：`deploy/certs/fullchain.pem` + `privkey.pem`（当前为自签名，仅内网可用；
+  生产需换成可信证书）。缺失会导致 nginx 反复重启。
 - client 出站需可达 server 的 WSS 地址与家庭 LLM 端口。
 
 ---
 
 ## 6. 全链路验证
 
-- **全链路 E2E**（harness→rrserver→llm_server）：见 [`e2e.md`](./e2e.md)，
-  一键脚本 `tcm_work/e2e_tests/run_full_chain_e2e.ps1`。
-- **后端测试**：见 [`testing.md`](./testing.md)，`cd server && cargo test -p harness`
-  （含 `cases.jsonl` 案例回归）。
-- **健康探针**：
-  - harness：`GET /health`（经 nginx 为 `/api/health`）；另 `GET /agents`、`GET /skills`
-  - llm_server：`GET /healthz`（无上游→`degraded`）
-  - rrserver server：`GET /healthz`（`ok`）
-  - 隧道通断：`GET /t/<name>/v1/models`（应转发到家庭端本地 LLM）；
-    harness 隧道可用 `GET /t/tcm/skills` 验证
-- **人工端到端验收**（真实 LLM）：`e2e_tests/run_manual_e2e.ps1`，
-  产出归档在 [`samples/`](../samples/README.md)。
+- **健康探针**：harness `GET /health`（经 nginx 为 `/api/health`）；llm_server `GET /healthz`
+  （无上游→`degraded`）；rrserver `GET /healthz`（`ok`）；
+  隧道通断 `GET /t/<name>/v1/models`，harness 隧道可用 `GET /t/tcm/skills` 验证。
+- **全链路 E2E**（用 stub，不需真实 LLM）：`e2e_tests/run_full_chain_e2e.ps1`，见 [`e2e.md`](./e2e.md)。
+- **人工验收**（需真实 LLM）：`e2e_tests/run_manual_e2e.ps1`，产出见 [`samples/`](./samples/README.md)。
+- **后端测试**（Docker 内）：见 [`testing.md`](./testing.md)。
 
 ---
 
 ## 7. 上线检查清单（T5.2 / T5.3）
 
-T5.1（报告持久化）与 T5.4（合规）已落地，见 [`usage.md`](./usage.md) 2.8 与下节；
-T5.2（对象存储 / 回源）与 T5.3（CDN 与小程序过审）**依赖外部云资源**，
-本机无法完成，故以清单形式给出，资源到位后逐项勾选即可。
+T5.1（报告持久化）与 T5.4（合规）已落地；T5.2、T5.3 **依赖外部云资源**，
+本机无法完成，资源到位后逐项勾选。
 
-### 7.1 T5.2 静态资源与媒体上云（对象存储）
+### 7.1 T5.2 对象存储与媒体上云
 
-当前事实：**harness 不保存图片**——舌象/面相以 base64 或 URL 随请求传入，
-用完即弃，服务端没有 `/uploads` 目录，也没有对象存储依赖。因此在接入对象存储前，
-先明确要解决的是「前端静态资源」与「用户图片」两件事：
+现状：**harness 不保存图片**——舌象/面相以 base64 或 URL 随请求传入，用完即弃，
+没有上传目录，也不依赖对象存储。接入前先明确要解决「前端静态资源」与「用户图片」两件事：
 
 | 项 | 做什么 | 状态 |
 |---|---|---|
 | 1 | 建桶（私有），开启服务端加密与版本控制 | ☐ 待资源 |
 | 2 | 前端 `dist/` 上传（`aws s3 sync dist/ s3://<bucket>/h5/ --delete`） | ☐ 待资源 |
 | 3 | 桶策略：仅 CDN / nginx 回源可读，禁止公共读 | ☐ 待资源 |
-| 4 | 若后续要做「报告附图」：harness 需新增上传端点，把返回的 URL 随报告归档 | ☐ 未开工（当前图片不落盘） |
-| 5 | 生命周期规则：报告归档与图片按合规要求设置保留期（建议 ≤ 180 天） | ☐ 待资源 |
-| 6 | 密钥：走 IAM 角色 / 环境变量，**不入库、不进镜像** | ☐ 待资源 |
+| 4 | 若做「报告附图」：harness 需新增上传端点，URL 随报告归档 | ☐ 未开工 |
+| 5 | 生命周期规则：报告与图片保留期（建议 ≤ 180 天） | ☐ 待资源 |
+| 6 | 密钥走 IAM 角色 / 环境变量，**不入库、不进镜像** | ☐ 待资源 |
 
-> 风险：一旦 harness 开始保存用户图片，就多了一处需要保护的个人信息，
-> 需要同步满足 T5.4 的脱敏与删除要求。**在合规复核通过前不要开通**。
+> 一旦 harness 开始保存用户图片，就多了一处需要保护的个人信息，
+> 需同步满足 T5.4 的脱敏与删除要求——**合规复核通过前不要开通**。
 
 ### 7.2 T5.3 CDN 与小程序上架
 
 | 项 | 做什么 | 状态 |
 |---|---|---|
-| 1 | 域名备案 + HTTPS 证书（当前 `deploy/certs/` 是自签名，仅内网可用） | ☐ 待资源 |
-| 2 | CDN 加速域名指向对象存储 / nginx 源站，配置缓存规则（HTML 不缓存，hash 资源长缓存） | ☐ 待资源 |
-| 3 | 回源鉴权（Referer / 签名 URL），防刷量 | ☐ 待资源 |
-| 4 | 小程序：`frontend/` 走 `npm run build:weapp`，开发者工具上传体验版 | ☐ 待资源 |
-| 5 | 小程序提审材料：类目选「医疗」需**提供医疗机构执业许可证或互联网医疗备案**，<br>AI 健康咨询属于高风险类目，个人主体通常无法通过 | ⚠️ 需确认主体资质 |
-| 6 | 提审前必须自查：免责声明常驻不可关闭、无「诊断/治疗」等医疗表述、红旗引导就医 | 已由 T5.4 在服务端保证 |
+| 1 | 域名备案 + 可信 HTTPS 证书（当前自签名仅内网可用） | ☐ 待资源 |
+| 2 | CDN 加速域名指向源站，缓存规则（HTML 不缓存，hash 资源长缓存） | ☐ 待资源 |
+| 3 | 回源鉴权（Referer / 签名 URL）防刷量 | ☐ 待资源 |
+| 4 | 小程序：`npm run build:weapp` → 开发者工具上传体验版 | ☐ 待资源 |
+| 5 | 提审材料：医疗类目需**医疗机构执业许可证或互联网医疗备案**，<br>个人主体通常无法通过 | ⚠️ 需确认主体资质 |
+| 6 | 自查：免责声明常驻不可关闭、无「诊断/治疗」表述、红旗引导就医 | 已由 T5.4 服务端保证 |
 | 7 | 服务端域名加入小程序 request 合法域名白名单 | ☐ 待资源 |
-| 8 | 备案号与「互联网医疗保健信息服务」审核通过 | ☐ 待资源 |
+| 8 | 互联网医疗保健信息服务审核通过 | ☐ 待资源 |
 
-> 第 5 项是**最大的非技术风险**：小程序类目审核不看代码质量看资质。
-> 若主体不具备医疗相关资质，替代路径是只做 H5 + 公众号，或与其它持证机构合作。
+> 第 5 项是**最大的非技术风险**：小程序类目审核看资质不看代码。
+> 若主体不具备医疗资质，替代路径是只做 H5 + 公众号，或与持证机构合作。
 
-### 7.3 T5.1 / T5.4 已落地部分（对照）
+### 7.3 T5.1 / T5.4 已落地部分
 
 | 项 | 落地位置 |
 |---|---|
-| 报告落盘与回查 | `server/harness/src/store.rs` + `GET /reports`、`GET /reports/:id` |
-| 落盘脱敏 | `store.rs::redact_text`（手机号/身份证/邮箱/长数字），`store_redact` 可关 |
-| 路径穿越防护 | id 仅允许 `A-Za-z0-9_-`，最长 128 |
-| 免责声明随结果下发 | `orchestrator::DISCLAIMER`，`/chat` 的 `disclaimer` 字段 |
+| 报告落盘与回查 | `src/store.rs` + `GET /reports`、`GET /reports/:id` |
+| 落盘脱敏 | `store.rs::redact_text`，`HARNESS_STORE_REDACT` 可关 |
+| 路径穿越防护 | 报告 id 仅允许 `A-Za-z0-9_-`，最长 128 |
+| 免责声明随结果下发 | `orchestrator::DISCLAIMER` → `/chat` 的 `disclaimer` 字段 |
 | 安全门不可被配置移除 | `orchestrator::resolve_order`（缺 safety 时强制插入并告警） |
-| 前端存证/回查 | 报告页「存证与回查」+ `pages/reports` 存证记录页 |
+| 前端存证 / 回查 | 报告页「存证与回查」+ `pages/reports` 存证记录页 |

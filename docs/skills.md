@@ -146,7 +146,7 @@ reg.register(
 );
 ```
 
-然后 `cargo build -p harness` 并重启，`GET /skills` 可见。
+然后在 Docker 内重新构建镜像并重启（后端一律走 Docker），`GET /skills` 可见。
 
 ### 5.3 挂载外部 MCP 工具（已接线）
 
@@ -189,7 +189,8 @@ mcp_clients:
 
 - `tests/behavior.rs`：技能归属（`treatment` 专属方剂/调护工具、专属技能不泄漏到其他
   capability）、`Capability::from_name` 中英文解析、`mcp_clients` 配置解析、埋点累加。
-- `cd server && cargo test -p harness`：技能注册、`for_capability` 的 owner 过滤、同步执行与错误分支。
-- 案例回归 `cargo test -p harness --test cases` 会校验 `tcm-kb` / `tcm-diet` 所依赖的
+- Docker 内 `cargo test -p harness`（命令见 [`testing.md`](./testing.md)）：技能注册、
+  `for_capability` 的 owner 过滤、同步执行与错误分支。
+- 案例回归 `--test cases` 会校验 `tcm-kb` / `tcm-diet` 所依赖的
   `syndromes.yaml` / `care.yaml` 数据完整性（每个基准证候必须有方剂或调护数据）。
 - 手工验证：`GET /skills` + `POST /skills`（见第 4 节）。

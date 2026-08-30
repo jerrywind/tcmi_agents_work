@@ -20,16 +20,20 @@
 | 集成 | `server/harness/tests/cases.rs` | **案例回归**：以 `cases.jsonl` 真实病例校验资源与纯函数链路（不依赖 LLM） |
 | 集成 | `server/harness/tests/behavior.rs` | **行为回归**：红旗中断判定、技能归属（含 treatment 专属工具）、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**（均不依赖 LLM） |
 | 评测 | `server/harness/tests/llm_eval.rs` | **LLM 质量评分**（T4.4）：以 `cases.jsonl` 跑真实辨证并自动评分；默认跳过，`HARNESS_EVAL=1` 才启用 |
-
-当前 **后端 129 个用例全绿**（harness 29：behavior 26 + cases 2 + llm_eval 1；rrserver 100）。
 | 隧道 | `server/rrserver/tests/integration.rs` | rrserver 端到端：注册鉴权、隧道转发、流式、CORS、断线重连、模型部署包装 |
 
-```bash
-cd server
-cargo test                              # 整个 workspace（harness + rrserver）
-cargo test -p harness                   # 仅 harness
-cargo test -p harness --test cases      # 仅案例回归
-cargo test -p rrserver                  # 仅 rrserver
+当前 **后端 129 个用例全绿**（harness 29：behavior 26 + cases 2 + llm_eval 1；rrserver 100）。
+
+```powershell
+# 后端一律在 Docker 内跑，runner / 本机无需 Rust 工具链
+cd tcm_work
+docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
+  cargo test --workspace
+
+# 只想跑其中一部分：替换上面最后一行的 cargo 参数
+#   cargo test -p harness                 仅 harness
+#   cargo test -p harness --test cases    仅案例回归
+#   cargo test -p rrserver                仅 rrserver
 ```
 
 ### 1.1 案例回归（`--test cases`）
@@ -89,12 +93,9 @@ npx vitest run            # 单测（jsdom）
 - 当前 **32 个用例全绿**（含 6 条契约：`/health`、`/agents`、`/skills`、
   `POST /skills` 错误分支 + MCP 的 `tools/list`、`list_agent_capabilities`）。
 
-> 2026-08-29 修复：此前 18 个用例失败，根因是 `vitest.setup.ts` 里的
-> `@tarojs/taro` mock 返回的是**普通 async 函数**而非 `vi.fn()`，
-> 导致 `vi.mocked(Taro.request).mockResolvedValue(...)` 报
-> `TypeError: mockImplementation is not a function`；
-> 同时 `vitest.config.ts` 把后端地址硬编码成已废弃的 `:22000`（旧 Python backend 端口）。
-> 现在 mock 用 `vi.hoisted()` + `vi.fn()` 构造，端口指向 harness 的 `:8011`。
+> 两个易踩的坑（已修，改测试时别踩回去）：
+> `vitest.setup.ts` 的 Taro mock 必须是 `vi.fn()`（普通 async 函数会让
+> `mockImplementation` 不存在）；后端地址不能用旧 Python backend 的 `:22000`。
 
 ### 2.1 RAG 语料（`llm_server/rag`，T4.3）
 
@@ -148,7 +149,7 @@ $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'
 ```
 
 跑完把输入、输出、耗时、工具调用与自动检查结论归档到
-[`docs/samples/<case>/`](../samples/README.md)，供后续改动对照回归。
+[`docs/samples/<case>/`](./samples/README.md)，供后续改动对照回归。
 
 ---
 
@@ -180,7 +181,9 @@ cd llm_server/rag && python -m unittest test_corpus
 
 ---
 
-## 5. CI（建议）
+## 5. CI
+
+定义在 `.github/workflows/test.yml`（PR / push 触发）：
 
 | Job | 做什么 | 门禁 |
 |---|---|---|

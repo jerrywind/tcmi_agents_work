@@ -1,132 +1,140 @@
 # 开发文档（Development）
 
-面向开发者：本地开发环境搭建、启动、调试与常见问题。**部署/端口/配置细节见
-[`deployment.md`](./deployment.md)；模型与降级事实见 [`llm_server.md`](./llm_server.md)。
+面向开发者：环境、目录结构、本地启动、调试与常见问题。
+**部署/端口/配置见 [`deployment.md`](./deployment.md)；模型与降级事实见
+[`llm_server.md`](./llm_server.md)；测试体系见 [`testing.md`](./testing.md)。
 本文件只描述开发流程，不重复这些事实。**
 
 ---
 
-## 1. 环境要求（建议）
-- Rust 1.75+（**后端 harness 与 rrserver 均需**，`server/` Cargo workspace）
-- Python 3.11+（llm_server；可选，仅当使用 Python 网关时）
-- Node.js 18+（frontend）
-- LM Studio（接入真实 LLM 时才需要，默认 `http://localhost:11223/v1`）
+## 1. 环境要求
 
-> 后端为 Rust **harness**（`server/harness`）。Python 只在**可选**的 `llm_server` 网关
-> 及其 RAG 子组件中需要——若直连 LM Studio，可以不装 Python。
+| 组件 | 要求 | 必需性 |
+|---|---|---|
+| Docker | 任意近期版本 | **必需**（后端构建、运行、验证全在容器内） |
+| Node.js 18+ | 前端 | 必需（改前端时） |
+| Python 3.11+ | `llm_server` 网关与 RAG | 可选（直连 LM Studio 则不需要） |
+| LM Studio | 宿主机 `:11223` | 真实推理时需要 |
+| Rust 工具链 | — | **不需要**（镜像内编译） |
 
 ---
 
 ## 2. 仓库结构
+
 ```
 tcm_work/
-├── frontend/      Taro 多端（H5/微信小程序），仅产出静态 dist，不含 web 服务器
-├── server/        Rust workspace（Cargo.toml 聚合两个 crate）
-│   ├── harness/      诊断编排，7× Sub-Agent
-│   │   ├── src/          agents / orchestrator / knowledge / skills / mcp / http / resources
-│   │   ├── resources/    可改 YAML 数据（证候/问诊/方剂/调护/安全规则…）
-│   │   ├── tests/        cases.rs 案例回归
-│   │   └── cases.jsonl   案例回归基准（93 条真实病例）
-│   └── rrserver/     Rust 反向隧道：server + client + llmsrv 模型部署包装
-├── llm_server/    纯 LM Studio 网关 + Agent 中间层（.py），rag/ 为可选子组件
-├── deploy/        统一 nginx（反代/TLS）配置与顶层编排，后端服务容器不含 nginx
-│   ├── nginx/         frontend.conf（前端静态+SPA回退+反代）、rrserver.conf（/rr TLS反代）
-│   ├── certs/         TLS 证书（fullchain.pem / privkey.pem）
-│   └── docker-compose.yml  nginx + harness + rrserver 统一编排
-├── docs/          文档（见 docs/README.md 索引）
-├── scripts/       本地脚本（build-release.ps1 预编译 / cleanup.ps1 清理）
-└── e2e_tests/     全链路 E2E（harness → rrserver → llm_server）
+├── frontend/          Taro 多端（H5/微信小程序），只产出静态 dist
+│   └── src/
+│       ├── pages/     index（建档）/ consult（问诊）/ report（报告）
+│       │              reports（存证记录）/ skills（技能）/ family（家庭档案）
+│       ├── services/  harness.ts（契约客户端）+ session.ts（前端多轮状态）
+│       └── utils/
+├── server/            Rust workspace
+│   ├── harness/       诊断编排
+│   │   ├── src/       agents / orchestrator / knowledge / skills / mcp
+│   │   │              http / resources / store / trace
+│   │   ├── resources/ 可改 YAML 数据
+│   │   ├── tests/     cases.rs（案例回归）/ behavior.rs（行为）/ llm_eval.rs（LLM 评分）
+│   │   └── cases.jsonl  93 条真实病例基准
+│   └── rrserver/      反向隧道：server + client + llmsrv
+├── llm_server/        纯 LM Studio 网关（Python，可选）；rag/ 为其检索子组件
+├── deploy/            nginx 配置 + certs + docker-compose
+├── docs/              文档（索引见 docs/README.md）；samples/ 为真实 LLM 验收样例
+├── scripts/           build-release.ps1（出镜像）/ cleanup.ps1（清理）
+├── e2e_tests/         全链路 E2E + 人工验收脚本
+└── rag_data/          中医典籍语料（700 部，**不入库**，见 docs/rag.md）
 ```
 
-> 产物目录（均已被 `.gitignore` 覆盖）：`server/target/`（数 GB）、`frontend/dist/`、
-> `__pycache__/`、`e2e_tests/images/`。
+产物目录（均已被 `.gitignore` 覆盖）：`server/target/`、`frontend/dist/`、
+`__pycache__/`、`e2e_tests/images/`、`e2e_tests/_reports/`。
 
 ---
 
-## 3. 后端启动（harness）
+## 3. 后端开发（harness）
 
-> **铁律：后端完全依赖 Docker 构建、运行与验证**，不使用宿主机 `cargo build` 产物。
-> 下面一律用镜像；编译、测试、lint 都在容器内完成（见 [`testing.md`](./testing.md)）。
+> **铁律：后端完全依赖 Docker**，不使用宿主机 `cargo build` 产物。
 
 ```powershell
 cd server
 docker build -f harness/Dockerfile -t tcm-harness:local .   # 多阶段，镜像内编译
 docker run -d --name tcm-harness-8011 -p 8011:8011 tcm-harness:local
-# 验证：http://127.0.0.1:8011/health 、/agents 、/skills
 ```
-- 镜像内默认 `--listen 0.0.0.0:8011 --resources /data/resources`；
-  容器外想覆盖资源目录，用 bind mount：`-v "$PWD/harness/resources:/data/resources"`。
-- 改 YAML 后重建镜像，或 `POST /reload`（需开启 `hot_reload`）生效。
-- **无 LLM 时**：只读端点可用，`/chat` 会失败（harness 无 MockProvider）；
-  确定性逻辑改完请在容器内跑 `cargo test --workspace`。
+
+- 想改 YAML 而不重建镜像：`-v "$PWD/harness/resources:/data/resources:ro"`，
+  再 `POST /reload`（需 `hot_reload: true`）。
+- 改 Rust 代码 → 重新 `docker build`。测试与 lint 也在容器内跑（见 `testing.md`）。
+- 无 LLM 时：`/chat` 会失败（harness 无 MockProvider），只读端点可用。
 
 ---
 
-## 4. 接入真实 LLM（开发态）
-> 详细步骤与模型事实见 [`usage.md`](./usage.md) 与 [`llm_server.md`](./llm_server.md)。
-> 概要：
-> 1. LM Studio 加载 `google/gemma-4-12b-qat`，开启 Local Server（`:11223`）。
-> 2. （可选）起 `llm_server` 网关（`python -m app.main`，`:8000`）。
-> 3. harness 指向 LLM：
->    ```powershell
->    $env:HARNESS_LLM_BASE_URL="http://localhost:8000/v1"    # 经网关
->    # 或直连 LM Studio（默认值）：http://localhost:11223/v1
->    $env:HARNESS_LLM_API_KEY="<LM Studio 开启校验时必填>"
->    docker run -d --name tcm-harness-8011 -p 8011:8011 `
->      -e HARNESS_LLM_BASE_URL -e HARNESS_LLM_API_KEY -e HARNESS_MODEL `
->      tcm-harness:local
->    ```
-> 注意：环境变量前缀是 **`HARNESS_`**（不是旧的 `TCM_LLM_*`）。
-> 完整配置项见 `server/harness/resources/config.yaml`（`max_tool_rounds`、
-> `llm_max_retries`、`llm_retry_backoff_ms`、`mcp_clients` 等同样可用
-> `HARNESS_*` 大写形式覆盖）。
+## 4. 接入真实 LLM
+
+1. LM Studio 加载 `google/gemma-4-12b-qat`，开启 Local Server（`:11223`）。
+2. （可选）起 `llm_server` 网关：`cd llm_server && python -m app.main`（`:8000`）。
+3. harness 指向 LLM（前缀是 **`HARNESS_`**，不是 `TCM_LLM_*`）：
+
+```powershell
+$env:HARNESS_LLM_BASE_URL = "http://host.docker.internal:11223/v1"  # 容器内访问宿主机
+$env:HARNESS_LLM_API_KEY  = "<LM Studio 开启校验时必填>"
+docker run -d --name tcm-harness-8011 -p 8011:8011 `
+  -e HARNESS_LLM_BASE_URL -e HARNESS_LLM_API_KEY -e HARNESS_MODEL `
+  tcm-harness:local
+```
+
+完整配置项见 `deployment.md` 3.2 与 `resources/config.yaml`。
 
 ---
 
-## 5. rrserver（家庭算力上云，可选）
-- 先构建镜像（镜像内编译，同 harness）：`cd server && docker build -f rrserver/Dockerfile -t tcm-rrserver:local .`
-  （见 [`deployment.md`](./deployment.md) 5.1）。
-- `cd server/rrserver && .\start_rrserver.ps1` 一键起 server(`:8088`) + client(`:9000`)；
-  client 把家庭端本地 LLM 暴露为 server 的 `/t/home/*`。
-- harness 也可直接经隧道暴露：`harness --tunnel-server ws://<rrserver> --tunnel-name tcm`
-  （详见 deployment 5.2.1）。
-- 调试时可用 `curl https://rr.windblue.tech/healthz`（应 `ok`）探测隧道状态。
+## 5. rrserver（可选）
+
+```powershell
+cd server
+docker build -f rrserver/Dockerfile -t tcm-rrserver:local .
+```
+
+启动与隧道配置见 `deployment.md` 第 5 节；本地一键也可用
+`server/rrserver/start_rrserver.ps1`（起 server `:8088` + client `:9000`）。
+调试探测：`curl https://rr.windblue.tech/healthz`（应返回 `ok`）。
 
 ---
 
-## 6. 前端本地启动
+## 6. 前端开发
+
 ```bash
 cd frontend
 npm install
-npm run dev:h5      # H5 http://localhost:10086（apiBase 见 config/dev.ts）
-npm run dev:weapp   # 微信小程序（需微信开发者工具）
+npm run dev:h5        # H5：http://localhost:10086
+npm run dev:weapp     # 微信小程序（需微信开发者工具）
 ```
-前端 service 层契约见 `src/services/harness.ts`（多轮 `messages` 由 `session.ts` 在前端维护，
-harness 无服务端会话）；跨端通过 Taro 适配（H5 走原生 fetch、小程序走 `wx.request`）。
+
+- 契约客户端 `src/services/harness.ts`；多轮 `messages` 由 `src/services/session.ts`
+  在前端维护（harness 无服务端会话）。
+- 跨端差异由 Taro 适配：H5 走 devServer 代理（`/api` → harness:8011），小程序直连后端地址。
+- 类型检查：`npx tsc --noEmit`。
 
 ---
 
 ## 7. 测试
-- **后端 harness**：`cd server && cargo test -p harness` —— 含单元 + `cases.jsonl`
-  案例回归（不依赖 LLM）—— [`testing.md`](./testing.md)。
-- **rrserver**：`cd server && cargo test -p rrserver`（单元 + 集成）。
-- **前端单测**：`frontend/`（vitest + jsdom）。
-- **全链路 E2E**（harness→rrserver→llm_server）：`tcm_work/e2e_tests/`，一键
-  `run_full_chain_e2e.ps1` —— 见 [`e2e.md`](./e2e.md)。
-- 临时文件/日志清理规范见 [`cleanup.md`](./cleanup.md)。
+
+全部命令见 [`testing.md`](./testing.md)，要点：
+
+- 后端：`docker run ... cargo test --workspace`（**不要在本地跑 cargo**）。
+- 前端：`npm run test`。
+- RAG：`python -m unittest test_corpus`。
+- 全链路 E2E：`e2e_tests/run_full_chain_e2e.ps1`；人工验收 `run_manual_e2e.ps1`。
 
 ---
 
 ## 8. 常见问题（FAQ）
+
 | 现象 | 排查 |
 |---|---|
-| harness `/chat` 报 LLM 不可用 | 未设置 `HARNESS_LLM_BASE_URL`（默认 `http://localhost:11223/v1`）或 LM Studio 未启动。harness 无 MockProvider，真实推理必须配 LLM。 |
-| 设了 `TCM_LLM_BASE_URL` 却不生效 | 变量名前缀错误：harness 读 **`HARNESS_`** 前缀（如 `HARNESS_LLM_BASE_URL`、`HARNESS_LLM_API_KEY`）。 |
-| harness 启动时报资源加载失败 | cwd 不对：`resources/` 是相对路径，须在 `server/harness` 下运行，或用 `--resources` 指定。 |
-| harness 隧道连不上（WS 404） | 直连 rrserver server 时 `external_ws_base` 不应带 `/rr` 前缀（`/rr` 由 nginx 添加）。 |
-| llm_server `/healthz` = `degraded` | 上游 LM Studio 未开或 `LMSTUDIO_BASE_URL` 不通。属预期降级，非错误。 |
-| llm_server `/v1/models` 返回 503 | 同上，上游不可达。启动 LM Studio 后恢复。 |
-| rrserver nginx 反复重启 | 缺 `deploy/certs/fullchain.pem` + `privkey.pem`，用 WSL2 `openssl` 生成自签名证书（nginx 配置见 `deploy/nginx/rrserver.conf`）。 |
-| rrserver / harness 镜像构建失败 | 两个 Dockerfile 都在**镜像内编译**（rust:1.98-bookworm → ubuntu:24.04），需能访问 crates.io。构建上下文必须是 workspace 根 `server/`（`cd server && docker build -f harness/Dockerfile ...`），否则 harness 依赖的 rrserver 源码进不了上下文。 |
-| 前端 dev 连不上后端 | 检查 `config/dev.ts` 的 `apiBase` / `process.env.VITE_API_BASE` 是否指向 harness 地址与端口（`:8011`，经 nginx 为 `/api`）；并确认 harness 容器正在运行（`docker ps`）。 |
-| 视觉识别无独立服务 | 视觉与文本共用 `google/gemma-4-12b-qat` 多模态端点，不单独部署视觉模型。 |
+| `/chat` 报 LLM 不可用 | 未设 `HARNESS_LLM_BASE_URL` 或 LM Studio 未启动。容器内要用 `host.docker.internal` 而非 `localhost`。 |
+| 设了 `TCM_LLM_BASE_URL` 不生效 | 前缀错误：harness 只认 **`HARNESS_`**。 |
+| `GET /reports` 返回 `enabled: false` | 报告持久化默认关闭，需配 `HARNESS_STORE_DIR`。 |
+| harness 隧道连不上（WS 404） | 直连 rrserver 时 `external_ws_base` 不应带 `/rr` 前缀。 |
+| llm_server `/healthz` = `degraded` | 上游 LM Studio 未开或 `LMSTUDIO_BASE_URL` 不通，属预期降级。 |
+| 镜像构建失败 | 两个 Dockerfile 都在镜像内编译，需能访问 crates.io；构建上下文必须是 workspace 根 `server/`。 |
+| 前端连不上后端 | 检查 `VITE_API_BASE` / `config/dev.ts` 的 apiBase 是否指向 `:8011`（经 nginx 为 `/api`），以及容器是否在跑。 |
+| 改了 ps1 脚本后中文变乱码 | Windows PowerShell 5.1 按 ANSI 读取无 BOM 的脚本：含中文的 `.ps1` **必须存为 UTF-8 with BOM**。 |
+| 视觉识别无独立服务 | 视觉与文本共用 `google/gemma-4-12b-qat` 多模态端点。 |

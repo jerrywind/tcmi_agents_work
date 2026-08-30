@@ -23,7 +23,7 @@
 | `server/rrserver/` | ✅ 可用 | 云端中继 + 家庭端 client + 模型部署包装；资源泄漏已修 |
 | `llm_server/` | ✅ 可用 | LM Studio 网关 + Agent 中间层；`rag/` 为可选子组件 |
 | `deploy/` | ✅ 可用 | nginx 统一入口 + compose 编排 |
-| **前端 ↔ harness 链路** | ✅ **已打通** | 旧 `api.ts` 已删除，5 个页面改用 `harness.ts` + `session.ts` 维护多轮 |
+| **前端 ↔ harness 链路** | ✅ **已打通** | 旧 `api.ts` 已删除，6 个页面改用 `harness.ts` + `session.ts` 维护多轮 |
 | **技能 → 推理链路** | ✅ **已接线** | 7 个 Agent 全部改用 `chat_with_tools`（此前技能在推理中完全不生效） |
 | **后端构建** | ✅ **Docker 化** | 两个 Dockerfile 改为多阶段、镜像内编译，不再依赖 WSL2 预编译 |
 | **MCP Client** | ✅ 已接线 | `config.yaml` 的 `mcp_clients` 启动时挂载为 `mcp__*` 工具（T2.4） |
@@ -216,7 +216,7 @@
 - 任务看板与验收标准：[`tasks.md`](./tasks.md)
 - 新增 Sub-Agent：[`agent-protocol.md`](./agent-protocol.md)
 - 新增技能：[`skills.md`](./skills.md)
-- 本地联调：`cd server/harness && ../target/debug/harness --listen 127.0.0.1:8011`
+- 本地联调：起 harness 容器（`docker run` 见 `deployment.md` 3.1）
   + `cd frontend && npm run dev:h5`
-- 测试：`cd server && cargo test`（harness + rrserver）；
+- 测试：后端在 Docker 内 `cargo test --workspace`（见 `testing.md`）；
   全链路 `cd e2e_tests && .\run_full_chain_e2e.ps1`

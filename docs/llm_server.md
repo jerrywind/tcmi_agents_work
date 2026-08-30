@@ -112,6 +112,9 @@ $env:MCP_CLIENTS = '[{"name":"kb","url":"http://127.0.0.1:9000/mcp","headers":{"
 
 见 `llm_server/.env.example`。核心项：
 
+> ⚠️ 真实 Key 只写进 `llm_server/.env`（已被 git 忽略）；
+> `.env.example` 不受忽略规则保护，只能放占位符。
+
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `LMSTUDIO_BASE_URL` | `http://localhost:11223/v1` | LM Studio 端点（Docker 内用 `host.docker.internal`） |

@@ -130,9 +130,10 @@
 | 调护/食疗 | `resources/care.yaml` | 同上 |
 | 红旗规则 | `resources/safety.yaml` | 同上 |
 | 关键词→证据/证候映射 | `resources/keywords.yaml` | 同上 |
+| 相反表现（矛盾证据） | `resources/contradictions.yaml` | 同上 |
 | 证候传变 | `resources/transformations.yaml` | 同上 |
-| 流程顺序 | `resources/routing.yaml` | 同上 |
-| Agent 逻辑 | `src/agents/*.rs` | 需 `cargo build` |
+| 流程顺序 | `resources/routing.yaml` | 同上（`safety` 不可移除，缺失会被强制补齐） |
+| Agent 逻辑 | `src/agents/*.rs` | 需重新 `docker build`（后端走 Docker） |
 
-改完数据建议跑 `cd server && cargo test -p harness --test cases`
+改完数据建议在 Docker 内跑 `--test cases` 回归
 （93 条真实病例基准，会校验证候是否缺失、方剂/调护是否存在）。
