@@ -63,8 +63,14 @@ fn capability_desc(cap: Capability) -> &'static str {
         Capability::Listening => "从声音与气味判断虚实寒热",
         Capability::Inquiry => "围绕寒热汗出头身二便等系统追问",
         Capability::Palpation => "解读脉象与体检数据",
+        Capability::CaseReference => "检索相似古代医案作为辨证参照",
         Capability::Differentiation => "综合四诊辨证，产出主证/兼证与置信度",
         Capability::Safety => "识别急危重症信号与用药禁忌",
+        Capability::Strategy => "确立治则治法（汗吐下和温清消补）",
+        Capability::Herbology => "本草用药：药性、炮制、配伍与剂量",
+        Capability::Prescription => "据证候开方，从方书检索方剂（治疗最后一步）",
+        Capability::Care => "食疗、养生与生活调摄",
+        Capability::Acupuncture => "针灸与外治取穴",
         Capability::Treatment => "给出方剂、外治与调护建议",
     }
 }

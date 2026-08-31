@@ -1,18 +1,31 @@
 //! sub-agent 注册表与调度
 //!
-//! 七个 sub-agent 对应 backend 的 7 个 Capability：
-//! inspection（望诊）/ listening（闻诊）/ inquiry（问诊）/ palpation（切诊）/
-//! differentiation（辨证）/ safety（安全门）/ treatment（治疗）。
+//! 十三个 sub-agent 对应 13 个 Capability，按问诊流程分四期：
+//!
+//! - **采集**：inspection（望诊）/ listening（闻诊）/ inquiry（问诊）/ palpation（切诊）
+//! - **辨证**：case_reference（医案参考）/ differentiation（辨证）
+//! - **安全**：safety（安全门）
+//! - **治疗**：strategy（立法）/ herbology（用药）/ prescription（开方）/
+//!   care（调护）/ acupuncture（针灸）
+//! - **兼容**：treatment（综合治疗，旧流程的一步到位版本）
 //!
 //! 每个 agent 实现 `SubAgent` trait，由 `Registry` 按 capability 名查找并分发。
+//! 各 agent 的典籍检索域见 `resources/rag_scopes.yaml`。
 
+pub mod acupuncture;
 pub mod base;
+pub mod care;
+pub mod case_reference;
+pub mod convergence;
 pub mod differentiation;
+pub mod herbology;
 pub mod inquiry;
 pub mod inspection;
 pub mod listening;
 pub mod palpation;
+pub mod prescription;
 pub mod safety;
+pub mod strategy;
 pub mod treatment;
 
 pub use base::{AgentContext, LlmCaller, SubAgent};
@@ -23,13 +36,15 @@ use crate::resources::ResourceBundle;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// 规范顺序：望 → 闻 → 问 → 切 → 辨证 → 安全门 → 治疗
+/// 规范顺序：望 → 闻 → 问 → 切 → 医案 → 辨证 → 安全门 → 立法 → 用药 → 开方 → 调护 → 针灸 → 治疗
 ///
 /// `Registry` 内部用 HashMap 存储，**迭代顺序不稳定**（Rust 的 HashMap
 /// 使用随机化哈希，每次进程启动顺序都可能不同）。对外暴露能力清单时必须
 /// 按此顺序，否则 `GET /agents` 每次重启返回的顺序都会变，
 /// 前端分步展示与契约测试都会被随机顺序打乱。
-const CAPABILITY_ORDER: [Capability; 7] = Capability::ALL;
+///
+/// 写成 `Capability::ALL` 的别名而非重复列举：新增能力时只需改枚举一处。
+const CAPABILITY_ORDER: [Capability; 13] = Capability::ALL;
 
 /// 触发**中断**的红色警戒级别（T3.3）
 ///
@@ -78,10 +93,26 @@ impl Registry {
         map.insert(Capability::Inquiry, Arc::new(inquiry::InquiryAgent));
         map.insert(Capability::Palpation, Arc::new(palpation::PalpationAgent));
         map.insert(
+            Capability::CaseReference,
+            Arc::new(case_reference::CaseReferenceAgent),
+        );
+        map.insert(
             Capability::Differentiation,
             Arc::new(differentiation::DifferentiationAgent),
         );
         map.insert(Capability::Safety, Arc::new(safety::SafetyAgent));
+        // ---- 治疗期：由旧的一步到位拆成「立法 → 用药 → 开方」，调护/针灸可选 ----
+        map.insert(Capability::Strategy, Arc::new(strategy::StrategyAgent));
+        map.insert(Capability::Herbology, Arc::new(herbology::HerbologyAgent));
+        map.insert(
+            Capability::Prescription,
+            Arc::new(prescription::PrescriptionAgent),
+        );
+        map.insert(Capability::Care, Arc::new(care::CareAgent));
+        map.insert(
+            Capability::Acupuncture,
+            Arc::new(acupuncture::AcupunctureAgent),
+        );
         map.insert(Capability::Treatment, Arc::new(treatment::TreatmentAgent));
         Self { map }
     }

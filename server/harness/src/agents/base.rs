@@ -206,14 +206,17 @@ impl<'a> LlmCaller<'a> {
                 trace::record(self.trace, |m| m.record_tool(name));
                 tracing::debug!(round = round + 1, tool = name, "模型请求调用工具");
 
-                let result = match crate::skills::dispatch(&tools, name, &args).await {
-                    Ok(v) => v,
-                    Err(e) => {
-                        let msg = e.to_string();
-                        trace::record(self.trace, |m| m.record_error(msg.clone()));
-                        json!({"error": msg})
-                    }
-                };
+                // 带上调用方 capability：「按知识域检索」这类技能要据此
+                // 决定检索范围（开方查方书、切诊查脉学）
+                let result =
+                    match crate::skills::dispatch(&tools, name, &args, Some(capability)).await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            let msg = e.to_string();
+                            trace::record(self.trace, |m| m.record_error(msg.clone()));
+                            json!({"error": msg})
+                        }
+                    };
                 body_msgs.push(json!({
                     "role": "tool",
                     "tool_call_id": id,

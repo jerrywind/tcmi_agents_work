@@ -3,13 +3,14 @@ import Taro from '@tarojs/taro'
 /**
  * harness（Rust 后端）契约客户端。
  *
- * 与旧 `api.ts` 的关键差异：harness 是**无状态**服务，不保存问诊会话，
- * 没有 `cons_xxx` 会话 id，也没有 start/answer/report 等会话端点。
+ * harness 是**无状态**服务，不保存问诊会话：没有 `cons_xxx` 会话 id，
+ * 也没有 start/answer/report 等会话端点。
  * 多轮问诊由调用方（前端）维护 `messages` 数组，每次带上完整对话历史。
  *
  * 端点：GET /health、GET|POST /agents、POST /chat、GET|POST /skills、POST /reload
  *
- * 说明：本模块与旧 `api.ts` 并存，便于渐进迁移；旧模块面向已归档的 Python backend。
+ * 说明：面向已归档 Python backend 的旧契约 `api.ts` 已**删除**，
+ * 本模块是唯一的后端访问层（多轮状态见 `services/session.ts`）。
  */
 
 // H5 走 devServer 代理（config/dev.ts 已把 /api 转发到 harness:8011 并剥离前缀）；

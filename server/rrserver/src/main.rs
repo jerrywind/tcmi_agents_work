@@ -5,11 +5,12 @@ use clap::{Parser, Subcommand};
 use std::sync::Arc;
 use std::time::Duration;
 use toml::Value;
+use tracing::info;
 
 use rrserver::skill::{ConstState, JudgeEngine, SkillRule, SkillSet};
 use rrserver::{client, llmsrv, server, state};
 
-use server::{AppState, TunnelAuth};
+use server::{AppState, HealthConfig, TunnelAuth};
 
 #[derive(Parser)]
 #[command(
@@ -60,13 +61,55 @@ enum Command {
     },
 }
 
-/// `load_config` 的返回：`(隧道 name/token 列表, external_ws_base, 可选技能集)`
-type LoadedConfig = (Vec<(String, String)>, String, Option<Arc<SkillSet>>);
+/// `load_config` 的返回：隧道凭据、external_ws_base、可选技能集、心跳/探活配置。
+struct ServerConfig {
+    tunnels: Vec<(String, String)>,
+    external_ws_base: String,
+    skills: Option<Arc<SkillSet>>,
+    health: HealthConfig,
+}
 
-fn load_config(path: Option<&str>) -> anyhow::Result<LoadedConfig> {
+/// 读取 `[health]` 表：全部为可选秒级配置，缺省走 [`HealthConfig::default`]。
+fn load_health(doc: &toml::Value) -> HealthConfig {
+    let mut h = HealthConfig::default();
+    let secs = |key: &str| -> Option<u64> {
+        doc.get("health")
+            .and_then(|v: &Value| v.get(key))
+            .and_then(|v: &Value| v.as_integer())
+            .map(|i| i.max(0) as u64)
+    };
+    if let Some(v) = secs("heartbeat_interval_secs") {
+        h.heartbeat_interval = Duration::from_secs(v);
+    }
+    if let Some(v) = secs("heartbeat_timeout_secs") {
+        h.heartbeat_timeout = Duration::from_secs(v);
+    }
+    if let Some(v) = secs("probe_timeout_secs") {
+        h.probe_timeout = Duration::from_secs(v);
+    }
+    if let Some(v) = secs("first_response_timeout_secs") {
+        h.first_response_timeout = Duration::from_secs(v);
+    }
+    if let Some(v) = secs("request_timeout_secs") {
+        h.request_timeout = Duration::from_secs(v);
+    }
+    if let Some(v) = secs("reaper_interval_secs") {
+        h.reaper_interval = Duration::from_secs(v);
+    }
+    h
+}
+
+fn load_config(path: Option<&str>) -> anyhow::Result<ServerConfig> {
     let path = match path {
         Some(p) => p,
-        None => return Ok((vec![], String::new(), None)),
+        None => {
+            return Ok(ServerConfig {
+                tunnels: vec![],
+                external_ws_base: String::new(),
+                skills: None,
+                health: HealthConfig::default(),
+            })
+        }
     };
     let content = std::fs::read_to_string(path).with_context(|| format!("read config {}", path))?;
     let doc: toml::Value = toml::from_str(&content).context("parse config")?;
@@ -141,7 +184,12 @@ fn load_config(path: Option<&str>) -> anyhow::Result<LoadedConfig> {
             set
         });
 
-    Ok((tokens, ws_base, skills))
+    Ok(ServerConfig {
+        tunnels: tokens,
+        external_ws_base: ws_base,
+        skills,
+        health: load_health(&doc),
+    })
 }
 
 #[tokio::main]
@@ -159,21 +207,33 @@ async fn main() -> anyhow::Result<()> {
             config,
             external_ws_base,
         } => {
-            let (tokens, cfg_ws_base, skills) = load_config(config.as_deref())?;
-            if tokens.is_empty() {
+            let cfg = load_config(config.as_deref())?;
+            if cfg.tunnels.is_empty() {
                 anyhow::bail!("no tunnels configured; add [[tunnels]] to config");
             }
-            let ws_base = if cfg_ws_base.is_empty() {
+            let ws_base = if cfg.external_ws_base.is_empty() {
                 external_ws_base
             } else {
-                cfg_ws_base
+                cfg.external_ws_base
             };
-            let auth = TunnelAuth::from_list(&tokens);
+            let auth = TunnelAuth::from_list(&cfg.tunnels);
+            info!(
+                "health config: heartbeat_interval={}s heartbeat_timeout={}s probe_timeout={}s first_response_timeout={}s request_timeout={}s reaper_interval={}s",
+                cfg.health.heartbeat_interval.as_secs(),
+                cfg.health.heartbeat_timeout.as_secs(),
+                cfg.health.probe_timeout.as_secs(),
+                cfg.health.first_response_timeout.as_secs(),
+                cfg.health.request_timeout.as_secs(),
+                cfg.health.reaper_interval.as_secs(),
+            );
             let state = AppState {
                 registry: state::Registry::new(),
+                services: rrserver::registry::ServiceRegistry::new(),
                 auth,
                 external_ws_base: ws_base,
-                skills,
+                skills: cfg.skills,
+                health: cfg.health,
+                http: reqwest::Client::new(),
             };
             server::run_server(listen, state).await?;
         }
@@ -233,13 +293,53 @@ name = "other"
 token = "othertok"
 "#,
         );
-        let (tunnels, ws_base, skills) = load_config(Some(p)).unwrap();
+        let cfg = load_config(Some(p)).unwrap();
         std::fs::remove_file(p).ok();
-        assert_eq!(tunnels.len(), 2);
-        assert_eq!(tunnels[0], ("home".to_string(), "s3cr3t".to_string()));
-        assert_eq!(tunnels[1], ("other".to_string(), "othertok".to_string()));
-        assert_eq!(ws_base, "wss://rr.example.com/rr");
-        assert!(skills.is_none());
+        assert_eq!(cfg.tunnels.len(), 2);
+        assert_eq!(cfg.tunnels[0], ("home".to_string(), "s3cr3t".to_string()));
+        assert_eq!(
+            cfg.tunnels[1],
+            ("other".to_string(), "othertok".to_string())
+        );
+        assert_eq!(cfg.external_ws_base, "wss://rr.example.com/rr");
+        assert!(cfg.skills.is_none());
+        // 未配置 [health] 时走默认：30 分钟心跳 / 40 分钟阈值 / 1 分钟探活
+        assert_eq!(cfg.health.heartbeat_interval, Duration::from_secs(1800));
+        assert_eq!(cfg.health.heartbeat_timeout, Duration::from_secs(2400));
+        assert_eq!(cfg.health.probe_timeout, Duration::from_secs(60));
+        assert_eq!(cfg.health.first_response_timeout, Duration::from_secs(60));
+        assert_eq!(cfg.health.reaper_interval, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn load_config_parses_health_section() {
+        let path =
+            std::env::temp_dir().join(format!("rrsrv_main_health_{}.toml", std::process::id()));
+        let p = path.to_str().unwrap();
+        write_temp(
+            p,
+            r#"
+[[tunnels]]
+name = "home"
+token = "s3cr3t"
+
+[health]
+heartbeat_interval_secs = 30
+heartbeat_timeout_secs = 40
+probe_timeout_secs = 1
+first_response_timeout_secs = 2
+request_timeout_secs = 30
+reaper_interval_secs = 5
+"#,
+        );
+        let cfg = load_config(Some(p)).unwrap();
+        std::fs::remove_file(p).ok();
+        assert_eq!(cfg.health.heartbeat_interval, Duration::from_secs(30));
+        assert_eq!(cfg.health.heartbeat_timeout, Duration::from_secs(40));
+        assert_eq!(cfg.health.probe_timeout, Duration::from_secs(1));
+        assert_eq!(cfg.health.first_response_timeout, Duration::from_secs(2));
+        assert_eq!(cfg.health.request_timeout, Duration::from_secs(30));
+        assert_eq!(cfg.health.reaper_interval, Duration::from_secs(5));
     }
 
     #[test]
@@ -262,10 +362,10 @@ cooldown_secs = 30
 cost = 2
 "#,
         );
-        let (tunnels, _ws, skills) = load_config(Some(p)).unwrap();
+        let cfg = load_config(Some(p)).unwrap();
         std::fs::remove_file(p).ok();
-        assert_eq!(tunnels.len(), 1);
-        let set = skills.expect("skills should be enabled");
+        assert_eq!(cfg.tunnels.len(), 1);
+        let set = cfg.skills.expect("skills should be enabled");
         assert!(set.contains("fire"));
         let rule = set.get("fire").unwrap();
         assert_eq!(rule.cooldown, Duration::from_secs(30));
@@ -274,9 +374,10 @@ cost = 2
 
     #[test]
     fn load_config_missing_path_returns_empty() {
-        let (tunnels, ws_base, skills) = load_config(None).unwrap();
-        assert!(tunnels.is_empty());
-        assert!(ws_base.is_empty());
-        assert!(skills.is_none());
+        let cfg = load_config(None).unwrap();
+        assert!(cfg.tunnels.is_empty());
+        assert!(cfg.external_ws_base.is_empty());
+        assert!(cfg.skills.is_none());
+        assert_eq!(cfg.health.heartbeat_timeout, Duration::from_secs(2400));
     }
 }

@@ -282,6 +282,19 @@ class CorpusIndex:
         c.execute("CREATE TABLE IF NOT EXISTS terms(term TEXT PRIMARY KEY, df INTEGER)")
         c.execute("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_postings_term ON postings(term)")
+        # ---- 分类标签（见 taxonomy.py）：只在 `corpus-classify` 时写入 ----
+        # 单独建表而不是给 docs 加列：老索引库也能直接升级，不必重建（重建要几分钟）。
+        c.execute(
+            """CREATE TABLE IF NOT EXISTS doc_tags(
+                   doc_id TEXT, dim TEXT, tag TEXT)"""
+        )
+        c.execute("CREATE INDEX IF NOT EXISTS idx_doc_tags_tag ON doc_tags(tag)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_doc_tags_doc ON doc_tags(doc_id)")
+        c.execute(
+            """CREATE TABLE IF NOT EXISTS doc_meta(
+                   doc_id TEXT PRIMARY KEY,
+                   author TEXT, dynasty TEXT, era TEXT)"""
+        )
         c.commit()
 
     def build(self, src_dir: Path, *, min_tf: int = 2,
@@ -376,9 +389,17 @@ class CorpusIndex:
         return idf, df
 
     def _rank_docs(self, query_terms: Sequence[str], idf: dict[str, float],
-                   dfs: dict[str, int], top_docs: int) -> list[int]:
-        """书级 BM25：先找出最可能包含答案的几部书。"""
+                   dfs: dict[str, int], top_docs: int,
+                   allowed: set[int] | None = None) -> list[int]:
+        """书级 BM25：先找出最可能包含答案的几部书。
+
+        `allowed` 是标签过滤后的候选书集合（`None` = 不限制）。过滤放在
+        **排序之前**而不是之后：先排序再过滤会把候选全砍光（儿科书在
+        BM25 里本来就排不进前三），这里是「只在某类书里找最相关的几本」。
+        """
         if not query_terms:
+            return []
+        if allowed is not None and not allowed:
             return []
         n_docs, avg_dl = self._doc_lengths()
         # 只取最具区分度的查询词：
@@ -386,9 +407,16 @@ class CorpusIndex:
         # - 满库都是的泛词（df 超过 max_df_ratio）也丢弃——
         #   否则「妊娠禁忌候 孕妇饮食宜忌」这类复合查询会被「饮食」「宜忌」
         #   这类高频词带偏，真正罕见的「妊娠禁忌」反而排不上。
-        max_df = max(1, int(n_docs * self.max_query_df_ratio))
+        #
+        # 但**按标签过滤时不做泛词抑制**：df 是按全库算的，而候选书只剩几部。
+        # 「附子」在 696 部里出现 525 部，按全库标准它是彻头彻尾的泛词；
+        # 可在 5 部火神派书里，它恰恰是最该命中的词。候选集已经被标签收窄，
+        # 这时再抑制只会把查询词砍光（`--tags 火神派` 查「附子干姜」返回空
+        # 就是这么来的）。
+        max_df = None if allowed is not None else max(1, int(n_docs * self.max_query_df_ratio))
         ranked_terms = [
-            t for t in query_terms if t in idf and dfs.get(t, n_docs + 1) <= max_df
+            t for t in query_terms
+            if t in idf and (max_df is None or dfs.get(t, n_docs + 1) <= max_df)
         ]
         # 兜底：若过滤后一个词都不剩（查询全是泛词），退回按 IDF 取最罕见的若干个
         if not ranked_terms:
@@ -411,6 +439,8 @@ class CorpusIndex:
                 w = idf.get(term)
                 if not w:
                     continue
+                if allowed is not None and ord_ not in allowed:
+                    continue
                 norm = tf * (k1 + 1.0) / (tf + k1 * (1.0 - b + b * (dl.get(ord_, avg_dl) / avg_dl)))
                 scores[ord_] = scores.get(ord_, 0.0) + w * norm
         return [o for o, _ in sorted(scores.items(), key=lambda x: -x[1])[:top_docs]]
@@ -418,25 +448,37 @@ class CorpusIndex:
     def search(self, query: str, *, top_k: int = 5, top_docs: int = DEFAULT_TOP_DOCS,
                max_chars: int = DEFAULT_MAX_CHARS,
                overlap: int = DEFAULT_OVERLAP,
-               per_doc: int = DEFAULT_PER_DOC) -> list[ChunkHit]:
+               per_doc: int = DEFAULT_PER_DOC,
+               tags: Sequence[str] | None = None,
+               tag_groups: Sequence[Sequence[str]] | None = None) -> list[ChunkHit]:
         """检索：书级 BM25 收敛 -> 片段级 IDF 覆盖打分。
 
         `per_doc` 限制**同一部书最多进几条**：像《普济方》《本草纲目》这种
         几百万字的巨著，命中片段数远超小书，不设上限会把 top-k 全占满，
         等于把「检索多本书」退化成「在一本书里翻页」。
+
+        `tags` 限定检索范围（如 `["儿科"]`、`["火神派"]`，多个标签取**并集**）；
+        `tag_groups` 做跨维度交集（组内并集、组间交集，语义见
+        `doc_ords_for_tags`）。两者都需要先跑过 `corpus-classify` 写入
+        `doc_tags` 表；未分类时传标签只会返回空结果，故这里显式报错
+        而不是静默返回空。
         """
         q = normalize(query)
         q_terms = bigrams(q)
         if not q_terms:
             return []
         idf, df = self._term_stats(q_terms)
+        if tags or tag_groups:
+            allowed = self.doc_ords_for_tags(tags, groups=tag_groups)
+        else:
+            allowed = None
         # 整词（如「半夏泻心汤」）命中应显著压过零散 bigram 命中：
         # 用户问的是方名/药名，逐字拆开打分会让「恰好含 半夏 和 泻心 的段落」
         # 排在真正讲这个方的段落之前。
         phrases = [
             normalize(p) for p in _PHRASE_SPLIT_RE.split(query) if len(normalize(p)) >= 2
         ]
-        doc_ords = self._rank_docs(q_terms, idf, df, top_docs)
+        doc_ords = self._rank_docs(q_terms, idf, df, top_docs, allowed=allowed)
         if not doc_ords:
             return []
 
@@ -498,6 +540,90 @@ class CorpusIndex:
             {"ord": r[0], "doc_id": r[1], "title": r[2], "chars": r[3], "terms": r[4]}
             for r in rows
         ]
+
+    # ---------------- 分类标签（taxonomy.py） ----------------
+    def write_classification(self, books: Iterable) -> int:
+        """把分类结果写进 `doc_tags` / `doc_meta`（按 doc_id 全量覆盖）。
+
+        接受 `taxonomy.BookMeta` 的序列。这里不 import taxonomy：
+        那会造成循环引用（taxonomy 依赖本模块的 `iter_books`），
+        故按鸭子类型取 `doc_id / tags / author / dynasty / era`。
+        """
+        c = self._conn
+        with self._lock:
+            c.execute("DELETE FROM doc_tags")
+            c.execute("DELETE FROM doc_meta")
+            tags: list[tuple[str, str, str]] = []
+            metas: list[tuple[str, str, str, str]] = []
+            for b in books:
+                for dim, tag_list in (getattr(b, "tags", None) or {}).items():
+                    for tag in tag_list:
+                        tags.append((b.doc_id, dim, tag))
+                metas.append((b.doc_id, getattr(b, "author", "") or "",
+                              getattr(b, "dynasty", "") or "",
+                              getattr(b, "era", "") or ""))
+            c.executemany("INSERT INTO doc_tags(doc_id, dim, tag) VALUES(?,?,?)", tags)
+            c.executemany(
+                "INSERT OR REPLACE INTO doc_meta(doc_id, author, dynasty, era)"
+                " VALUES(?,?,?,?)", metas)
+            c.commit()
+        return len(tags)
+
+    def tag_counts(self, dim: str | None = None) -> dict[str, int]:
+        """各标签的部数统计；`dim` 指定时只统计该维度。"""
+        if dim:
+            rows = self._query(
+                "SELECT tag, COUNT(*) FROM doc_tags WHERE dim=? GROUP BY tag", (dim,))
+        else:
+            rows = self._query("SELECT tag, COUNT(*) FROM doc_tags GROUP BY tag")
+        return {t: int(n) for t, n in sorted(rows, key=lambda r: (-r[1], r[0]))}
+
+    def _ords_for_one_group(self, tags: Sequence[str]) -> set[int]:
+        """一组标签 -> 书序号集合（组内取并集）。"""
+        wanted = [t for t in (tags or ()) if t]
+        if not wanted:
+            return set()
+        qs = ",".join("?" * len(wanted))
+        rows = self._query(
+            f"SELECT DISTINCT d.ord FROM docs d JOIN doc_tags t ON t.doc_id = d.doc_id"
+            f" WHERE t.tag IN ({qs})", wanted)
+        return {int(r[0]) for r in rows}
+
+    def doc_ords_for_tags(self, tags: Sequence[str] | None = None, *,
+                          groups: Sequence[Sequence[str]] | None = None) -> set[int]:
+        """标签 -> 书序号集合。
+
+        两种用法：
+
+        - `tags=["儿科", "产科"]`：**并集**（任一命中即可）；
+        - `groups=[["方书方剂"], ["儿科", "温病疫病"]]`：组内并集、
+          **组间交集**，即「方书 AND (儿科 OR 温病)」。
+
+        为什么需要 `groups`：四个分类维度是正交的，「儿科的方书」在
+        标签层面是两个维度的交集，扁平并集会把「儿科的医案」和「内科的方书」
+        一起捞进来——那不是调用方想要的。sub-agent 的检索域正是
+        「体裁/功能（静态）AND 科室（动态）」这种跨维度组合。
+        """
+        wanted_groups = [g for g in (groups or ()) if g]
+        flat = [t for t in (tags or ()) if t]
+        if not wanted_groups and not flat:
+            return set()
+
+        ords: set[int] | None = None
+        for g in wanted_groups:
+            g_ords = self._ords_for_one_group(g)
+            ords = g_ords if ords is None else (ords & g_ords)
+        if flat:
+            flat_ords = self._ords_for_one_group(flat)
+            ords = flat_ords if ords is None else (ords | flat_ords)
+
+        result = ords or set()
+        if not result and not self._query("SELECT 1 FROM doc_tags LIMIT 1"):
+            raise ValueError(
+                "索引库里没有分类标签，先跑 `python -m rag corpus-classify`；"
+                "否则按标签过滤只会永远返回空结果"
+            )
+        return result
 
     def close(self) -> None:
         self._conn.close()

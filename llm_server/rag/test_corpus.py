@@ -12,17 +12,34 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from corpus import (  # noqa: E402
-    CorpusIndex,
-    bigrams,
-    chunk_text,
-    count_bigrams,
-    iter_books,
-    normalize,
-    parse_sections,
-    read_text,
-)
-from eval_rag import run_eval  # noqa: E402
+try:
+    from .corpus import (
+        CorpusIndex,
+        bigrams,
+        chunk_text,
+        count_bigrams,
+        iter_books,
+        normalize,
+        parse_sections,
+        read_text,
+    )
+    from .eval_rag import run_eval
+    from .taxonomy import scan_corpus
+except ImportError:  # 与 test_rag.py 一致：直接 `python -m unittest test_corpus` 时退化为平铺导入
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from corpus import (  # noqa: E402
+        CorpusIndex,
+        bigrams,
+        chunk_text,
+        count_bigrams,
+        iter_books,
+        normalize,
+        parse_sections,
+        read_text,
+    )
+    from eval_rag import run_eval  # noqa: E402
+    from taxonomy import scan_corpus  # noqa: E402
 
 # 片段正文（GB18030 写出，测试里再读回来）
 BOOK_A = """<篇名>测试本草
@@ -46,6 +63,79 @@ BOOK_B = """<篇名>测试方书
 <篇名>桂枝汤
 内容：太阳中风，阳浮而阴弱。啬啬恶寒，淅淅恶风，翕翕发热，鼻鸣干呕者，桂枝汤主之。
 """
+
+# 儿科方书：既是「儿科」又是「方书方剂」，用来验证跨维度交集
+BOOK_C = """<篇名>测试幼科方
+书名：测试幼科方
+作者：第三人
+
+<目录>
+<篇名>小儿咳嗽
+内容：小儿发热咳嗽，宜用杏苏散加减。
+<篇名>小儿痘疹
+内容：小儿痘疹初起，发热咳嗽，宜升麻葛根汤。
+"""
+
+
+class TestTagFiltering(unittest.TestCase):
+    """按标签收窄检索范围。
+
+    四个分类维度正交，「儿科的方书」是两个维度的**交集**——扁平并集会把
+    「儿科的医案」和「内科的方书」一起捞进来，那不是调用方想要的。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.dir = Path(cls._tmp.name) / "corpus"
+        cls.dir.mkdir()
+        # 儿科方书：既是儿科又是方书
+        (cls.dir / "001-测试幼科方.txt").write_bytes(BOOK_C.encode("gb18030"))
+        # 本草书：既不是儿科也不是方书
+        (cls.dir / "002-测试本草.txt").write_bytes(BOOK_A.encode("gb18030"))
+        cls.db = Path(cls._tmp.name) / "corpus.sqlite3"
+        idx = CorpusIndex(cls.db)
+        idx.build(cls.dir, min_tf=1)
+        idx.write_classification(list(scan_corpus(cls.dir)))
+        cls.idx = idx
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.idx.close()
+        cls._tmp.cleanup()
+
+    def test_flat_tags_are_union(self):
+        """扁平 `tags` 是并集：儿科 OR 方书 -> 两本都进。"""
+        ords = self.idx.doc_ords_for_tags(["儿科", "本草药物"])
+        self.assertEqual(len(ords), 2)
+
+    def test_tag_groups_are_intersection(self):
+        """`tag_groups` 组内并集、组间交集。"""
+        only_ped = self.idx.doc_ords_for_tags(groups=[["儿科"]])
+        self.assertEqual(len(only_ped), 1)
+        # 儿科 AND 方书方剂 -> 只有《测试幼科方》
+        both = self.idx.doc_ords_for_tags(groups=[["儿科"], ["方书方剂"]])
+        self.assertEqual(both, only_ped)
+        # 儿科 AND 本草药物 -> 空（没有既是儿科又是本草的书）
+        self.assertEqual(self.idx.doc_ords_for_tags(
+            groups=[["儿科"], ["本草药物"]]), set())
+
+    def test_search_with_tag_groups(self):
+        hits = self.idx.search("发热咳嗽", top_k=3, tag_groups=[["儿科"], ["方书方剂"]])
+        self.assertTrue(hits)
+        self.assertTrue(all(h.book == "测试幼科方" for h in hits))
+
+    def test_unclassified_db_raises_instead_of_silent_empty(self):
+        """没跑过分类就按标签过滤，必须显式报错而不是静默返回空。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "corpus"
+            src.mkdir()
+            (src / "001-测试幼科方.txt").write_bytes(BOOK_C.encode("gb18030"))
+            idx = CorpusIndex(Path(d) / "db.sqlite3")
+            idx.build(src, min_tf=1)
+            with self.assertRaises(ValueError):
+                idx.doc_ords_for_tags(groups=[["儿科"]])
+            idx.close()
 
 
 class TestTextUtils(unittest.TestCase):

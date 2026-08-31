@@ -10,7 +10,7 @@
 ```powershell
 cd e2e_tests
 .\run_full_chain_e2e.ps1                 # harness(镜像) + pytest + 前端契约测试
-.\run_full_chain_e2e.ps1 -WithRrserver   # 额外跑 rrserver 隧道（需 TCM_RRSERVER_BIN）
+.\run_full_chain_e2e.ps1 -WithRrserver   # 额外跑 rrserver 隧道 + 注册/心跳/注销（需 TCM_RRSERVER_BIN）
 .\run_full_chain_e2e.ps1 -SkipFrontend   # 只跑 pytest
 .\run_full_chain_e2e.ps1 -SkipBuild      # 复用已有镜像
 

@@ -69,7 +69,8 @@ docker compose up --build
 
 | 端点 | 说明 |
 |---|---|
-| `GET /healthz` | 健康检查（含 LM Studio 连通性、工具数量） |
+| `GET /healthz` | 健康检查（含 LM Studio 连通性、工具数量、rrserver 注册状态） |
+| `GET /rr/heartbeat` | rrserver 心跳探活端点（以 `transport=http` 注册时由云端调用） |
 | `GET /v1/models` | 透传 LM Studio 模型列表 |
 | `POST /v1/chat/completions` | OpenAI chat 兼容；带 `x-tcm-agent: 1` 或 `"agent": true` 时走网关内 agent 循环 |
 | `POST /v1/responses` | 透传 LM Studio Responses API |
@@ -91,6 +92,40 @@ POST /v1/agent/run
 
 返回 `content`（最终答案）+ `trace`（每轮工具调用记录）+ `usage`（token 汇总）。
 
+## rrserver 注册与心跳（可选）
+
+配置 `RR_SERVER_BASE` 后，本服务会**主动**与 `server/rrserver` 建立注册关系
+（`app/rrclient.py`，生命周期由 `Runtime` 托管，注册失败不阻塞服务启动）：
+
+```
+llm_server  ──1. POST /api/register(name,token[,endpoint])──▶  rrserver
+            ◀──   hash_code + heartbeat_interval  ───────────┘
+            ──2. 每 30 分钟 POST /api/heartbeat(name,hash)──▶  rrserver
+            ◀──3. 云端 40 分钟没心跳 → GET /rr/heartbeat 探活─┘
+            ──4. 关机时 POST /api/unregister(name,hash)────▶  rrserver
+```
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `RR_SERVER_BASE` | 空 | rrserver 基址（如 `https://<域名>/rr`）；**留空即不启用** |
+| `RR_SERVICE_NAME` | `llm-server` | 须与 rrserver 配置 `[[tunnels]]` 的 name 一致 |
+| `RR_SERVICE_TOKEN` | 空 | 与 rrserver 对应隧道的 token 一致 |
+| `RR_SERVICE_ENDPOINT` | 空 | 本服务可被 rrserver 直达的基址（如 `http://llm_server:8000`）；留空则按 `transport=ws` 注册，转发仍由 rrserver client 的反向隧道承载 |
+| `RR_TIMEOUT_SECS` / `RR_RETRY_INTERVAL_SECS` | `10` / `30` | 请求超时 / 失败退避间隔 |
+
+心跳周期**不在本侧配置**：注册响应里的 `heartbeat_interval_millis` 就是唯一依据
+（由 rrserver 的 `[health] heartbeat_interval_secs` 决定，默认 30 分钟）。
+
+行为约定：
+
+- 每次注册都会拿到**新的 hash code**（重连、重启可区分）；
+- 云端探活失败会注销注册，本服务下一次心跳将收到 **404**，随后自动重新注册；
+- `GET /healthz` 与 `GET /rr/heartbeat` 会返回 `rrserver` 字段，展示注册状态、
+  距上次心跳的时间与失败次数，便于排查。
+
+云端侧的回收规则（30 分钟心跳 / 40 分钟静默 / 1 分钟探活等待）见
+[`server/rrserver/README.md`](../server/rrserver/README.md)。
+
 ## 四个核心模块
 
 | 模块 | 路径 | 说明 |
@@ -99,6 +134,7 @@ POST /v1/agent/run
 | tool calling | `app/tools/` | `ToolRegistry` 统一管理 schema + handler；内置工具见 `builtin.py` |
 | MCP | `app/mcp/` | 极简 Streamable HTTP Client（`initialize`/`tools/list`/`tools/call`），`MCP_CLIENTS` 声明外部 server |
 | agent | `app/agent/loop.py` | ReAct 循环：调用模型 → 执行工具 → 回填结果 → 直到纯文本或达上限 |
+| rrserver 注册 | `app/rrclient.py` | 主动注册换 hash code + 周期心跳 + 失效重注册 + 关机注销 |
 
 ### 接入 MCP Server
 

@@ -23,15 +23,17 @@ use axum::{
 };
 use futures::{SinkExt, Stream, StreamExt};
 use serde::Deserialize;
+use serde_json::json;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
 use tracing::{error, info, warn};
 
 use crate::protocol::{
     is_hop_by_hop_str, ClientToServer, RequestMsg, ResponseChunkMsg, ServerToClient,
 };
+use crate::registry::{Registration, ServiceRegistry, Transport};
 use crate::skill::{JudgeError, SkillSet};
 use crate::state::{PendingResponse, Registry, TunnelCommand};
 
@@ -72,9 +74,12 @@ mod tests {
     fn test_state() -> AppState {
         AppState {
             registry: Registry::new(),
+            services: ServiceRegistry::new(),
             auth: auth(),
             external_ws_base: "ws://127.0.0.1/rr".into(),
             skills: None,
+            health: HealthConfig::default(),
+            http: reqwest::Client::new(),
         }
     }
 
@@ -104,9 +109,12 @@ mod tests {
     fn register_constructs_external_ws_url() {
         let state = AppState {
             registry: Registry::new(),
+            services: ServiceRegistry::new(),
             auth: auth(),
             external_ws_base: "wss://rr.example.com/rr".into(),
             skills: None,
+            health: HealthConfig::default(),
+            http: reqwest::Client::new(),
         };
         let ws_url = format!(
             "{}/ws/{}?token={}",
@@ -241,9 +249,12 @@ mod tests {
         set.register(skill);
         AppState {
             registry: Registry::new(),
+            services: ServiceRegistry::new(),
             auth: auth(),
             external_ws_base: "ws://127.0.0.1/rr".into(),
             skills: Some(set),
+            health: HealthConfig::default(),
+            http: reqwest::Client::new(),
         }
     }
 
@@ -314,6 +325,463 @@ mod tests {
         assert_eq!(r2.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
+    // ---- 注册 / 心跳 / 探活回收 ----
+    use crate::protocol::HeartbeatAck;
+    use axum::{routing::get as axum_get, Router as AxumRouter};
+
+    /// 可自定义超时参数的 state（测试里用毫秒级阈值驱动探活/回收）。
+    fn state_with_health(mut health: HealthConfig) -> AppState {
+        health.request_timeout = health.request_timeout.max(Duration::from_secs(5));
+        AppState {
+            registry: Registry::new(),
+            services: ServiceRegistry::new(),
+            auth: auth(),
+            external_ws_base: "ws://127.0.0.1/rr".into(),
+            skills: None,
+            health,
+            http: reqwest::Client::new(),
+        }
+    }
+
+    async fn post_json(
+        app: &axum::Router,
+        uri: &str,
+        body: &str,
+    ) -> (StatusCode, serde_json::Value) {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value =
+            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+        (status, v)
+    }
+
+    #[tokio::test]
+    async fn register_issues_independent_hash_code() {
+        let app = build_router(test_state());
+        let (s1, v1) =
+            post_json(&app, "/api/register", r#"{"name":"home","token":"s3cr3t"}"#).await;
+        let (s2, v2) =
+            post_json(&app, "/api/register", r#"{"name":"home","token":"s3cr3t"}"#).await;
+        assert_eq!(s1, StatusCode::OK);
+        assert_eq!(s2, StatusCode::OK);
+        let h1 = v1["hash_code"].as_str().expect("hash_code present");
+        let h2 = v2["hash_code"].as_str().expect("hash_code present");
+        assert_eq!(h1.len(), 16);
+        assert_ne!(h1, h2, "每次注册都应签发独立的 hash code");
+        // 不带 endpoint 时默认走 WS 反向隧道，并下发 30 分钟心跳周期（毫秒）
+        assert_eq!(v1["transport"], "ws");
+        assert_eq!(v1["heartbeat_interval_millis"], 1_800_000);
+        assert!(v1["ws_url"].as_str().unwrap().contains("/ws/home"));
+    }
+
+    #[tokio::test]
+    async fn register_with_endpoint_uses_http_transport() {
+        let app = build_router(test_state());
+        let (status, v) = post_json(
+            &app,
+            "/api/register",
+            r#"{"name":"home","token":"s3cr3t","endpoint":"http://llm_server:8000/"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(v["transport"], "http");
+        assert_eq!(v["heartbeat_path"], "/rr/heartbeat");
+    }
+
+    #[tokio::test]
+    async fn register_with_unknown_or_incomplete_transport_is_rejected() {
+        let app = build_router(test_state());
+        let (status, _) = post_json(
+            &app,
+            "/api/register",
+            r#"{"name":"home","token":"s3cr3t","transport":"grpc"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        let (status, _) = post_json(
+            &app,
+            "/api/register",
+            r#"{"name":"home","token":"s3cr3t","transport":"http"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "http 形态必须带 endpoint");
+    }
+
+    #[tokio::test]
+    async fn heartbeat_accepts_hash_and_rejects_unknown() {
+        let app = build_router(test_state());
+        let (_, reg) =
+            post_json(&app, "/api/register", r#"{"name":"home","token":"s3cr3t"}"#).await;
+        let hash = reg["hash_code"].as_str().unwrap();
+
+        let (status, v) = post_json(
+            &app,
+            "/api/heartbeat",
+            &format!(r#"{{"name":"home","hash":"{}"}}"#, hash),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(v["status"], "ok");
+        assert_eq!(v["name"], "home");
+        assert_eq!(v["heartbeat_interval_millis"], 1_800_000);
+
+        let (status, _) = post_json(
+            &app,
+            "/api/heartbeat",
+            r#"{"name":"home","hash":"deadbeefdeadbeef"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn heartbeat_requires_matching_name_and_payload() {
+        let app = build_router(test_state());
+        let (_, reg) =
+            post_json(&app, "/api/register", r#"{"name":"home","token":"s3cr3t"}"#).await;
+        let hash = reg["hash_code"].as_str().unwrap();
+
+        // hash 有效但 name 与注册名不符 → 404（防止拿别人的 hash 顶替）
+        let (status, _) = post_json(
+            &app,
+            "/api/heartbeat",
+            &format!(r#"{{"name":"other","hash":"{}"}}"#, hash),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        // 缺 name 字段 → 请求体非法
+        let (status, _) =
+            post_json(&app, "/api/heartbeat", &format!(r#"{{"hash":"{}"}}"#, hash)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn services_lists_registrations_with_stale_flag() {
+        let app = build_router(test_state());
+        let _ = post_json(&app, "/api/register", r#"{"name":"home","token":"s3cr3t"}"#).await;
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/services")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let v: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let list = v["services"].as_array().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0]["name"], "home");
+        assert_eq!(list[0]["stale"], false);
+        assert_eq!(v["heartbeat_timeout_millis"], 2_400_000);
+        assert_eq!(list[0]["heartbeat_interval_millis"], 1_800_000);
+    }
+
+    #[tokio::test]
+    async fn unregister_closes_registration_and_tunnel() {
+        let state = test_state();
+        let (tx, _rx) = mpsc::unbounded_channel();
+        state.registry.register("home", tx).await;
+        let app = build_router(state.clone());
+        let (_, reg) =
+            post_json(&app, "/api/register", r#"{"name":"home","token":"s3cr3t"}"#).await;
+        let hash = reg["hash_code"].as_str().unwrap();
+
+        let (status, v) = post_json(
+            &app,
+            "/api/unregister",
+            &format!(r#"{{"name":"home","hash":"{}"}}"#, hash),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(v["status"], "removed");
+        // 注册与隧道通道都被清理
+        assert!(state.services.find_by_hash(hash).await.is_none());
+        let (status, _) = post_json(
+            &app,
+            "/api/heartbeat",
+            &format!(r#"{{"name":"home","hash":"{}"}}"#, hash),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    /// 起一个暴露 `/rr/heartbeat` 的本地服务，返回其基址。
+    async fn start_probe_endpoint(alive: bool) -> String {
+        let status = if alive {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        };
+        let app = AxumRouter::new().route(
+            HEARTBEAT_PATH,
+            axum_get(move || async move { (status, "probe") }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{}", addr)
+    }
+
+    /// 模拟家庭端：连着隧道并按 `alive` 回应探活。
+    fn spawn_fake_home(
+        state: AppState,
+        mut rx: mpsc::UnboundedReceiver<TunnelCommand>,
+        alive: bool,
+    ) {
+        tokio::spawn(async move {
+            while let Some(cmd) = rx.recv().await {
+                if let TunnelCommand::Heartbeat(p) = cmd {
+                    state
+                        .registry
+                        .resolve_probe(HeartbeatAck {
+                            probe_id: p.probe_id,
+                            alive,
+                        })
+                        .await;
+                }
+            }
+        });
+    }
+
+    #[tokio::test]
+    async fn probe_ws_reports_no_channel_without_tunnel() {
+        let state = state_with_health(HealthConfig {
+            probe_timeout: Duration::from_millis(200),
+            ..Default::default()
+        });
+        let reg = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        assert_eq!(probe_service(&state, &reg).await, ProbeResult::NoChannel);
+    }
+
+    #[tokio::test]
+    async fn reap_once_keeps_registration_when_probe_succeeds() {
+        let state = state_with_health(HealthConfig {
+            heartbeat_timeout: Duration::from_millis(10),
+            probe_timeout: Duration::from_secs(2),
+            ..Default::default()
+        });
+        let (tx, rx) = mpsc::unbounded_channel::<TunnelCommand>();
+        state.registry.register("home", tx).await;
+        let reg = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        spawn_fake_home(state.clone(), rx, true);
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        reap_once(&state).await;
+        assert!(
+            state.services.find_by_hash(&reg.hash).await.is_some(),
+            "探活成功的服务不应被注销"
+        );
+        // 探活成功后静默时间归零，下一轮不会再重复探活
+        assert!(state
+            .services
+            .stale(state.health.heartbeat_timeout)
+            .await
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn reap_once_drops_registration_when_probe_reports_dead() {
+        let state = state_with_health(HealthConfig {
+            heartbeat_timeout: Duration::from_millis(10),
+            probe_timeout: Duration::from_secs(2),
+            ..Default::default()
+        });
+        let (tx, rx) = mpsc::unbounded_channel::<TunnelCommand>();
+        state.registry.register("home", tx).await;
+        let reg = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        spawn_fake_home(state.clone(), rx, false);
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        reap_once(&state).await;
+        assert!(state.services.find_by_hash(&reg.hash).await.is_none());
+        assert!(
+            !state
+                .registry
+                .send_request(
+                    "home",
+                    RequestMsg {
+                        req_id: "x".into(),
+                        method: "GET".into(),
+                        path: "/".into(),
+                        headers: vec![],
+                        body: vec![],
+                    }
+                )
+                .await,
+            "探活失败后隧道通道应被关闭"
+        );
+    }
+
+    #[tokio::test]
+    async fn reap_once_drops_registration_when_probe_times_out() {
+        // 家庭端连着隧道但从不回应探活：应在 probe_timeout 后判定失联
+        let state = state_with_health(HealthConfig {
+            heartbeat_timeout: Duration::from_millis(10),
+            probe_timeout: Duration::from_millis(150),
+            ..Default::default()
+        });
+        let (tx, _rx) = mpsc::unbounded_channel::<TunnelCommand>();
+        state.registry.register("home", tx).await;
+        let reg = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        reap_once(&state).await;
+        assert!(state.services.find_by_hash(&reg.hash).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn reap_once_keeps_http_service_that_answers_probe() {
+        let endpoint = start_probe_endpoint(true).await;
+        let state = state_with_health(HealthConfig {
+            heartbeat_timeout: Duration::from_millis(10),
+            probe_timeout: Duration::from_secs(2),
+            ..Default::default()
+        });
+        let reg = state
+            .services
+            .register(
+                "home",
+                Transport::Http,
+                Some(endpoint),
+                Duration::from_secs(1800),
+            )
+            .await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        reap_once(&state).await;
+        assert!(state.services.find_by_hash(&reg.hash).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn reap_once_drops_http_service_with_abnormal_probe() {
+        // 服务在但探活端点返回 5xx：属于「返回的是非正常的情况」
+        let endpoint = start_probe_endpoint(false).await;
+        let state = state_with_health(HealthConfig {
+            heartbeat_timeout: Duration::from_millis(10),
+            probe_timeout: Duration::from_secs(2),
+            ..Default::default()
+        });
+        let reg = state
+            .services
+            .register(
+                "home",
+                Transport::Http,
+                Some(endpoint),
+                Duration::from_secs(1800),
+            )
+            .await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        reap_once(&state).await;
+        assert!(state.services.find_by_hash(&reg.hash).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn reap_once_drops_http_service_that_is_unreachable() {
+        let state = state_with_health(HealthConfig {
+            heartbeat_timeout: Duration::from_millis(10),
+            probe_timeout: Duration::from_millis(300),
+            ..Default::default()
+        });
+        let reg = state
+            .services
+            .register(
+                "home",
+                Transport::Http,
+                Some("http://127.0.0.1:1".to_string()),
+                Duration::from_secs(1800),
+            )
+            .await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        reap_once(&state).await;
+        assert!(state.services.find_by_hash(&reg.hash).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn close_registration_must_not_drop_a_newer_tunnel() {
+        // 旧注册（hash A）被回收时，同名服务已经重新注册（hash B）并建了新隧道：
+        // 旧注册的收尾不得关掉新隧道。
+        let state = test_state();
+        let (tx, _rx) = mpsc::unbounded_channel::<TunnelCommand>();
+        state.registry.register("home", tx).await;
+        let old = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        let new = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        assert_ne!(old.hash, new.hash);
+
+        close_registration(&state, &old).await;
+        // 新注册仍在，且隧道仍可下发命令
+        assert!(state.services.find_by_hash(&new.hash).await.is_some());
+        assert!(
+            state
+                .registry
+                .send_heartbeat("home", "probe-new-tunnel")
+                .await
+        );
+
+        // 而注销当前 hash 时才真正关闭隧道
+        close_registration(&state, &new).await;
+        assert!(
+            !state
+                .registry
+                .send_heartbeat("home", "probe-after-close")
+                .await
+        );
+    }
+
+    #[tokio::test]
+    async fn ws_connection_accepts_hash_code_as_credential() {
+        // 注册后拿到的 hash code 也可以作为 WS 接入凭证（无需再带 token）
+        let state = test_state();
+        let reg = state
+            .services
+            .register("home", Transport::Ws, None, Duration::from_secs(1800))
+            .await;
+        assert!(state.services.matches_hash("home", &reg.hash).await);
+    }
+
     #[tokio::test]
     async fn proxy_skips_gate_when_no_x_skill_header() {
         // 即使配置了 SkillSet，未携带 X-Skill 头时闸门不生效，请求照常转发
@@ -338,23 +806,75 @@ mod tests {
     }
 }
 
+/// 心跳 / 探活 / 转发超时配置（默认值即需求约定的时长）。
+#[derive(Clone, Debug)]
+pub struct HealthConfig {
+    /// 服务上报心跳的周期（下发注册结果告知对方）：默认 30 分钟。
+    pub heartbeat_interval: Duration,
+    /// 超过多久没心跳就主动发起探活：默认 40 分钟。
+    pub heartbeat_timeout: Duration,
+    /// 探活等待回应的上限：默认 1 分钟；超时视为服务不可用。
+    pub probe_timeout: Duration,
+    /// 转发后等待「首个响应」的时间：默认 1 分钟；到点先探活确认服务是否还在运行。
+    pub first_response_timeout: Duration,
+    /// 单次转发的总超时：默认 600 秒（需小于 nginx 的 proxy_read_timeout）。
+    pub request_timeout: Duration,
+    /// 心跳回收任务的扫描周期：默认 60 秒。
+    pub reaper_interval: Duration,
+}
+
+impl Default for HealthConfig {
+    fn default() -> Self {
+        Self {
+            heartbeat_interval: Duration::from_secs(30 * 60),
+            heartbeat_timeout: Duration::from_secs(40 * 60),
+            probe_timeout: Duration::from_secs(60),
+            first_response_timeout: Duration::from_secs(60),
+            request_timeout: Duration::from_secs(600),
+            reaper_interval: Duration::from_secs(60),
+        }
+    }
+}
+
 /// 服务器共享状态。
 #[derive(Clone)]
 pub struct AppState {
     pub registry: Registry,
+    /// llm_server 侧服务的注册中心（hash code + 心跳）。
+    pub services: ServiceRegistry,
     pub auth: TunnelAuth,
     /// 外部可达的 WS 基址，用于构造家庭端的 ws_url（如 wss://rr.example.com/rr）。
     pub external_ws_base: String,
     /// 可选技能闸门：配置了 `SkillSet` 后，带 `X-Skill` 头的请求会做冷却 / 资源 / 状态校验。
     /// `None` 表示不启用闸门（所有请求按原逻辑直接转发）。
     pub skills: Option<Arc<SkillSet>>,
+    /// 心跳 / 探活 / 转发超时配置。
+    pub health: HealthConfig,
+    /// 出站 HTTP 客户端：HTTP 直连形态的转发与探活复用同一连接池。
+    pub http: reqwest::Client,
 }
 
 #[derive(Deserialize)]
 pub struct RegisterReq {
     pub name: String,
     pub token: String,
+    /// 服务自身可被云端直达的基址（HTTP 直连形态）；缺省表示走 WS 反向隧道。
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// 接入形态：`ws`（默认）/ `http`。
+    #[serde(default)]
+    pub transport: Option<String>,
 }
+
+/// 心跳 / 注销：`hash` 为注册时签发的 hash code，`name` 必须与注册名一致。
+#[derive(Deserialize)]
+pub struct HeartbeatReq {
+    pub hash: String,
+    pub name: String,
+}
+
+/// HTTP 直连形态下，云端探活时访问的路径。
+pub const HEARTBEAT_PATH: &str = "/rr/heartbeat";
 
 #[derive(Deserialize)]
 pub struct WsQuery {
@@ -401,6 +921,9 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/api/register", post(register_handler))
+        .route("/api/heartbeat", post(heartbeat_handler))
+        .route("/api/unregister", post(unregister_handler))
+        .route("/api/services", get(services_handler))
         .route("/ws/:name", get(ws_handler))
         .route(
             "/t/:name/*rest",
@@ -418,6 +941,8 @@ pub fn build_router(state: AppState) -> Router {
 }
 
 pub async fn run_server(listen: String, state: AppState) -> anyhow::Result<()> {
+    // 心跳回收任务：定期扫描静默服务并主动探活，失败则注销注册。
+    spawn_reaper(state.clone());
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     info!("rrserver listening on {}", listen);
@@ -425,26 +950,281 @@ pub async fn run_server(listen: String, state: AppState) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// 注册：校验 name + token，签发一个**独立 hash code** 并返回接入所需信息。
 async fn register_handler(
     State(state): State<AppState>,
     Json(req): Json<RegisterReq>,
 ) -> impl IntoResponse {
     if !state.auth.check(&req.name, &req.token) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "bad token"}))).into_response();
+    }
+    // 形态：显式 transport 优先；否则有 endpoint 就走 HTTP 直连，反之走 WS 反向隧道。
+    let transport = match req.transport.as_deref().map(Transport::parse) {
+        Some(Some(t)) => t,
+        Some(None) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": format!("unknown transport: {:?}", req.transport)})),
+            )
+                .into_response();
+        }
+        None => match &req.endpoint {
+            Some(_) => Transport::Http,
+            None => Transport::Ws,
+        },
+    };
+    let endpoint = req
+        .endpoint
+        .map(|e| e.trim_end_matches('/').to_string())
+        .filter(|e| !e.is_empty());
+    if transport == Transport::Http && endpoint.is_none() {
         return (
-            StatusCode::FORBIDDEN,
-            Json(serde_json::json!({"error": "bad token"})),
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "transport=http requires a non-empty endpoint"})),
         )
             .into_response();
     }
+
+    // 心跳周期由云端统一决定（配置文件 `[health] heartbeat_interval_secs`），
+    // 注册响应里把它下发给服务，服务按此周期上报。
+    let interval = state.health.heartbeat_interval;
+    let reg = state
+        .services
+        .register(&req.name, transport, endpoint.clone(), interval)
+        .await;
     let ws_url = format!(
         "{}/ws/{}?token={}",
         state.external_ws_base, req.name, req.token
     );
+    info!(
+        "service '{}' registered: hash={} transport={} endpoint={:?} heartbeat_interval={}s",
+        req.name,
+        reg.hash,
+        transport.as_str(),
+        endpoint,
+        interval.as_secs()
+    );
     (
         StatusCode::OK,
-        Json(serde_json::json!({ "name": req.name, "ws_url": ws_url })),
+        Json(json!({
+            "name": req.name,
+            "ws_url": ws_url,
+            "hash_code": reg.hash,
+            "transport": transport.as_str(),
+            // 周期统一用毫秒下发：秒级字段在亚秒场景（测试 / 极短周期）会退化成 0
+            "heartbeat_interval_millis": interval.as_millis() as u64,
+            "heartbeat_path": HEARTBEAT_PATH,
+        })),
     )
         .into_response()
+}
+
+/// 心跳上报：llm_server 侧服务按注册时下发的周期（默认 30 分钟）主动调用，
+/// 用 hash code 作为凭证；注册已不存在时返回 404，调用方应重新注册。
+async fn heartbeat_handler(
+    State(state): State<AppState>,
+    Json(req): Json<HeartbeatReq>,
+) -> impl IntoResponse {
+    match state.services.heartbeat(&req.hash).await {
+        Some(reg) if reg.name == req.name => {
+            info!(
+                "heartbeat from '{}' (hash={} transport={})",
+                reg.name,
+                reg.hash,
+                reg.transport.as_str()
+            );
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "status": "ok",
+                    "name": reg.name,
+                    "hash": reg.hash,
+                    "heartbeat_interval_millis": reg.heartbeat_interval.as_millis() as u64,
+                })),
+            )
+                .into_response()
+        }
+        _ => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "unknown registration"})),
+        )
+            .into_response(),
+    }
+}
+
+/// 主动注销：关闭注册维护并断开对应隧道通道（服务优雅下线时调用）。
+/// 心跳回收任务判定服务失联时走的也是同一套清理逻辑（见 [`reap_once`]）。
+async fn unregister_handler(
+    State(state): State<AppState>,
+    Json(req): Json<HeartbeatReq>,
+) -> impl IntoResponse {
+    let reg = match state.services.remove_by_hash(&req.hash).await {
+        Some(r) if r.name == req.name => r,
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "unknown registration"})),
+            )
+                .into_response();
+        }
+    };
+    state.registry.unregister(&reg.name).await;
+    warn!(
+        "service '{}' (hash={}) unregistered by request; tunnel closed",
+        reg.name, reg.hash
+    );
+    (
+        StatusCode::OK,
+        Json(json!({"status": "removed", "name": reg.name, "hash": reg.hash})),
+    )
+        .into_response()
+}
+
+/// 注册总览（运维 / 诊断）：每条注册的状态与静默时长。
+async fn services_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let timeout = state.health.heartbeat_timeout;
+    let services: Vec<serde_json::Value> = state
+        .services
+        .list()
+        .await
+        .iter()
+        .map(|r| r.to_json(r.is_stale(timeout)))
+        .collect();
+    (
+        StatusCode::OK,
+        // 配置/周期类字段统一毫秒（与注册响应一致）；已过去时长用秒，便于人工阅读
+        Json(json!({
+            "services": services,
+            "heartbeat_interval_millis": state.health.heartbeat_interval.as_millis() as u64,
+            "heartbeat_timeout_millis": timeout.as_millis() as u64,
+            "probe_timeout_millis": state.health.probe_timeout.as_millis() as u64,
+        })),
+    )
+        .into_response()
+}
+
+/// 启动心跳回收任务。
+///
+/// 每 `reaper_interval` 扫描一次：静默超过 `heartbeat_timeout` 的注册会被主动探活；
+/// 探活失败（1 分钟内无回应 / 回应异常 / 无可用通道）则记录日志并注销注册、关闭隧道维护。
+pub fn spawn_reaper(state: AppState) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(state.health.reaper_interval);
+        loop {
+            ticker.tick().await;
+            reap_once(&state).await;
+        }
+    })
+}
+
+/// 一轮回收扫描（拆成独立函数便于测试直接驱动）。
+pub async fn reap_once(state: &AppState) {
+    for reg in state.services.stale(state.health.heartbeat_timeout).await {
+        warn!(
+            "service '{}' (hash={}) 已 {}s 未上报心跳（阈值 {}s），发起探活",
+            reg.name,
+            reg.hash,
+            reg.silence().as_secs(),
+            state.health.heartbeat_timeout.as_secs()
+        );
+        match probe_service(state, &reg).await {
+            ProbeResult::Alive => {
+                // 服务确实在运行：保留注册，并记下探活时间，避免下一轮重复探活
+                info!(
+                    "service '{}' (hash={}) 心跳缺失但探活成功，保留注册",
+                    reg.name, reg.hash
+                );
+                state.services.note_probe(&reg.hash).await;
+            }
+            other => {
+                warn!(
+                    "service '{}' (hash={}) 探活失败（{:?}）：记录日志并关闭注册维护",
+                    reg.name, reg.hash, other
+                );
+                close_registration(state, &reg).await;
+            }
+        }
+    }
+}
+
+/// 关闭一条注册的维护：移除注册记录 + 断开对应隧道通道。
+///
+/// 隧道通道被丢弃后，该连接的发送任务会结束、WebSocket 随之关闭，
+/// 家庭端随后自动重连并重新注册（拿到新的 hash code）。
+///
+/// 只有**当前 hash 仍匹配**时才关闭隧道：若同名服务已经重新注册（换了新 hash），
+/// 则绝不能用旧注册的收尾逻辑去关掉新隧道（与 `unregister_if_same` 同一类竞态）。
+pub async fn close_registration(state: &AppState, reg: &Registration) {
+    if state.services.remove_by_hash(&reg.hash).await.is_some() {
+        state.registry.unregister(&reg.name).await;
+    }
+}
+
+/// 探活结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeResult {
+    /// 服务确认在运行。
+    Alive,
+    /// 服务回应了，但明确表示不健康。
+    Dead,
+    /// 在 `probe_timeout` 内没有回应（或请求本身失败）。
+    Timeout,
+    /// 没有可用通道（隧道未连接 / HTTP 直连缺 endpoint）。
+    NoChannel,
+}
+
+/// 对一条注册发起心跳探活，等待上限为 `probe_timeout`（默认 1 分钟）。
+pub async fn probe_service(state: &AppState, reg: &Registration) -> ProbeResult {
+    match reg.transport {
+        Transport::Ws => probe_ws(state, reg).await,
+        Transport::Http => probe_http(state, reg).await,
+    }
+}
+
+/// 经 WS 反向隧道探活：下发 `Heartbeat{probe_id}`，等待家庭端回 `Heartbeat{probe_id, alive}`。
+async fn probe_ws(state: &AppState, reg: &Registration) -> ProbeResult {
+    let probe_id = uuid::Uuid::new_v4().to_string();
+    let ack_rx = state.registry.new_probe(&probe_id).await;
+    if !state.registry.send_heartbeat(&reg.name, &probe_id).await {
+        state.registry.cancel_probe(&probe_id).await;
+        return ProbeResult::NoChannel;
+    }
+    match timeout(state.health.probe_timeout, ack_rx).await {
+        Ok(Ok(ack)) if ack.alive => ProbeResult::Alive,
+        Ok(Ok(_)) => ProbeResult::Dead,
+        // 发送端被丢弃：通道已失效
+        Ok(Err(_)) => ProbeResult::NoChannel,
+        Err(_) => {
+            state.registry.cancel_probe(&probe_id).await;
+            ProbeResult::Timeout
+        }
+    }
+}
+
+/// 经 HTTP 直达探活：GET `{endpoint}/rr/heartbeat`，2xx 视为在运行。
+async fn probe_http(state: &AppState, reg: &Registration) -> ProbeResult {
+    let endpoint = match &reg.endpoint {
+        Some(e) => e,
+        None => return ProbeResult::NoChannel,
+    };
+    let url = format!("{}{}", endpoint, HEARTBEAT_PATH);
+    match state
+        .http
+        .get(&url)
+        .timeout(state.health.probe_timeout)
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => ProbeResult::Alive,
+        Ok(r) => {
+            warn!("probe '{}' returned abnormal status {}", url, r.status());
+            ProbeResult::Dead
+        }
+        Err(e) => {
+            warn!("probe '{}' failed: {}", url, e);
+            ProbeResult::Timeout
+        }
+    }
 }
 
 async fn ws_handler(
@@ -453,7 +1233,10 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> Response {
-    if !state.auth.check(&name, &q.token) {
+    // 凭证可以是配置里的 token，也可以是注册时签发的 hash code。
+    let ok =
+        state.auth.check(&name, &q.token) || state.services.matches_hash(&name, &q.token).await;
+    if !ok {
         return (StatusCode::FORBIDDEN, "bad token").into_response();
     }
     ws.on_upgrade(move |socket| handle_socket(socket, name, state.registry))
@@ -479,6 +1262,17 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, name: String, reg: 
                 }
                 cmd = rx.recv() => {
                     match cmd {
+                        Some(TunnelCommand::Heartbeat(h)) => {
+                            let msg = ServerToClient::Heartbeat(h);
+                            match serde_json::to_string(&msg) {
+                                Ok(s) => {
+                                    if sender.send(Message::Text(s)).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(e) => warn!("serialize heartbeat failed: {}", e),
+                            }
+                        }
                         Some(TunnelCommand::Request(r)) => {
                             let msg = ServerToClient::Request(r);
                             match serde_json::to_string(&msg) {
@@ -528,6 +1322,7 @@ async fn handle_client_msg(reg: &Registry, text: &str) {
         match c2s {
             ClientToServer::Response(r) => reg.resolve(r).await,
             ClientToServer::ResponseChunk(c) => reg.push_chunk(c).await,
+            ClientToServer::Heartbeat(ack) => reg.resolve_probe(ack).await,
             ClientToServer::Pong => {}
         }
     }
@@ -651,41 +1446,98 @@ async fn proxy_handler(
     }
 
     // 家庭端可回传完整 Response（非流式）或一串 ResponseChunk（流式，LLM 增量输出）。
-    // 用 select! 抢占先到的那种；LLM 推理可能很慢且很长，故给足 600s 超时，
-    // nginx 侧 proxy_read_timeout 需大于此值。
+    // 用 select! 抢占先到的那种。
+    //
+    // 等待策略：每 `first_response_timeout`（默认 1 分钟）仍无首响就**主动探活**一次，
+    // 确认服务是否还在运行 —— 在运行则继续等（LLM 推理本来就可能超过 1 分钟），
+    // 探活失败才放弃；总时长受 `request_timeout` 约束（需小于 nginx proxy_read_timeout）。
     enum Outcome {
         Full(Result<PendingResponse, ()>),
         Chunk(Option<ResponseChunkMsg>),
     }
 
-    let outcome = timeout(Duration::from_secs(600), async {
-        tokio::select! {
-            full = &mut rx => Outcome::Full(full.map_err(|_| ())),
-            first = chunk_rx.recv() => Outcome::Chunk(first),
+    let deadline = Instant::now() + state.health.request_timeout;
+    let outcome: Option<Outcome> = loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let wait = remaining.min(state.health.first_response_timeout);
+        if wait.is_zero() {
+            break None; // 总超时
         }
-    })
-    .await;
+        let outcome = timeout(wait, async {
+            tokio::select! {
+                full = &mut rx => Outcome::Full(full.map_err(|_| ())),
+                first = chunk_rx.recv() => Outcome::Chunk(first),
+            }
+        })
+        .await;
+        match outcome {
+            Ok(o) => break Some(o),
+            Err(_) => {
+                // 首响等待超时：先探活，确认服务是否还在运行。
+                //
+                // 服务必须先注册（注册是拿到隧道地址的唯一途径，注册记录里带着探活所需的
+                // 形态与地址）；没有注册记录就无从探活，直接放弃并让服务重新注册。
+                let Some(reg) = state.services.get(&name).await else {
+                    warn!(
+                        "service '{}' has no registration; cannot probe, aborting request",
+                        name
+                    );
+                    state.registry.cancel_pending(&req_id).await;
+                    return (
+                        StatusCode::GATEWAY_TIMEOUT,
+                        "service not registered; re-register first",
+                    )
+                        .into_response();
+                };
+                info!(
+                    "no response from '{}' within {}s; probing service (hash={})",
+                    name,
+                    state.health.first_response_timeout.as_secs(),
+                    reg.hash
+                );
+                match probe_service(&state, &reg).await {
+                    ProbeResult::Alive => {
+                        info!("service '{}' is alive; keep waiting", name);
+                        state.services.note_probe(&reg.hash).await;
+                    }
+                    other => {
+                        warn!(
+                            "service '{}' probe failed ({:?}) while forwarding; aborting request",
+                            name, other
+                        );
+                        // 清理两侧登记，避免等待方/通道泄漏
+                        state.registry.cancel_pending(&req_id).await;
+                        return (
+                            StatusCode::GATEWAY_TIMEOUT,
+                            "service not responding to heartbeat",
+                        )
+                            .into_response();
+                    }
+                }
+            }
+        }
+    };
 
     match outcome {
-        Err(_) => {
-            // 超时：清理两侧登记，避免等待方/通道泄漏
+        None => {
+            // 总超时：清理两侧登记，避免等待方/通道泄漏
             state.registry.cancel_pending(&req_id).await;
             (StatusCode::GATEWAY_TIMEOUT, "tunnel timeout").into_response()
         }
-        Ok(Outcome::Full(Ok(pending))) => {
+        Some(Outcome::Full(Ok(pending))) => {
             state.registry.cancel_stream(&req_id).await;
             build_response(pending)
         }
-        Ok(Outcome::Full(Err(_))) => {
+        Some(Outcome::Full(Err(_))) => {
             // 不应到达：oneshot 仅在流式路径胜出后才被取消
             state.registry.cancel_stream(&req_id).await;
             (StatusCode::BAD_GATEWAY, "tunnel closed").into_response()
         }
-        Ok(Outcome::Chunk(None)) => {
+        Some(Outcome::Chunk(None)) => {
             state.registry.cancel_pending(&req_id).await;
             (StatusCode::BAD_GATEWAY, "tunnel stream closed").into_response()
         }
-        Ok(Outcome::Chunk(Some(first))) => {
+        Some(Outcome::Chunk(Some(first))) => {
             // 流式：首片提供 status/headers；后续片只含 chunk
             let status = if first.status == 0 { 200 } else { first.status };
             let mut builder = Response::builder().status(status);

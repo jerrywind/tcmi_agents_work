@@ -1,0 +1,7 @@
+# llm_server 开发 / 测试依赖（**运行服务不需要**，服务依赖见 requirements.txt）
+#
+# 用法：
+#   pip install -r requirements-dev.txt
+#   python -m pytest tests -q
+pytest>=8.0
+pytest-asyncio>=0.23

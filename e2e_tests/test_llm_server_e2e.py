@@ -96,50 +96,81 @@ def stub_lmstudio():
     srv.shutdown()
 
 
-@pytest.fixture(scope="module")
-def llm_server_with_upstream(stub_lmstudio):
-    """启动 llm_server，上游指向 stub LM Studio。"""
+def _spawn_llm_server(stub_base: str, extra_env: dict | None = None):
+    """启动 llm_server（上游指向 stub LM Studio），返回进程对象。"""
     if not _have_python_with("fastapi"):
         pytest.skip("当前 Python 环境缺少 fastapi，无法启动 llm_server。")
     port = _free_port()
     env = dict(os.environ)
     env["LLM_HOST"] = "127.0.0.1"
     env["LLM_PORT"] = str(port)
-    env["LMSTUDIO_BASE_URL"] = f"{stub_lmstudio}/v1"
+    env["LMSTUDIO_BASE_URL"] = f"{stub_base}/v1"
     env["LMSTUDIO_API_KEY"] = "sk-noauth"
     env["DEFAULT_MODEL"] = "google/gemma-4-12b-qat"
     env.setdefault("ENABLE_MCP", "false")
     env.setdefault("ENABLE_PROMPT_OPTIMIZE", "true")
+    env.update(extra_env or {})
 
     proc = subprocess.Popen(
         [sys.executable, "-m", "app.main"],
         cwd=LLM_DIR, env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    base = f"http://127.0.0.1:{port}"
+    return proc, f"http://127.0.0.1:{port}"
+
+
+def _wait_healthz_ok(base: str, timeout: float = 60) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with httpx.Client(timeout=3) as c:
+                r = c.get(f"{base}/healthz")
+                if r.status_code == 200 and r.json().get("status") == "ok":
+                    return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return False
+
+
+def _terminate(proc) -> None:
+    proc.terminate()
     try:
-        # 等待 /healthz 达到 ok（上游 stub 就绪）
-        deadline = time.time() + 60
-        ok = False
-        while time.time() < deadline:
-            try:
-                with httpx.Client(timeout=3) as c:
-                    r = c.get(f"{base}/healthz")
-                    if r.status_code == 200 and r.json().get("status") == "ok":
-                        ok = True
-                        break
-            except Exception:
-                pass
-            time.sleep(0.5)
-        if not ok:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+
+
+@pytest.fixture(scope="module")
+def llm_server_with_upstream(stub_lmstudio):
+    """启动 llm_server，上游指向 stub LM Studio。"""
+    proc, base = _spawn_llm_server(stub_lmstudio)
+    try:
+        if not _wait_healthz_ok(base):
             pytest.skip("llm_server 启动后 upstream 未达到 ok（可能依赖未装齐）。")
         yield base
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except Exception:
-            proc.kill()
+        _terminate(proc)
+
+
+@pytest.fixture(scope="module")
+def llm_server_with_unreachable_rrserver(stub_lmstudio):
+    """启动 llm_server，并配一个**不可达**的 rrserver（注册必然失败）。
+
+    用于验证：注册 / 心跳失败不影响服务本身对外可用。
+    """
+    proc, base = _spawn_llm_server(stub_lmstudio, {
+        "RR_SERVER_BASE": "http://127.0.0.1:1",   # 必然连接失败
+        "RR_SERVICE_NAME": "home",
+        "RR_SERVICE_TOKEN": "e2e-secret",
+        "RR_RETRY_INTERVAL_SECS": "1",
+    })
+    try:
+        if not _wait_healthz_ok(base):
+            pytest.skip("llm_server 启动后 upstream 未达到 ok（可能依赖未装齐）。")
+        yield base
+    finally:
+        _terminate(proc)
 
 
 def test_llm_healthz_ok(llm_server_with_upstream):
@@ -180,3 +211,50 @@ def test_llm_agent_tools_listed(llm_server_with_upstream):
         assert r.status_code == 200
         tools = r.json().get("tools", r.json())
         assert len(tools) >= 0  # 至少不报错
+
+
+def test_llm_rr_heartbeat_endpoint(llm_server_with_upstream):
+    """/rr/heartbeat 是给 rrserver 探活用的：始终 200，并带上注册状态。"""
+    with httpx.Client(timeout=10) as c:
+        r = c.get(f"{llm_server_with_upstream}/rr/heartbeat")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "llm_server"
+    rr = body["rrserver"]
+    # 本 fixture 未配 RR_SERVER_BASE：注册不启用
+    assert rr["enabled"] is False
+    assert rr["registered"] is False
+    assert rr["heartbeat_interval_millis"] == 1_800_000
+
+
+def test_llm_healthz_reports_registration_state(llm_server_with_upstream):
+    with httpx.Client(timeout=10) as c:
+        r = c.get(f"{llm_server_with_upstream}/healthz")
+    assert r.status_code == 200
+    rr = r.json()["rrserver"]
+    assert {"enabled", "registered", "detail"} <= set(rr)
+
+
+def test_llm_startup_survives_unreachable_tunnel_server(
+    llm_server_with_unreachable_rrserver,
+):
+    """中继不可达时：注册失败进后台重试，服务本身照常对外可用。"""
+    base = llm_server_with_unreachable_rrserver
+    with httpx.Client(timeout=10) as c:
+        health = c.get(f"{base}/healthz").json()
+        assert health["status"] == "ok", "上游正常，服务应照常可用"
+
+        rr = health["rrserver"]
+        assert rr["enabled"] is True, "配了 RR_SERVER_BASE 即启用注册"
+        assert rr["registered"] is False
+        assert rr["failures"] >= 1, "注册失败应被计数"
+        assert rr["last_error"], "应记录失败原因，便于排查"
+
+        # 转发链路不受影响
+        r = c.post(
+            f"{base}/v1/chat/completions",
+            json={"model": "google/gemma-4-12b-qat",
+                  "messages": [{"role": "user", "content": "hi"}]},
+        )
+        assert r.status_code == 200, r.text

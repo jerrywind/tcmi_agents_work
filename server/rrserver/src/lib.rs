@@ -5,6 +5,7 @@
 pub mod client;
 pub mod llmsrv;
 pub mod protocol;
+pub mod registry;
 pub mod server;
 pub mod skill;
 pub mod state;

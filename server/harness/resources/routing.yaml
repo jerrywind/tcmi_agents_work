@@ -1,22 +1,65 @@
-# 当前激活的诊断流程顺序（可改）
-# 按顺序依次调用各 sub-agent；删除某行即跳过该步骤。
-# slug 含义：
-#   inspection     望诊
-#   listening      闻诊
-#   inquiry        问诊
-#   palpation      切诊
-#   differentiation 辨证
-#   safety         安全门
-#   treatment      治疗
-active:
-  - inspection
-  - listening
-  - inquiry
-  - palpation
-  - differentiation
-  - safety
-  - treatment
+# 当前激活的诊断流程（可改）
+#
+# 两种配置方式，优先用 `active_profile`：
+#   1. `active_profile` —— 引用下面 `profiles` 里的命名档位（推荐）；
+#   2. `active` —— 直接列出 slug 顺序（`active_profile` 为空时用它）。
+# 删除某行即跳过该步骤；`safety` 不可移除（缺失会被强制补齐，见代码）。
 
-# 说明：本文件只决定「激活哪些步骤及其顺序」。
-# `POST /chat` 会按 active 顺序**串行跑完全部**步骤后一次性返回，
+# slug 含义：
+#   采集期  inspection 望诊 / listening 闻诊 / inquiry 问诊 / palpation 切诊
+#   辨证期  case_reference 医案参考 / differentiation 辨证
+#   安全    safety 安全门
+#   治疗期  strategy 立法 / herbology 用药 / prescription 开方
+#           care 调护 / acupuncture 针灸 / treatment 综合治疗（旧流程）
+profiles:
+  # 兼容档：与改造前完全一致，仅把 RAG 接进治疗步
+  compatible:
+    - inspection
+    - listening
+    - inquiry
+    - palpation
+    - differentiation
+    - safety
+    - treatment
+
+  # 标准档（推荐）：完整的「理法方药」链路 + 医案参考，开方是最后一步
+  standard:
+    - inspection
+    - listening
+    - inquiry
+    - palpation
+    - case_reference
+    - differentiation
+    - safety
+    - strategy
+    - herbology
+    - prescription
+
+  # 完整档：在标准档之后追加调护与针灸
+  full:
+    - inspection
+    - listening
+    - inquiry
+    - palpation
+    - case_reference
+    - differentiation
+    - safety
+    - strategy
+    - herbology
+    - prescription
+    - care
+    - acupuncture
+
+active_profile: standard
+
+# 直接列顺序的写法（active_profile 留空时才生效）
+active: []
+
+# 说明：harness 无状态，一次 `/chat` 按本顺序**串行跑完全部**步骤后返回，
 # 没有「从某一步开始」的入口概念，因此不再保留 default 字段。
+#
+# 反馈式辨证：采集期四诊**并行**执行，随后辨证；若信息不足以定证，
+# 流程会在辨证后停下并返回 `pending_questions`（响应 `status=awaiting_input`），
+# 不会继续往下走到开方。调用方把用户回答追加进 messages 再请求一次，
+# 并把 `payload.round` +1；达到上限（默认 3 轮）则强制放行并标注 `forced`。
+# 若已在 `payload.syndrome` 给定证候，则跳过判定直接走完流程。

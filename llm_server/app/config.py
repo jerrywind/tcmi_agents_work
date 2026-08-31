@@ -66,6 +66,18 @@ class Settings:
     enable_mcp: bool = True              # 是否连接外部 MCP Server 并拉取其工具
     mcp_clients: list[dict] = field(default_factory=list)  # 见 .env.example 的 MCP_CLIENTS
 
+    # ---- rrserver 注册与心跳 ----
+    # 留空即不启用：不影响本地开发。启用后本服务会主动注册并按周期心跳。
+    rr_server_base: str = ""             # 如 https://<域名>/rr
+    rr_service_name: str = "llm-server"  # 须与 rrserver 配置 [[tunnels]] 的 name 一致
+    rr_service_token: str = ""           # 与 rrserver 对应隧道的 token 一致
+    # 本服务可被 rrserver 直达的基址（同网/docker 内可达时填写，如 http://llm_server:8000）；
+    # 留空则按 ws 反向隧道注册（此时转发仍由 rrserver client 承载）
+    # 心跳周期由 rrserver 的 [health] heartbeat_interval_secs 统一下发，本侧不配置
+    rr_service_endpoint: str = ""
+    rr_timeout: int = 10                 # 注册/心跳请求超时（秒）
+    rr_retry_interval: int = 30          # 注册失败后的重试间隔（秒）
+
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
@@ -86,6 +98,12 @@ class Settings:
             agent_max_tool_output_chars=_env_int("AGENT_MAX_TOOL_OUTPUT_CHARS", 3000),
             enable_mcp=_env_bool("ENABLE_MCP", True),
             mcp_clients=_env_json_list("MCP_CLIENTS"),
+            rr_server_base=_env("RR_SERVER_BASE", "").strip(),
+            rr_service_name=_env("RR_SERVICE_NAME", "llm-server").strip() or "llm-server",
+            rr_service_token=_env("RR_SERVICE_TOKEN", ""),
+            rr_service_endpoint=_env("RR_SERVICE_ENDPOINT", "").strip(),
+            rr_timeout=_env_int("RR_TIMEOUT_SECS", 10),
+            rr_retry_interval=_env_int("RR_RETRY_INTERVAL_SECS", 30),
         )
 
 

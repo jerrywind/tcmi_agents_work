@@ -1,25 +1,33 @@
 //! 家庭端隧道客户端。
 //!
 //! 运行在家庭网络中（与本地 llm 服务同机或同局域网）。流程：
-//! 1. `POST /api/register` 用 name + token 向云端注册，拿到 `ws_url`。
+//! 1. `POST /api/register` 用 name + token 向云端注册，拿到 `ws_url`、
+//!    **独立 hash code** 与心跳周期。
 //! 2. 连接 `ws_url` 建立持久控制连接。
-//! 3. 收到云端下发的 `Request` 后，转发到本地 llm 服务（`--local`），把响应回传云端。
-//! 4. 连接断开自动重连（指数退避由固定 5s 简化）。
+//! 3. 收到云端下发的 `Request` 后，转发到本地 llm 服务（`--local`），把响应回传云端；
+//!    收到 `Ping` 回 `Pong`，收到 `Heartbeat` 探活则确认本地服务存活后回 ack。
+//! 4. 按云端下发的周期（默认 30 分钟）上报心跳；注册被回收（404）即重连重新注册。
+//! 5. 连接断开自动重连（指数退避由固定 5s 简化）。
 //!
 //! 家庭网络通常无公网 IP/端口映射，但能主动出站访问云端 —— 这正是本隧道成立的前提。
 
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
-use futures::{Sink, SinkExt, StreamExt};
+use futures::{SinkExt, StreamExt};
 use serde_json::json;
+use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, info, warn};
 
 use crate::protocol::{
-    is_hop_by_hop_str, ClientToServer, RequestMsg, ResponseChunkMsg, ResponseMsg, ServerToClient,
+    is_hop_by_hop_str, ClientToServer, HeartbeatAck, RequestMsg, ResponseChunkMsg, ResponseMsg,
+    ServerToClient,
 };
+
+/// 回应云端探活前，检查本地 llm 服务的超时（秒）。
+const LOCAL_PROBE_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
@@ -61,53 +69,195 @@ async fn run_once(cfg: ClientConfig) -> anyhow::Result<()> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow!("no ws_url in register response"))?
         .to_string();
-    info!("registered, connecting {}", ws_url);
+    // 云端为本次注册签发的 hash code：心跳与注销都以它作为凭证
+    let hash = reg
+        .get("hash_code")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow!("register response without hash_code"))?;
+    let heartbeat_period = reg
+        .get("heartbeat_interval_millis")
+        .and_then(|v| v.as_u64())
+        .filter(|ms| *ms > 0)
+        .map(Duration::from_millis)
+        .ok_or_else(|| anyhow!("register response without heartbeat_interval_millis"))?;
+    info!(
+        "registered (hash={}), heartbeat every {:?}, connecting {}",
+        hash, heartbeat_period, ws_url
+    );
 
     let (ws_stream, _) = connect_async(&ws_url).await.context("ws connect failed")?;
     let (mut write, mut read) = ws_stream.split();
     info!("tunnel '{}' connected", cfg.name);
 
+    // 独立的写任务：所有发往云端的消息都经由此通道。
+    // 这样「慢请求转发」与「心跳探活回应」可以并发进行 —— 否则一个耗时的 LLM 推理
+    // 会占住读循环，导致云端的 1 分钟探活收不到回应而被误判为失联。
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<ClientToServer>();
+    let writer = tokio::spawn(async move {
+        while let Some(msg) = out_rx.recv().await {
+            match serde_json::to_string(&msg) {
+                Ok(s) => {
+                    if write.send(Message::Text(s)).await.is_err() {
+                        break;
+                    }
+                }
+                Err(e) => error!("serialize outbound message failed: {}", e),
+            }
+        }
+    });
+
     let local = cfg.local_url.trim_end_matches('/').to_string();
-    while let Some(Ok(msg)) = read.next().await {
-        match msg {
-            Message::Text(t) => {
-                if let Ok(s2c) = serde_json::from_str::<ServerToClient>(&t) {
-                    match s2c {
-                        ServerToClient::Request(r) => {
-                            // 以流式方式转发（首片带 status/headers，随后逐块回传），支持 LLM 增量输出
-                            if !forward_to_ws(&mut write, &http, &local, &r).await {
-                                break;
+    // reader 会独占一份 client（每次转发/探活再克隆给子任务），外层仍保留 `http` 给心跳任务
+    let reader_http = http.clone();
+    let mut reader = tokio::spawn(async move {
+        while let Some(Ok(msg)) = read.next().await {
+            match msg {
+                Message::Text(t) => {
+                    if let Ok(s2c) = serde_json::from_str::<ServerToClient>(&t) {
+                        match s2c {
+                            ServerToClient::Request(r) => {
+                                // 每个请求一个独立任务：慢推理不阻塞心跳探活
+                                let (out, http, local) =
+                                    (out_tx.clone(), reader_http.clone(), local.clone());
+                                tokio::spawn(async move {
+                                    forward_to_ws(&out, &http, &local, &r).await;
+                                });
                             }
-                        }
-                        ServerToClient::Ping => {
-                            if write
-                                .send(Message::Text("{\"type\":\"pong\"}".to_string()))
-                                .await
-                                .is_err()
-                            {
-                                break;
+                            ServerToClient::Ping => {
+                                if out_tx.send(ClientToServer::Pong).is_err() {
+                                    break;
+                                }
+                            }
+                            ServerToClient::Heartbeat(p) => {
+                                // 云端探活：确认本地 llm 服务确实在运行后回 ack
+                                let (out, http, local) =
+                                    (out_tx.clone(), reader_http.clone(), local.clone());
+                                tokio::spawn(async move {
+                                    let alive = local_alive(&http, &local).await;
+                                    info!("heartbeat probe {} -> alive={}", p.probe_id, alive);
+                                    let _ = out.send(ClientToServer::Heartbeat(HeartbeatAck {
+                                        probe_id: p.probe_id,
+                                        alive,
+                                    }));
+                                });
                             }
                         }
                     }
                 }
-            }
-            Message::Binary(b) => {
-                if let Ok(t) = String::from_utf8(b) {
-                    if let Ok(ServerToClient::Request(r)) =
-                        serde_json::from_str::<ServerToClient>(&t)
-                    {
-                        // 以流式方式转发，支持 LLM 增量输出
-                        if !forward_to_ws(&mut write, &http, &local, &r).await {
-                            break;
+                Message::Binary(b) => {
+                    if let Ok(t) = String::from_utf8(b) {
+                        if let Ok(s2c) = serde_json::from_str::<ServerToClient>(&t) {
+                            match s2c {
+                                ServerToClient::Request(r) => {
+                                    let (out, http, local) =
+                                        (out_tx.clone(), reader_http.clone(), local.clone());
+                                    tokio::spawn(async move {
+                                        forward_to_ws(&out, &http, &local, &r).await;
+                                    });
+                                }
+                                ServerToClient::Ping => {
+                                    if out_tx.send(ClientToServer::Pong).is_err() {
+                                        break;
+                                    }
+                                }
+                                ServerToClient::Heartbeat(p) => {
+                                    let (out, http, local) =
+                                        (out_tx.clone(), reader_http.clone(), local.clone());
+                                    tokio::spawn(async move {
+                                        let alive = local_alive(&http, &local).await;
+                                        let _ = out.send(ClientToServer::Heartbeat(HeartbeatAck {
+                                            probe_id: p.probe_id,
+                                            alive,
+                                        }));
+                                    });
+                                }
+                            }
                         }
                     }
                 }
+                Message::Close(_) => break,
+                _ => {}
             }
-            Message::Close(_) => break,
-            _ => {}
+        }
+    });
+
+    // 心跳上报任务：定期告诉云端「本服务仍活跃」。
+    // 仅当云端返回 404（注册已被回收）时结束，此时需要断线重连并重新注册。
+    let mut heartbeat = tokio::spawn(heartbeat_loop(
+        cfg.clone(),
+        hash,
+        heartbeat_period,
+        http.clone(),
+    ));
+
+    tokio::select! {
+        _ = &mut reader => {
+            heartbeat.abort();
+        }
+        _ = &mut heartbeat => {
+            warn!("heartbeat stopped (registration expired); reconnecting to re-register");
+            reader.abort();
         }
     }
+    writer.abort();
     Ok(())
+}
+
+/// 心跳上报循环：每 `interval` 用注册时签发的 hash code 向云端报一次活。
+///
+/// 网络类错误只记录日志并等待下一个周期（隧道本身可能仍然可用）；
+/// 只有云端明确回 404（注册已不存在）时才返回，交由上层重新注册。
+async fn heartbeat_loop(
+    cfg: ClientConfig,
+    hash: String,
+    interval: Duration,
+    http: reqwest::Client,
+) {
+    let url = format!("{}/api/heartbeat", cfg.server_base);
+    loop {
+        tokio::time::sleep(interval).await;
+        match http
+            .post(&url)
+            .timeout(Duration::from_secs(30))
+            .json(&json!({"name": cfg.name, "hash": hash}))
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => {
+                info!("heartbeat ack for '{}' (hash={})", cfg.name, hash);
+            }
+            Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
+                warn!(
+                    "registration (hash={}) no longer known by server; re-registering",
+                    hash
+                );
+                return;
+            }
+            Ok(r) => warn!("heartbeat rejected: {}", r.status()),
+            Err(e) => warn!("heartbeat error: {}", e),
+        }
+    }
+}
+
+/// 探活时确认本地 llm 服务是否在运行：能拿到任何 HTTP 回应即视为存活。
+async fn local_alive(client: &reqwest::Client, local_base: &str) -> bool {
+    match client
+        .get(local_base)
+        .timeout(Duration::from_secs(LOCAL_PROBE_TIMEOUT_SECS))
+        .send()
+        .await
+    {
+        Ok(r) => {
+            info!("local probe {} -> {}", local_base, r.status());
+            true
+        }
+        Err(e) => {
+            warn!("local service {} unreachable: {}", local_base, e);
+            false
+        }
+    }
 }
 
 /// 把云端的请求转发到本地 llm 服务并回收响应。
@@ -175,15 +325,12 @@ pub async fn forward_local_with(
 /// 末片 `done = true` 结束。这样 LLM 的增量输出（流式 / SSE）能被原样透传。
 ///
 /// 返回 `false` 表示写向隧道失败（调用方应断开隧道）。
-async fn forward_to_ws<W>(
-    write: &mut W,
+async fn forward_to_ws(
+    out: &mpsc::UnboundedSender<ClientToServer>,
     client: &reqwest::Client,
     local_base: &str,
     req: &RequestMsg,
-) -> bool
-where
-    W: Sink<Message> + Unpin,
-{
+) -> bool {
     let url = format!("{}{}", local_base, req.path);
     let method = match req.method.to_uppercase().as_str() {
         "POST" => reqwest::Method::POST,
@@ -212,7 +359,7 @@ where
                 .collect();
             // 首片：仅 status/headers，body 置空
             if !send_chunk(
-                write,
+                out,
                 ResponseChunkMsg {
                     req_id: req.req_id.clone(),
                     status,
@@ -220,9 +367,7 @@ where
                     chunk: vec![],
                     done: false,
                 },
-            )
-            .await
-            {
+            ) {
                 return false;
             }
             // 真·流式转发：随本地响应体的到达逐块回传（`Response::chunk` 每读到一段就回传一段），
@@ -235,7 +380,7 @@ where
                             continue;
                         }
                         if !send_chunk(
-                            write,
+                            out,
                             ResponseChunkMsg {
                                 req_id: req.req_id.clone(),
                                 status: 0,
@@ -243,17 +388,15 @@ where
                                 chunk: bytes.to_vec(),
                                 done: false,
                             },
-                        )
-                        .await
-                        {
+                        ) {
                             return false;
                         }
                     }
                     Ok(None) => break, // 响应体读取完毕
                     Err(e) => {
-                        // 体流读取中途失败：以 502 末片结束本次转发，并断开隧道
+                        // 体流读取中途失败：以 502 末片结束本次转发
                         let _ = send_chunk(
-                            write,
+                            out,
                             ResponseChunkMsg {
                                 req_id: req.req_id.clone(),
                                 status: 502,
@@ -261,14 +404,13 @@ where
                                 chunk: format!("stream read error: {}", e).into_bytes(),
                                 done: true,
                             },
-                        )
-                        .await;
+                        );
                         return false;
                     }
                 }
             }
             send_chunk(
-                write,
+                out,
                 ResponseChunkMsg {
                     req_id: req.req_id.clone(),
                     status: 0,
@@ -277,37 +419,23 @@ where
                     done: true,
                 },
             )
-            .await
         }
-        Err(e) => {
-            send_chunk(
-                write,
-                ResponseChunkMsg {
-                    req_id: req.req_id.clone(),
-                    status: 502,
-                    headers: vec![],
-                    chunk: format!("forward error: {}", e).into_bytes(),
-                    done: true,
-                },
-            )
-            .await
-        }
+        Err(e) => send_chunk(
+            out,
+            ResponseChunkMsg {
+                req_id: req.req_id.clone(),
+                status: 502,
+                headers: vec![],
+                chunk: format!("forward error: {}", e).into_bytes(),
+                done: true,
+            },
+        ),
     }
 }
 
-/// 序列化并发送一个响应分片；返回 `false` 表示发送失败。
-async fn send_chunk<W>(write: &mut W, chunk: ResponseChunkMsg) -> bool
-where
-    W: Sink<Message> + Unpin,
-{
-    let msg = ClientToServer::ResponseChunk(chunk);
-    match serde_json::to_string(&msg) {
-        Ok(s) => write.send(Message::Text(s)).await.is_ok(),
-        Err(e) => {
-            error!("serialize response chunk failed: {}", e);
-            false
-        }
-    }
+/// 投递一个响应分片到隧道写任务；返回 `false` 表示通道已关闭。
+fn send_chunk(out: &mpsc::UnboundedSender<ClientToServer>, chunk: ResponseChunkMsg) -> bool {
+    out.send(ClientToServer::ResponseChunk(chunk)).is_ok()
 }
 
 #[cfg(test)]

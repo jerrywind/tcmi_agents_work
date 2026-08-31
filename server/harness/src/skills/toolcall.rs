@@ -46,13 +46,39 @@ impl Skill {
     }
 }
 
+/// 参数里注入的「调用方 capability」字段名
+///
+/// `SkillFn` 只接收 `&Value`，技能无从知道是哪个 agent 在调用自己。
+/// 而「按知识域检索」必须知道——开方 agent 查方书、切诊 agent 查脉学，
+/// 同一个 `tcm-rag` 技能要按调用方给出不同的检索域。
+/// 与其改 `SkillFn` 签名（会波及全部技能与 MCP 适配器），
+/// 不如在分发时把调用方塞进参数：技能需要就读，不需要则完全无感。
+pub const CALLER_FIELD: &str = "_caller";
+
 /// 按名字分发执行（异步）
-pub async fn dispatch(skills: &[Skill], name: &str, args: &Value) -> Result<Value> {
+///
+/// `caller` 为调用方 capability（`POST /skills` 手动调用时传 `None`），
+/// 会以 [`CALLER_FIELD`] 注入参数供技能按需读取。
+pub async fn dispatch(
+    skills: &[Skill],
+    name: &str,
+    args: &Value,
+    caller: Option<Capability>,
+) -> Result<Value> {
     let skill = skills
         .iter()
         .find(|s| s.name == name)
         .ok_or_else(|| anyhow::anyhow!("未知技能: {name}"))?;
-    (skill.executor)(args).await
+    match (caller, args) {
+        (Some(cap), Value::Object(_)) => {
+            let mut args = args.clone();
+            if let Value::Object(m) = &mut args {
+                m.insert(CALLER_FIELD.into(), json!(cap.slug()));
+            }
+            (skill.executor)(&args).await
+        }
+        _ => (skill.executor)(args).await,
+    }
 }
 
 /// 构造一个转发到 HTTP 端点的技能

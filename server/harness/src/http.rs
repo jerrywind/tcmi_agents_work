@@ -72,6 +72,7 @@ async fn chat(State(st): State<AppState>, Json(req): Json<Value>) -> Json<Value>
         &res,
         &st.llm,
         &st.skills,
+        &st.departments,
         &messages,
         &payload,
     )
@@ -182,7 +183,8 @@ async fn call_skill(State(st): State<AppState>, Json(req): Json<Value>) -> Json<
         },
         None => st.skills.all(),
     };
-    match crate::skills::dispatch(&skills, name, &args).await {
+    // 手动调用没有 agent 上下文；`owner` 过滤已限定范围，故不注入 `_caller`
+    match crate::skills::dispatch(&skills, name, &args, None).await {
         Ok(r) => Json(json!({"result": r})),
         Err(e) => Json(json!({"error": e.to_string()})),
     }

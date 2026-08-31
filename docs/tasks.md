@@ -1,7 +1,13 @@
 # 任务看板（Task Board）
 
 > 对应 [`plan.md`](./plan.md) 的阶段路线图。状态约定：🔲 待办 / 🔧 进行中 / ✅ 已完成 / 🚫 阻塞。
-> 最后更新：2026-08-30（本轮：T4.3 RAG 语料与召回评估落地；
+> 最后更新：2026-08-31（本轮：T6.4 —— rrserver ↔ llm_server 注册通信机制
+> （hash code 注册 / 30 分钟心跳 / 40 分钟静默探活 / 转发 1 分钟首响探活）；
+> 并按「**不保留兼容**」收敛契约：周期字段统一毫秒、`name` 必填校验、
+> 心跳周期由云端统一下发、未注册服务拒绝转发；
+> 后端 182 用例 + llm_server 8 条 + 前端 32 条全绿，fmt + clippy 通过）
+>
+> 上一轮（2026-08-30）：T4.3 RAG 语料与召回评估落地；
 > T5.1 报告持久化 / T5.4 合规落地；T5.2、T5.3 给出上线检查清单；
 > T1.5 连真实 LM Studio 完成端到端人工验收，3 个样例归档）
 >
@@ -82,6 +88,7 @@
 | T6.1 | rrserver 生产化：真实 TLS、强 token / 随机 name、告警 | 公网隧道稳定 | 🔲 待办 |
 | T6.2 | 多隧道 / 多模型路由 | 可按 capability 选路 | 🔲 待办 |
 | T6.3 | harness 隧道加固：重连 / 鉴权 / 观测 | 断线自动重连 | 🔲 待办 |
+| T6.4 | **rrserver ↔ llm_server 注册通信机制**：① 服务主动注册换取独立 hash code；② 转发 1 分钟未首响即主动探活，活着继续等、失败才放弃；③ 服务每 30 分钟主动心跳；④ 云端 40 分钟没心跳即探活，1 分钟无回应/回应异常则记录日志并注销注册 | 注册/心跳/探活全链路可验证 | ✅ 已完成（2026-08-31。`src/registry.rs` 签发 16 位 hash（FNV-1a + UUID + 时间戳）；新增 `POST /api/heartbeat`、`/api/unregister`、`GET /api/services`，`/api/register` 下发 `hash_code`/`transport`/心跳周期；协议层新增 `heartbeat{probe_id}` + `Heartbeat{probe_id, alive}`，`Registry` 增加探活等待表；转发首响 1 分钟到点先探活，**活着就继续等**（总超时 600s，需 ≤ nginx `proxy_read_timeout`）；回收任务每 60s 扫描，探活失败→`WARN`+注销并关隧道，`close_registration` 只在 hash 仍当前时才关隧道（防误关新连接）；client 重构为「写任务 + 每请求独立任务」并发结构（否则慢推理占住读循环、1 分钟探活收不到回应）；llm_server（Python）新增 `app/rrclient.py` + `GET /rr/heartbeat`，`RR_*` 留空即不启用，心跳 404 自动重注册。**契约收敛（不保留兼容）**：周期/配置字段统一 `*_millis`、已过时长用 `*_secs`；心跳/注销的 `name` 必填且必须与注册名一致；心跳周期由云端 `[health]` 统一下发（删掉客户端请求覆盖与 `RR_HEARTBEAT_INTERVAL_SECS`）；无注册记录的服务拒绝转发（504 + 提示重新注册）。测试：后端 182 全绿，新增 `llm_server/tests/`（8 条 pytest）、e2e 注册/心跳/探活 6 条） |
 
 ## 基础设施
 

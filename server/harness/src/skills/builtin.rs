@@ -18,7 +18,7 @@
 use crate::config::HarnessConfig;
 use crate::model::{Capability, Message};
 use crate::resources::ResourceBundle;
-use crate::skills::{mcp_skill, mcp_skill_named, Skill, SkillFn, SkillRegistry};
+use crate::skills::{mcp_skill, mcp_skill_named, SharedDepartments, Skill, SkillFn, SkillRegistry};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -30,6 +30,46 @@ fn obj_param() -> Value {
         },
         "required": ["text"]
     })
+}
+
+/// 把检索域写进 RAG 请求体。
+///
+/// `departments` 的 `dynamic` 是这里唯一费笔墨的地方：辨证出「儿科」后，
+/// 开方 agent 检索方书时应当只看儿科方书，故读共享的「当前科室」；
+/// 辨证之前它是空的，此时不注入该维度（而不是注入空数组——那会把结果全砍光）。
+fn apply_scope(
+    mut body: Value,
+    scope: &crate::resources::RagScope,
+    departments: &SharedDepartments,
+) -> Value {
+    let Some(obj) = body.as_object_mut() else {
+        return body;
+    };
+    if !scope.genres.is_empty() {
+        obj.insert("genres".into(), json!(scope.genres));
+    }
+    if !scope.functions.is_empty() {
+        obj.insert("functions".into(), json!(scope.functions));
+    }
+    if !scope.schools.is_empty() {
+        obj.insert("schools".into(), json!(scope.schools));
+    }
+    let mut depts: Vec<String> = scope
+        .departments
+        .iter()
+        .filter(|d| *d != "dynamic")
+        .cloned()
+        .collect();
+    if scope.dynamic_department() {
+        // 读不到锁（中毒）时宁可不过滤，也不要让整个检索失败
+        if let Ok(shared) = departments.read() {
+            depts.extend(shared.iter().cloned());
+        }
+    }
+    if !depts.is_empty() {
+        obj.insert("departments".into(), json!(depts));
+    }
+    body
 }
 
 /// 按证候检索的入参（方剂 / 调护 / 食疗共用）
@@ -84,10 +124,14 @@ fn agent_skill_executor(
 }
 
 /// 构建默认技能注册表
+///
+/// `departments` 是编排器与技能之间的共享「当前科室」：辨证后写入，
+/// `tcm-rag` 读取后注入检索域（见 [`SharedDepartments`]）。
 pub fn build_default_registry(
     cfg: &HarnessConfig,
     res: &ResourceBundle,
     llm: reqwest::Client,
+    departments: SharedDepartments,
 ) -> SkillRegistry {
     let mut reg = SkillRegistry::new();
     let res = Arc::new(res.clone());
@@ -247,14 +291,28 @@ pub fn build_default_registry(
         }),
         {
             let rag = Arc::new(cfg.rag_endpoint.clone());
+            let scopes = Arc::new(res.rag_scopes.clone());
+            let departments = Arc::new(departments.clone());
             let exec: SkillFn = Arc::new(move |args: &Value| {
                 let rag = rag.clone();
+                let scopes = scopes.clone();
+                let departments = departments.clone();
                 let q = args
                     .get("query")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
+                // `_caller` 由 `dispatch` 注入：同一个技能，开方 agent 调用
+                // 就查方书、切诊 agent 调用就查脉学。手动调用时没有该字段，
+                // 退化为不过滤的宽检索。
+                let caller = args
+                    .get(crate::skills::CALLER_FIELD)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let scope = scopes.get(&caller).cloned();
                 let top_k = args.get("top_k").and_then(|v| v.as_u64()).map(|n| n as u32);
+
                 Box::pin(async move {
                     let Some(endpoint) = rag.as_ref() else {
                         return Ok(json!({
@@ -264,14 +322,20 @@ pub fn build_default_registry(
                     };
 
                     // 与 llm_server/rag 的契约对齐：
-                    //   POST <endpoint>  {"query": "...", "top_k"?: N}
-                    // endpoint 需指向具体检索端点，例如
-                    //   http://<rag-host>:8080/rag/retrieve/text
+                    //   POST <endpoint>  {"query": "...", "top_k"?: N, <知识域可选>}
+                    // endpoint 需指向具体检索端点。RAG 挂在 **llm_server 主应用**
+                    // 上（app/rag_router.py），故默认
+                    //   http://llm_server:8000/rag/retrieve/text
+                    // 而不是早先独立 RAG 服务的 8080。
                     // 该端点返回**数组**，这里统一包成 {"result": [...]}，
                     // 使其余技能的返回形状保持一致。
                     let mut body = json!({"query": q});
-                    if let Some(k) = top_k {
+                    let k = top_k.or_else(|| scope.as_ref().and_then(|s| s.top_k));
+                    if let Some(k) = k {
                         body["top_k"] = json!(k);
+                    }
+                    if let Some(s) = &scope {
+                        body = apply_scope(body, s, &departments);
                     }
 
                     let resp = match reqwest::Client::new()

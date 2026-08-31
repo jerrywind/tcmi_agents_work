@@ -119,7 +119,12 @@ async fn differentiation_quality_eval() {
         .timeout(std::time::Duration::from_secs(cfg.llm_timeout_secs))
         .build()
         .expect("HTTP 客户端构建失败");
-    let skills = build_default_registry(&cfg, &res, llm.clone());
+    let skills = build_default_registry(
+        &cfg,
+        &res,
+        llm.clone(),
+        std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+    );
 
     let cases = load_eval_cases();
     let limit = env_usize("HARNESS_EVAL_LIMIT", 20);

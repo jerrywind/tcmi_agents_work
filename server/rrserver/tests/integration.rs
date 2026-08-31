@@ -15,18 +15,33 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use rrserver::client::{forward_local, run_client};
 use rrserver::llmsrv::{Backend, BackendConfig, Deployer, DeploymentConfig, RrClientConfig};
-use rrserver::protocol::{ClientToServer, ServerToClient};
-use rrserver::server::{build_router, AppState, TunnelAuth};
+use rrserver::protocol::{ClientToServer, HeartbeatAck, ServerToClient};
+use rrserver::registry::ServiceRegistry;
+use rrserver::server::{build_router, AppState, HealthConfig, TunnelAuth};
 use rrserver::skill::{ConstState, JudgeEngine, SkillRule, SkillSet};
 use rrserver::state::Registry;
 use serde_json::json;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 
 /// 启动云端 rrserver，监听 127.0.0.1:0，返回 `ip:port` 与任务句柄。
 /// 默认配置两条隧道：`home`/secret，便于多隧道隔离测试复用。
 async fn start_server() -> (String, JoinHandle<()>) {
+    start_server_with_health(HealthConfig::default()).await
+}
+
+/// 同上，但可自定义心跳 / 探活 / 转发超时（测试里用毫秒级阈值驱动）。
+async fn start_server_with_health(health: HealthConfig) -> (String, JoinHandle<()>) {
+    let (addr, _state, handle) = start_server_with_state(health).await;
+    (addr, handle)
+}
+
+/// 再进一步：把 `AppState` 也交回给测试，便于直接操作注册中心（如模拟「隧道在但注册没了」）。
+async fn start_server_with_state(
+    health: HealthConfig,
+) -> (String, rrserver::server::AppState, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let auth = TunnelAuth::from_list(&[
@@ -35,14 +50,19 @@ async fn start_server() -> (String, JoinHandle<()>) {
     ]);
     let state = AppState {
         registry: Registry::new(),
+        services: ServiceRegistry::new(),
         auth,
         // 接入端可达基址仅用于构造 ws_url；测试中我们直连 addr，不经过 nginx 剥离 /rr 前缀
         external_ws_base: format!("ws://{}", addr),
         skills: None,
+        health,
+        http: reqwest::Client::new(),
     };
-    let app = build_router(state);
+    // 生产由 run_server 拉起回收任务；测试直连 build_router，这里显式拉起
+    let _reaper = rrserver::server::spawn_reaper(state.clone());
+    let app = build_router(state.clone());
     let handle = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    (addr.to_string(), handle)
+    (addr.to_string(), state, handle)
 }
 
 /// 启动带技能闸门的云端 rrserver（便于「闸门 × 隧道」端到端测试复用）。
@@ -60,9 +80,12 @@ async fn start_skilled_server(skill: SkillRule) -> (String, JoinHandle<()>) {
     set.register(skill);
     let state = AppState {
         registry: Registry::new(),
+        services: ServiceRegistry::new(),
         auth,
         external_ws_base: format!("ws://{}", addr),
         skills: Some(set),
+        health: HealthConfig::default(),
+        http: reqwest::Client::new(),
     };
     let app = build_router(state);
     let handle = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -89,25 +112,53 @@ async fn start_local_mock() -> (String, JoinHandle<()>) {
 }
 
 /// 家庭端隧道客户端模拟器：连上 WS，把云端下发的请求转发到本地 llm，回传响应。
-/// 同时响应云端下发的 Ping（回 Pong），以验证心跳链路。
+/// 同时响应云端下发的 Ping（回 Pong）与 Heartbeat 探活（回 alive ack）。
+///
+/// 转发在独立任务中进行：这样「慢请求」不会挡住探活回应
+/// ——真实 client 也是同样的并发结构。
 async fn run_home(ws_url: String, local: String) {
+    run_home_with_heartbeat(ws_url, local, true).await
+}
+
+async fn run_home_with_heartbeat(ws_url: String, local: String, alive: bool) {
     let (ws_stream, _resp) = tokio_tungstenite::connect_async(&ws_url).await.unwrap();
     let (mut w, mut r) = ws_stream.split();
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<ClientToServer>();
+    let writer = tokio::spawn(async move {
+        while let Some(msg) = out_rx.recv().await {
+            let text = serde_json::to_string(&msg).unwrap();
+            if w.send(Message::Text(text)).await.is_err() {
+                break;
+            }
+        }
+    });
     while let Some(Ok(msg)) = r.next().await {
         match msg {
             Message::Text(t) => {
                 match serde_json::from_str::<ServerToClient>(&t) {
                     Ok(ServerToClient::Request(req)) => {
-                        let resp = forward_local(&local, &req).await;
-                        let out = serde_json::to_string(&ClientToServer::Response(resp)).unwrap();
-                        if w.send(Message::Text(out)).await.is_err() {
-                            break;
-                        }
+                        let out = out_tx.clone();
+                        let local = local.clone();
+                        tokio::spawn(async move {
+                            let resp = forward_local(&local, &req).await;
+                            let _ = out.send(ClientToServer::Response(resp));
+                        });
                     }
                     Ok(ServerToClient::Ping) => {
                         // 云端心跳，家庭端需回 Pong
-                        let out = serde_json::to_string(&ClientToServer::Pong).unwrap();
-                        if w.send(Message::Text(out)).await.is_err() {
+                        if out_tx.send(ClientToServer::Pong).is_err() {
+                            break;
+                        }
+                    }
+                    Ok(ServerToClient::Heartbeat(p)) => {
+                        // 云端探活：回 ack（alive 可由调用方指定，用于模拟失联）
+                        if out_tx
+                            .send(ClientToServer::Heartbeat(HeartbeatAck {
+                                probe_id: p.probe_id,
+                                alive,
+                            }))
+                            .is_err()
+                        {
                             break;
                         }
                     }
@@ -118,6 +169,7 @@ async fn run_home(ws_url: String, local: String) {
             _ => {}
         }
     }
+    writer.abort();
 }
 
 async fn register(addr: &str, name: &str, token: &str) -> reqwest::Response {
@@ -672,9 +724,12 @@ async fn start_skilled_server_multi(rules: Vec<SkillRule>) -> (String, JoinHandl
     }
     let state = AppState {
         registry: Registry::new(),
+        services: ServiceRegistry::new(),
         auth,
         external_ws_base: format!("ws://{}", addr),
         skills: Some(set),
+        health: HealthConfig::default(),
+        http: reqwest::Client::new(),
     };
     let app = build_router(state);
     let handle = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -1083,4 +1138,506 @@ async fn new_tunnel_connection_replaces_old_without_being_dropped() {
     sh.abort();
     lh_old.abort();
     lh_new.abort();
+}
+
+// ───────────── 注册 · 心跳 · 探活 端到端 ─────────────
+
+/// 启动一个「延迟 `delay` 后才响应」的本地 mock（模拟慢推理）。
+async fn start_local_slow_mock(delay: Duration) -> (String, JoinHandle<()>) {
+    let app = Router::new().fallback(any(move |body: Bytes| async move {
+        tokio::time::sleep(delay).await;
+        Response::builder()
+            .status(200)
+            .body(Body::from(body))
+            .unwrap()
+    }));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{}", addr), handle)
+}
+
+/// 启动一个「永不返回」的本地 mock（模拟服务卡死）。
+async fn start_local_hanging_mock() -> (String, JoinHandle<()>) {
+    async fn hang() -> Response {
+        tokio::time::sleep(Duration::from_secs(300)).await;
+        Response::builder().status(200).body(Body::empty()).unwrap()
+    }
+    let app = Router::new().fallback(any(hang));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (format!("http://{}", addr), handle)
+}
+
+/// 注册并连上隧道，返回 (ws_url 所属注册信息, 家庭端句柄)。
+async fn register_and_connect(addr: &str, local: String, alive: bool) -> JoinHandle<()> {
+    let reg = register(addr, "home", "secret").await;
+    let ws_url = reg.json::<serde_json::Value>().await.unwrap()["ws_url"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let home = tokio::spawn(run_home_with_heartbeat(ws_url, local, alive));
+    wait_for_tunnel_connected(addr).await;
+    home
+}
+
+#[tokio::test]
+async fn register_issues_hash_code_and_heartbeat_accepts_it() {
+    let (addr, sh) = start_server().await;
+    let client = reqwest::Client::new();
+
+    let v: serde_json::Value = client
+        .post(format!("http://{}/api/register", addr))
+        .json(&json!({"name": "home", "token": "secret"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let hash = v["hash_code"].as_str().expect("hash_code 应存在");
+    assert_eq!(hash.len(), 16, "hash code 应为 16 位");
+    assert_eq!(
+        v["heartbeat_interval_millis"], 1_800_000,
+        "默认心跳周期 30 分钟（毫秒下发）"
+    );
+    // 秒级字段已移除：周期统一由毫秒字段下发
+    assert!(v.get("heartbeat_interval_secs").is_none());
+
+    // 用 hash code 上报心跳
+    let hb: serde_json::Value = client
+        .post(format!("http://{}/api/heartbeat", addr))
+        .json(&json!({"name": "home", "hash": hash}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(hb["status"], "ok");
+    assert_eq!(hb["name"], "home");
+
+    // 未知 hash：说明注册已被回收，服务应重新注册
+    let r = client
+        .post(format!("http://{}/api/heartbeat", addr))
+        .json(&json!({"name": "home", "hash": "0000000000000000"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    // hash 有效但 name 与注册名不符 → 同样视为未知注册
+    let r = client
+        .post(format!("http://{}/api/heartbeat", addr))
+        .json(&json!({"name": "other", "hash": hash}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::NOT_FOUND);
+
+    sh.abort();
+}
+
+#[tokio::test]
+async fn reaper_drops_registration_when_probe_reports_dead() {
+    // 压缩时间：100ms 没心跳即探活，探活回应 alive=false → 注销注册并关闭隧道
+    let health = HealthConfig {
+        heartbeat_timeout: Duration::from_millis(100),
+        probe_timeout: Duration::from_millis(500),
+        reaper_interval: Duration::from_millis(50),
+        first_response_timeout: Duration::from_millis(200),
+        request_timeout: Duration::from_secs(3),
+        ..Default::default()
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let (local, lh) = start_local_mock().await;
+    let home = register_and_connect(&addr, local, false).await;
+
+    let client = reqwest::Client::new();
+    let mut dropped = false;
+    for _ in 0..100 {
+        let v: serde_json::Value = client
+            .get(format!("http://{}/api/services", addr))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        if v["services"].as_array().unwrap().is_empty() {
+            dropped = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(dropped, "探活失败的服务应被注销注册");
+
+    // 隧道通道也应被关闭：后续请求不再路由到该服务
+    let resp = client
+        .get(format!("http://{}/t/home/x", addr))
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+
+    home.abort();
+    sh.abort();
+    lh.abort();
+}
+
+#[tokio::test]
+async fn reaper_keeps_registration_when_probe_succeeds() {
+    // 心跳缺失但服务确实在运行（探活成功）→ 保留注册
+    let health = HealthConfig {
+        heartbeat_timeout: Duration::from_millis(60),
+        probe_timeout: Duration::from_millis(500),
+        reaper_interval: Duration::from_millis(50),
+        first_response_timeout: Duration::from_millis(200),
+        request_timeout: Duration::from_secs(3),
+        ..Default::default()
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let (local, lh) = start_local_mock().await;
+    let home = register_and_connect(&addr, local, true).await;
+
+    // 静默阈值远小于下面的观察时长：期间必然被扫描到并探活成功
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let v: serde_json::Value = reqwest::Client::new()
+        .get(format!("http://{}/api/services", addr))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        v["services"].as_array().unwrap().len(),
+        1,
+        "探活成功的服务不应被注销"
+    );
+
+    home.abort();
+    sh.abort();
+    lh.abort();
+}
+
+#[tokio::test]
+async fn heartbeat_reports_keep_registration_fresh() {
+    // 服务按周期上报心跳 → 注册始终不过期（压扁到 60ms 周期 / 200ms 阈值）
+    let health = HealthConfig {
+        heartbeat_timeout: Duration::from_millis(200),
+        probe_timeout: Duration::from_millis(300),
+        reaper_interval: Duration::from_millis(50),
+        heartbeat_interval: Duration::from_millis(60),
+        ..Default::default()
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let reg = register(&addr, "home", "secret").await;
+    let v: serde_json::Value = reg.json().await.unwrap();
+    let hash = v["hash_code"].as_str().unwrap().to_string();
+    assert_eq!(
+        v["heartbeat_interval_millis"], 60,
+        "服务端下发的周期应随配置（含毫秒精度）"
+    );
+
+    let url = format!("http://{}/api/heartbeat", addr);
+    let hash_clone = hash.clone();
+    let beater = tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        loop {
+            tokio::time::sleep(Duration::from_millis(60)).await;
+            let _ = client
+                .post(&url)
+                .json(&json!({"name": "home", "hash": hash_clone}))
+                .send()
+                .await;
+        }
+    });
+
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    let listed: serde_json::Value = reqwest::Client::new()
+        .get(format!("http://{}/api/services", addr))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let list = listed["services"].as_array().unwrap();
+    assert_eq!(list.len(), 1, "持续心跳的服务不应被回收");
+    assert_eq!(list[0]["stale"], false);
+
+    beater.abort();
+    sh.abort();
+}
+
+#[tokio::test]
+async fn forwarding_probes_service_after_first_response_timeout() {
+    // 本地推理需要 1.2s，云端首响窗口只有 300ms：
+    // 每 300ms 探活一次，服务回应 alive → 继续等待，最终拿到完整响应。
+    let health = HealthConfig {
+        first_response_timeout: Duration::from_millis(300),
+        probe_timeout: Duration::from_millis(500),
+        request_timeout: Duration::from_secs(10),
+        heartbeat_timeout: Duration::from_secs(3600),
+        reaper_interval: Duration::from_secs(3600),
+        ..Default::default()
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let (local, lh) = start_local_slow_mock(Duration::from_millis(1200)).await;
+    let home = register_and_connect(&addr, local, true).await;
+
+    let started = std::time::Instant::now();
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/t/home/v1/chat", addr))
+        .timeout(Duration::from_secs(10))
+        .body("hello")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.text().await.unwrap(), "hello");
+    assert!(
+        started.elapsed() >= Duration::from_millis(1200),
+        "应真的等到本地响应，而不是被 1 分钟窗口掐断"
+    );
+
+    home.abort();
+    sh.abort();
+    lh.abort();
+}
+
+#[tokio::test]
+async fn forwarding_aborts_when_service_stops_answering_probes() {
+    // 本地服务卡死（永不返回）且探活回 alive=false → 云端应主动放弃并返回 504
+    let health = HealthConfig {
+        first_response_timeout: Duration::from_millis(300),
+        probe_timeout: Duration::from_millis(500),
+        request_timeout: Duration::from_secs(5),
+        heartbeat_timeout: Duration::from_secs(3600),
+        reaper_interval: Duration::from_secs(3600),
+        ..Default::default()
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let (local, lh) = start_local_hanging_mock().await;
+    let reg = register(&addr, "home", "secret").await;
+    let ws_url = reg.json::<serde_json::Value>().await.unwrap()["ws_url"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // 探活回 alive=false 的家庭端（本地卡死）
+    let home = tokio::spawn(run_home_with_heartbeat(ws_url, local, false));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/t/home/v1/chat", addr))
+        .timeout(Duration::from_secs(10))
+        .body("hello")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
+    let body = resp.text().await.unwrap();
+    assert!(
+        body.contains("heartbeat"),
+        "应说明放弃原因是探活失败: {body}"
+    );
+
+    home.abort();
+    sh.abort();
+    lh.abort();
+}
+
+#[tokio::test]
+async fn client_sends_heartbeat_and_answers_probes() {
+    // 真实 client（run_client）端到端：注册拿 hash → 按周期心跳 → 云端探活得到回应。
+    let health = HealthConfig {
+        heartbeat_interval: Duration::from_millis(60),
+        heartbeat_timeout: Duration::from_millis(120),
+        probe_timeout: Duration::from_millis(500),
+        reaper_interval: Duration::from_millis(50),
+        first_response_timeout: Duration::from_millis(200),
+        request_timeout: Duration::from_secs(5),
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let (local, lh) = start_local_mock().await;
+
+    let cfg = rrserver::client::ClientConfig {
+        server_base: format!("http://{}", addr),
+        name: "home".into(),
+        token: "secret".into(),
+        local_url: local,
+    };
+    let home = tokio::spawn(run_client(cfg));
+    wait_for_tunnel_connected(&addr).await;
+
+    // 客户端持续心跳（60ms 周期 < 120ms 阈值），注册应长期存活
+    tokio::time::sleep(Duration::from_millis(700)).await;
+    let listed: serde_json::Value = reqwest::Client::new()
+        .get(format!("http://{}/api/services", addr))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let list = listed["services"].as_array().unwrap();
+    assert_eq!(list.len(), 1, "真实 client 的心跳应保住注册");
+    assert_eq!(list[0]["stale"], false);
+    // 心跳确实被记录（距上次心跳的时间应远小于观察时长）
+    assert!(list[0]["heartbeat_age_secs"].as_u64().unwrap() < 1);
+
+    home.abort();
+    sh.abort();
+    lh.abort();
+}
+
+#[tokio::test]
+async fn client_reconnects_with_new_hash_after_registration_is_closed() {
+    // 云端关闭注册（连同隧道）后，真实 client 应自动重连并重新注册 —— 拿到**新的** hash code。
+    // 这是 Python e2e 里「注销后 client 自动恢复」断言的 Rust 侧守护（CI 必跑）。
+    let health = HealthConfig {
+        heartbeat_interval: Duration::from_millis(200),
+        heartbeat_timeout: Duration::from_secs(3600),
+        probe_timeout: Duration::from_millis(500),
+        reaper_interval: Duration::from_secs(3600),
+        first_response_timeout: Duration::from_millis(300),
+        request_timeout: Duration::from_secs(5),
+    };
+    let (addr, sh) = start_server_with_health(health).await;
+    let (local, lh) = start_local_mock().await;
+
+    let cfg = rrserver::client::ClientConfig {
+        server_base: format!("http://{}", addr),
+        name: "home".into(),
+        token: "secret".into(),
+        local_url: local,
+    };
+    let home = tokio::spawn(run_client(cfg));
+    wait_for_tunnel_connected(&addr).await;
+
+    let client = reqwest::Client::new();
+    let listed: serde_json::Value = client
+        .get(format!("http://{}/api/services", addr))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let old_hash = listed["services"][0]["hash"]
+        .as_str()
+        .expect("client 应已注册")
+        .to_string();
+
+    let closed = client
+        .post(format!("http://{}/api/unregister", addr))
+        .json(&json!({"name": "home", "hash": old_hash}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(closed.status(), StatusCode::OK);
+    // 旧 hash 立即失效
+    let stale_hb = client
+        .post(format!("http://{}/api/heartbeat", addr))
+        .json(&json!({"name": "home", "hash": old_hash}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stale_hb.status(), StatusCode::NOT_FOUND);
+
+    // client 重连并重新注册：应出现一个不同于旧值的 hash
+    let mut new_hash = None;
+    for _ in 0..200 {
+        let v: serde_json::Value = client
+            .get(format!("http://{}/api/services", addr))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        if let Some(h) = v["services"][0].get("hash").and_then(|x| x.as_str()) {
+            if h != old_hash {
+                new_hash = Some(h.to_string());
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let new_hash = new_hash.expect("client 应重新注册并拿到新的 hash code");
+    // 隧道随之恢复，且新 hash 可用于心跳
+    wait_for_tunnel_connected(&addr).await;
+    let hb = client
+        .post(format!("http://{}/api/heartbeat", addr))
+        .json(&json!({"name": "home", "hash": new_hash}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(hb.status(), StatusCode::OK);
+
+    home.abort();
+    sh.abort();
+    lh.abort();
+}
+
+#[tokio::test]
+async fn forwarding_without_registration_is_rejected() {
+    // 隧道在、注册没了（例如注册被回收而隧道尚未断开）：无从探活，
+    // 应明确拒绝并提示服务重新注册，而不是无限等待。
+    let health = HealthConfig {
+        first_response_timeout: Duration::from_millis(200),
+        probe_timeout: Duration::from_millis(500),
+        request_timeout: Duration::from_secs(5),
+        heartbeat_timeout: Duration::from_secs(3600),
+        reaper_interval: Duration::from_secs(3600),
+        ..Default::default()
+    };
+    let (addr, state, sh) = start_server_with_state(health).await;
+    // 本地 1.2s 才回：足以触发首响探活（200ms），又不会让恢复后的断言等太久
+    let (local, lh) = start_local_slow_mock(Duration::from_millis(1200)).await;
+
+    let reg = register(&addr, "home", "secret").await;
+    let v: serde_json::Value = reg.json().await.unwrap();
+    let hash = v["hash_code"].as_str().unwrap().to_string();
+    let ws_url = v["ws_url"].as_str().unwrap().to_string();
+    let home = tokio::spawn(run_home(ws_url, local));
+    wait_for_tunnel_connected(&addr).await;
+
+    // 仅抹掉注册记录，隧道通道保持连接
+    assert!(state.services.remove_by_hash(&hash).await.is_some());
+
+    let resp = reqwest::Client::new()
+        .post(format!("http://{}/t/home/v1/chat", addr))
+        .timeout(Duration::from_secs(10))
+        .body("hello")
+        .send()
+        .await
+        .unwrap();
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    assert_eq!(status, StatusCode::GATEWAY_TIMEOUT, "body={body}");
+    assert!(body.contains("not registered"), "应提示先重新注册: {body}");
+
+    // 重新注册后服务恢复：注册记录重新出现，转发正常
+    let reg2 = register(&addr, "home", "secret").await;
+    assert_eq!(reg2.status(), StatusCode::OK);
+    let resp2 = reqwest::Client::new()
+        .post(format!("http://{}/t/home/v1/chat", addr))
+        .timeout(Duration::from_secs(10))
+        .body("again")
+        .send()
+        .await
+        .unwrap();
+    let status2 = resp2.status();
+    let body2 = resp2.text().await.unwrap_or_default();
+    // 慢 mock 固定返回 200 并回显 body
+    assert_eq!(status2, StatusCode::OK, "body={body2}");
+    assert_eq!(body2, "again");
+
+    home.abort();
+    sh.abort();
+    lh.abort();
 }

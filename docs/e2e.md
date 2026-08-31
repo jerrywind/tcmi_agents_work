@@ -16,7 +16,7 @@
 e2e_tests/
 ├── conftest.py                        # 各组件 base_url + 健康等待 + httpx fixtures
 ├── e2e_helpers.py                     # 共享辅助
-├── test_rrserver_e2e.py               # rrserver 隧道：server+client 启动、token 鉴权、/t/<name> 转发
+├── test_rrserver_e2e.py               # rrserver 隧道：server+client 启动、token 鉴权、/t/<name> 转发、注册 hash / 心跳 / 注销与自动重连
 ├── test_llm_server_e2e.py             # llm_server 网关：/healthz(degraded/ok)、/v1/models、chat 透传
 ├── _make_sample_image.py              # 生成 1x1 样例 JPEG（素材）
 ├── run_full_chain_e2e.ps1             # 一键编排：起 harness → pytest → 前端契约测试
@@ -32,7 +32,7 @@ frontend/src/services/harness.contract.test.ts  # vitest：真实执行 harness.
 
 | 层 | 测试文件 | 验证点 | 依赖真实 LLM? |
 |---|---|---|---|
-| rrserver | `test_rrserver_e2e.py` | server/client 启动、token 鉴权、隧道把请求转发到本地 stub llm 并回传 | 否（stub 充当本地 llm） |
+| rrserver | `test_rrserver_e2e.py` | server/client 启动、token 鉴权、隧道把请求转发到本地 stub llm 并回传；注册签发 hash code、`/api/heartbeat` 报活与未知 hash 404、`/api/unregister` 后 client 自动重连恢复隧道 | 否（stub 充当本地 llm） |
 | llm_server | `test_llm_server_e2e.py` | 服务可达；无上游→`degraded` + `/v1/models` 503；有 stub 上游→`/v1/chat/completions` 透传 | 否（stub 充当 LM Studio） |
 | harness | `run_full_chain_e2e.ps1` 启动后探活 | `/health` 可达（返回 `ok`） | 否（仅只读端点） |
 | 前端→后端 | `frontend/src/services/harness.contract.test.ts` | 真实执行 `harness.ts` 函数：`/health`、`/agents`、`/skills`、`POST /skills` 错误分支，以及 MCP 的 `tools/list`、`list_agent_capabilities`（**默认开启**） | 否 |

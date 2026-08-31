@@ -22,13 +22,61 @@
 
 ## 工作原理
 
-1. **注册**：家庭端 `client` 启动后，用 `name + token` 向云端 `POST /api/register`，
-   云端校验通过后返回 `ws_url`。
+1. **注册**：家庭端 `client`（或 `llm_server` 自身）启动后，用 `name + token` 向云端
+   `POST /api/register`，云端校验通过后会为该次注册签发一个**独立 hash code**，
+   并返回 `ws_url`、接入形态（`transport`）与心跳周期。
 2. **建连**：家庭端与云端 `GET /ws/<name>?token=...` 建立**持久 WebSocket**（出海连接，绕过 NAT）。
    云端每 25s 发一次 `ping` 心跳保活。
 3. **转发**：外部对 `https://<域名>/rr/t/<name>/...` 的请求，经 nginx 反代到 rrserver；
    rrserver 通过对应隧道把请求（方法/路径/头/body）发给家庭端，家庭端转发到本地 `llm_server`，
    再把响应原路回传，rrserver 返回给外部调用方。整个 body 走 base64，支持任意二进制（含图片）。
+4. **心跳与探活**：见下节「注册 · 心跳 · 探活」。
+
+## 注册 · 心跳 · 探活
+
+服务注册后会拿到一个 hash code，随后由两端共同维护「服务是否还活着」：
+
+| 环节 | 周期 / 阈值 | 说明 |
+|---|---|---|
+| 服务主动心跳 | 每 **30 分钟** | `POST /api/heartbeat {"name","hash"}`，证明服务仍活跃 |
+| 转发首响等待 | **1 分钟** | 转发后 1 分钟没等到首个字节，云端**主动探活**，确认服务是否在运行 |
+| 静默判定 | **40 分钟** | 云端每 60s 扫描一次，找出 40 分钟没心跳的注册 |
+| 主动探活 | 等待 **1 分钟** | 经 WS 隧道下发 `heartbeat{probe_id}`，或（HTTP 直连形态）`GET {endpoint}/rr/heartbeat` |
+| 探活失败处理 | 立即 | 记录 `WARN` 日志 → 注销该注册、关闭对应隧道通道 |
+
+要点：
+
+- **hash code 每次注册重新签发**：同名服务重连/重启会拿到新 hash，可用于识别「重新注册」。
+  它同时可作为 WS 接入凭证（`?token=<hash>`），心跳/注销也以它为准。
+- **探活成功即保留**：服务确实在运行但心跳缺失（例如心跳任务异常）时只记日志、不注销；
+  并记下探活时间，避免下一轮重复探活刷爆日志。
+- **注销后自动重连**：注册被回收后，家庭端下一次心跳会收到 404，随即断开并重连、
+  重新注册拿新 hash；`llm_server`（Python）侧同样会自动重新注册。
+- **两种接入形态**：
+  - `ws`（默认）：服务在 NAT 后，走反向隧道，探活经 WS 下发；
+  - `http`：注册时带 `endpoint`（云端可直达的基址），探活走 `GET {endpoint}/rr/heartbeat`。
+
+相关端点：
+
+| 端点 | 说明 |
+|---|---|
+| `POST /api/register` | 注册并换取 hash code；可带 `endpoint` / `transport`。周期**由云端决定**并随响应下发 |
+| `POST /api/heartbeat` | 心跳上报（`{name, hash}`，name 必须与注册名一致）；注册不存在或 name 不符返回 404 |
+| `POST /api/unregister` | 主动注销：关闭注册维护并断开隧道（同样校验 name） |
+| `GET /api/services` | 注册总览（hash、形态、已过时长、是否 stale） |
+
+约定：
+
+- **周期 / 配置类字段统一用毫秒**（`*_millis`）：`heartbeat_interval_millis`、
+  `heartbeat_timeout_millis`、`probe_timeout_millis`。秒级字段在亚秒场景下会退化成 0，
+  配置文件里仍是秒（`[health] heartbeat_interval_secs`）。
+- **已过去时长的字段用秒**（`heartbeat_age_secs`、`silence_secs`、`registered_secs_ago`），
+  便于人工阅读。
+- **服务必须先注册**才能被转发：注册是拿到隧道地址的唯一途径，注册记录里带着探活所需的
+  形态与地址。隧道在而注册没了时，转发会返回 **504 `service not registered`**，
+  服务重新注册后即恢复。
+
+全部时长可在配置的 `[health]` 表中覆盖（见 `config/rrserver.toml`）。
 
 ## 目录结构
 
@@ -40,13 +88,14 @@ rrserver/
 ├── config/rrserver.toml.example
 ├── src/
 │   ├── main.rs        # CLI：server / client / llm-server 子命令 + TOML 配置
-│   ├── protocol.rs    # WS JSON 协议 + 头过滤/base64
-│   ├── state.rs       # 隧道注册表（通道 + 请求等待映射）
-│   ├── server.rs      # 云端中继：注册端点 + WS 隧道 + 反代转发 + 技能闸门
-│   ├── client.rs      # 家庭端：注册 + 维持 WS + 转发本地 llm
+│   ├── protocol.rs    # WS JSON 协议 + 头过滤/base64 + 心跳探活消息
+│   ├── state.rs       # 隧道注册表（通道 + 请求等待映射 + 探活等待映射）
+│   ├── registry.rs    # 服务注册中心：hash code 签发、心跳记录、静默扫描
+│   ├── server.rs      # 云端中继：注册/心跳/注销端点 + WS 隧道 + 转发探活 + 回收任务 + 技能闸门
+│   ├── client.rs      # 家庭端：注册 + 维持 WS + 心跳上报 + 转发本地 llm
 │   ├── skill.rs       # 可选技能闸门：冷却/资源/状态前置校验引擎
 │   └── llmsrv.rs      # 模型部署包装：启动/接入本地模型并注册到 rrserver
-├── tests/integration.rs   # 27 个端到端集成测试（真实 TCP + WS 编排）
+├── tests/integration.rs   # 36 个端到端集成测试（真实 TCP + WS 编排）
 ├── examples/e2e.rs        # 全链路实证示例（含真·流式分片透传）
 ├── scripts/gen-certs.sh   # 本地联调自签名证书生成
 └── README.md
@@ -58,12 +107,17 @@ rrserver/
 # 后端一律在 Docker 内跑（不使用宿主机 cargo 产物）
 cd server
 docker run --rm -v "${PWD}:/build" -w /build rust:1.98-bookworm `
-  cargo test -p rrserver          # lib 70 + main 3 + integration 27 = 100 个测试
+  cargo test -p rrserver          # lib 107 + main 4 + integration 36 = 147 个测试
 ```
 
 集成测试覆盖：流式分片重组、非 2xx 状态透传、并发请求隔离、CORS（实际请求 +
 OPTIONS 预检）、技能闸门（429/409/402、多技能冷却隔离）、隧道断线重连、
-同名新连接替换旧隧道（守护 `unregister_if_same` 竞态修复）。
+同名新连接替换旧隧道（守护 `unregister_if_same` 竞态修复）、
+注册签发 hash code / 心跳保活 / 探活失败后注销注册（回收任务）、
+转发首响超时后主动探活并继续等待（慢推理不被 1 分钟窗口掐断）、
+真实 client 心跳链路、注销后自动重连并重新注册（换新 hash）、
+**隧道在但注册没了 → 504 并提示重新注册**（重新注册后即恢复）、
+心跳 name 与注册名不一致按未知注册处理。
 
 全链路实证示例（真实 TCP + WS + 流式）：`docker run ... cargo run -p rrserver --example e2e`。
 
@@ -240,6 +294,7 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 | config `[[tunnels]]` | name/token | 允许的隧道鉴权对，可多个 |
 | client `--server` | 云端基址 | 如 `https://rr.example.com/rr` |
 | client `--local` | 本地 llm 基址 | 如 `http://127.0.0.1:8080` |
+| config `[health]` | 心跳 / 探活 / 转发超时 | `heartbeat_interval_secs`、`heartbeat_timeout_secs`、`probe_timeout_secs`、`first_response_timeout_secs`、`request_timeout_secs`、`reaper_interval_secs` |
 
 ## 安全说明
 

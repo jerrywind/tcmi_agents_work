@@ -12,6 +12,16 @@ external_ws_base = "wss://rr.example.com/rr"
 name = "home"
 token = "change-me-strong-token"
 
+# ───────── 可选：llm_server 注册 · 心跳 · 探活 ─────────
+# 全部可省略，缺省即下列默认值（30 分钟心跳 / 40 分钟探活 / 1 分钟等待）。
+# [health]
+# heartbeat_interval_secs     = 1800  # 注册响应里下发给服务的心跳周期
+# heartbeat_timeout_secs      = 2400  # 静默超过 40 分钟 → 主动探活
+# probe_timeout_secs          = 60    # 探活等待回应的上限（超时/异常即注销注册）
+# first_response_timeout_secs = 60    # 转发后等首响的时长，到点先探活再决定继续等
+# request_timeout_secs        = 600   # 单次转发总超时（需小于 nginx proxy_read_timeout）
+# reaper_interval_secs        = 60    # 心跳回收任务扫描周期
+
 # ───────── 可选：技能闸门 ─────────
 # 配置 [[skills]] 后启用。带 `X-Skill: <name>` 头的请求会先做
 # 「冷却 / 资源 / 状态」前置校验，校验通过才转发；失败返回对应状态码：

@@ -1,0 +1,116 @@
+# 各 sub-agent 的典籍检索域（可改）
+#
+# 背景：RAG 里有 694 部典籍，但**没有哪个 agent 该看全部**——
+# 切诊该翻《脉经》，开方该翻《普济方》，两者混着检索只会互相稀释。
+# 本文件用四维分类标签（临床学科 / 内容体裁 / 功能用途 / 学术流派）
+# 给每个 agent 圈定它该看的书。
+#
+# 字段：
+#   genres      —— 内容体裁（静态，agent 固有）
+#   functions   —— 功能用途（静态，体裁的细分）
+#   departments —— 临床学科。留空 = 不按科室过滤；
+#                  填 ["dynamic"] 表示**由辨证结果动态注入**
+#   schools     —— 学术流派。留空 = 不过滤（避免学术偏见）；
+#                  仅当请求 `payload.school` 指定时才注入
+#   top_k       —— 该 agent 单次检索取几条
+#
+# 过滤语义：**维度之间取交集**（体裁 AND 科室），维度内部取并集。
+# 例：开方 agent 在辨证为「儿科」后查「小儿发热咳嗽」
+#     -> 体裁=方书方剂 AND 科室=儿科 ->《小儿卫生总微论方》《慈幼便览》
+#
+# 对应 RAG 端点 POST /rag/retrieve/scope，见 docs/rag.md。
+
+# ---- 采集期（四诊）----
+inspection:                 # 望诊：舌诊、色诊、形态
+  genres: ["诊断学"]
+  functions: ["诊断方法"]
+  departments: []
+  schools: []
+  top_k: 3
+
+listening:                  # 闻诊：声、嗅、咳、息（专门著作极少，以临床各科为主）
+  genres: ["临床各科"]
+  functions: ["专科证治"]
+  departments: []
+  schools: []
+  top_k: 2
+
+inquiry:                    # 问诊：十问、辨证要点
+  genres: ["诊断学", "入门歌诀"]
+  functions: ["诊断方法", "入门启蒙"]
+  departments: []
+  schools: []
+  top_k: 2
+
+palpation:                  # 切诊：脉学专著
+  genres: ["诊断学"]
+  functions: ["诊断方法"]
+  departments: []
+  schools: []
+  top_k: 3
+
+# ---- 辨证期 ----
+case_reference:             # 相似古代医案（RAG 最具差异化的用法）
+  genres: ["临证医案"]
+  functions: ["临证实录"]
+  departments: ["dynamic"]  # 儿科病就看儿科医案
+  schools: []
+  top_k: 4
+
+differentiation:            # 辨证：经典、理论与各家学说
+  genres: ["医经基础", "伤寒论", "金匮要略", "医话医论"]
+  functions: ["理论建构", "经典诠释", "经典注疏", "医论争鸣"]
+  departments: ["dynamic"]
+  schools: []               # payload.school 指定时注入
+  top_k: 4
+
+# ---- 安全期 ----
+safety:                     # 安全门：配伍禁忌、药性毒性
+  genres: ["本草药物"]
+  functions: ["配伍归经", "药性理论", "经典本草"]
+  departments: []
+  schools: []
+  top_k: 3
+
+# ---- 治疗期 ----
+strategy:                   # 立法：治则治法（汗吐下和温清消补）
+  genres: ["临床综合", "医话医论"]
+  functions: ["综合证治", "医论争鸣"]
+  departments: ["dynamic"]
+  schools: []
+  top_k: 3
+
+herbology:                  # 用药：药性、炮制、配伍、剂量
+  genres: ["本草药物"]
+  functions: ["药性理论", "炮制制剂", "配伍归经", "经典本草"]
+  departments: []
+  schools: []
+  top_k: 4
+
+prescription:               # 开方：方书（流程最后一步）
+  genres: ["方书方剂"]
+  functions: ["方剂汇编", "专科方书", "经验验方", "成药标准", "急救方书", "方论阐释"]
+  departments: ["dynamic"]  # 辨证出妇科就看妇科方书
+  schools: []
+  top_k: 5
+
+care:                       # 调护：食疗、养生、生活调摄（默认关闭）
+  genres: ["养生摄生", "本草药物"]
+  functions: ["养生调摄", "食疗本草"]
+  departments: []
+  schools: []
+  top_k: 3
+
+acupuncture:                # 针灸外治（默认关闭）
+  genres: ["针灸经络"]
+  functions: ["刺法灸法", "腧穴考证", "经络理论", "时间针法", "推拿按摩", "针灸综合"]
+  departments: ["dynamic"]
+  schools: []
+  top_k: 3
+
+treatment:                  # 兼容旧流程的综合治疗步
+  genres: ["方书方剂", "临床综合"]
+  functions: ["方剂汇编", "专科方书", "综合证治"]
+  departments: ["dynamic"]
+  schools: []
+  top_k: 4

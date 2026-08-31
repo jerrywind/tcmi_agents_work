@@ -82,12 +82,36 @@ fn default_method() -> String {
     "GET".to_string()
 }
 
+/// 云端 → 家庭端：心跳探活请求。
+///
+/// 转发等待超时、或心跳回收任务扫描到静默服务时由云端主动发出；
+/// `probe_id` 用于与回应配对（一次探活一个 id）。
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HeartbeatProbe {
+    pub probe_id: String,
+}
+
+/// 家庭端 → 云端：心跳探活回应。
+///
+/// `alive` 表示本地 llm 服务确实在运行（缺省视为 true，兼容只回 probe_id 的老实现）。
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HeartbeatAck {
+    pub probe_id: String,
+    #[serde(default = "default_alive")]
+    pub alive: bool,
+}
+
+fn default_alive() -> bool {
+    true
+}
+
 /// 云端 → 家庭端。
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ServerToClient {
     Request(RequestMsg),
     Ping,
+    Heartbeat(HeartbeatProbe),
 }
 
 /// 家庭端 → 云端。
@@ -97,6 +121,7 @@ pub enum ClientToServer {
     Response(ResponseMsg),
     ResponseChunk(ResponseChunkMsg),
     Pong,
+    Heartbeat(HeartbeatAck),
 }
 
 #[cfg(test)]
@@ -259,6 +284,46 @@ mod tests {
                 assert!(c.done);
             }
             _ => panic!("expected ResponseChunk variant"),
+        }
+    }
+
+    #[test]
+    fn heartbeat_probe_round_trip() {
+        // 云端下发探活：lowercase 的 "heartbeat"
+        let s = serde_json::to_string(&ServerToClient::Heartbeat(HeartbeatProbe {
+            probe_id: "p1".into(),
+        }))
+        .unwrap();
+        assert_eq!(s, r#"{"type":"heartbeat","probe_id":"p1"}"#);
+        match serde_json::from_str::<ServerToClient>(&s).unwrap() {
+            ServerToClient::Heartbeat(p) => assert_eq!(p.probe_id, "p1"),
+            _ => panic!("expected Heartbeat variant"),
+        }
+    }
+
+    #[test]
+    fn heartbeat_ack_round_trip_and_defaults_alive() {
+        let s = serde_json::to_string(&ClientToServer::Heartbeat(HeartbeatAck {
+            probe_id: "p1".into(),
+            alive: false,
+        }))
+        .unwrap();
+        match serde_json::from_str::<ClientToServer>(&s).unwrap() {
+            ClientToServer::Heartbeat(a) => {
+                assert_eq!(a.probe_id, "p1");
+                assert!(!a.alive);
+            }
+            _ => panic!("expected Heartbeat variant"),
+        }
+
+        // 老实现可能只回 probe_id：缺省 alive 视为 true
+        let minimal = r#"{"type":"Heartbeat","probe_id":"p2"}"#;
+        match serde_json::from_str::<ClientToServer>(minimal).unwrap() {
+            ClientToServer::Heartbeat(a) => {
+                assert_eq!(a.probe_id, "p2");
+                assert!(a.alive, "缺省 alive 应为 true");
+            }
+            _ => panic!("expected Heartbeat variant"),
         }
     }
 

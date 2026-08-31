@@ -44,6 +44,9 @@ pub struct AppState {
     pub registry: agents::Registry,
     /// 技能/工具注册表（MCP / HTTP）
     pub skills: Arc<skills::SkillRegistry>,
+    /// 当前科室（临床学科标签）：辨证后由编排器写入，`tcm-rag` 读取用于
+    /// 动态收窄检索范围。技能执行体是闭包、拿不到 agent 上下文，故走共享状态。
+    pub departments: skills::SharedDepartments,
     /// 报告存储（T5.1；未配置 store_dir 时为空实现）
     pub store: Arc<ReportStore>,
 }
@@ -67,7 +70,10 @@ impl AppState {
         let registry = agents::Registry::new();
 
         // 技能注册表：内置工具（9 个 + treatment 专属 2 个），再按配置挂载外部 MCP
-        let mut skills = skills::build_default_registry(&config, &resources, llm.clone());
+        // 显式用 std 的 RwLock：技能执行体在同步闭包里读它，不该引入异步锁
+        let departments: skills::SharedDepartments = Arc::new(std::sync::RwLock::new(Vec::new()));
+        let mut skills =
+            skills::build_default_registry(&config, &resources, llm.clone(), departments.clone());
         if !config.mcp_clients.is_empty() {
             skills::mount_mcp_clients(&mut skills, &config, &llm).await;
         }
@@ -89,6 +95,7 @@ impl AppState {
             llm,
             registry,
             skills: Arc::new(skills),
+            departments,
             store: Arc::new(store),
         })
     }

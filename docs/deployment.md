@@ -19,7 +19,7 @@
 | harness | 8011 | 容器内监听；nginx 以 `/api` 前缀对外并剥离后转发 |
 | llm_server | 8000 | `/healthz`、`/v1/*`（可选网关） |
 | LM Studio（宿主机） | 11223 | `http://localhost:11223/v1`；容器内用 `host.docker.internal` |
-| rrserver server | 容器内 8080（nginx 对外 8088） | `/healthz`、`/api/register`、WS `/ws/<name>`、隧道 `/t/<name>/*` |
+| rrserver server | 容器内 8080（nginx 对外 8088） | `/healthz`、`/api/register`、`/api/heartbeat`、`/api/unregister`、`/api/services`、WS `/ws/<name>`、隧道 `/t/<name>/*` |
 | rrserver client | 9000 | 家庭端隧道客户端 |
 | RAG（可选） | 8080（`RAG_PORT`） | `llm_server/rag`，见 `rag.md` |
 
@@ -181,7 +181,52 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 > 直连 rrserver server（不经 nginx 反代）时，`external_ws_base` 应设为 `ws://<host>:<port>`
 > （**不含 `/rr` 前缀**）——`/rr` 由 nginx 添加，否则 WS 握手 404。
 
-### 5.4 防火墙与证书
+### 5.4 注册 · 心跳 · 探活
+
+服务（家庭端 client 或 `llm_server` 自身）启动后**主动**注册，换取一个独立 hash code，
+之后靠心跳维持注册：
+
+```
+服务 ──1. POST /rr/api/register(name,token[,endpoint])──▶ rrserver
+     ◀──   hash_code + heartbeat_interval  ─────────────┘
+     ──2. 每 30 分钟 POST /rr/api/heartbeat(name,hash)──▶ rrserver
+     ◀──3. 静默 40 分钟 → 探活（WS 或 GET {endpoint}/rr/heartbeat）─┘
+     ──4. 关机 POST /rr/api/unregister(name,hash)──────▶ rrserver
+```
+
+| 环节 | 默认 | 配置键（`rrserver.toml` 的 `[health]`） |
+|---|---|---|
+| 服务心跳周期 | 30 分钟 | `heartbeat_interval_secs` |
+| 静默判定（超过即探活） | 40 分钟 | `heartbeat_timeout_secs` |
+| 探活等待上限 | 1 分钟 | `probe_timeout_secs` |
+| 转发首响等待（到点先探活） | 1 分钟 | `first_response_timeout_secs` |
+| 单次转发总超时 | 10 分钟 | `request_timeout_secs` |
+| 回收任务扫描周期 | 1 分钟 | `reaper_interval_secs` |
+
+要点：
+
+- **首响 1 分钟不是硬超时**：到点先探活，服务活着就继续等（LLM 推理常超过 1 分钟），
+  探活失败才以 504 放弃；总时长受 `request_timeout_secs` 约束。
+- **探活成功即保留**：心跳丢了但服务确实在跑，只记日志不注销。
+- **探活失败**：`WARN` 日志 + 注销注册并关闭隧道；服务下次心跳收到 404 会自动重新注册。
+- **nginx 超时必须 ≥ `request_timeout_secs`**：`deploy/nginx/rrserver.conf` 已设
+  `proxy_read_timeout 600s` / `proxy_send_timeout 600s`；若调大
+  `request_timeout_secs`，两处需同步调整，否则 nginx 会先掐断。
+- **心跳周期由云端统一下发**：服务不自带周期配置，注册响应里的
+  `heartbeat_interval_millis` 就是唯一依据。
+- **`llm_server` 接入**（可选）：配 `RR_SERVER_BASE`、`RR_SERVICE_NAME`、
+  `RR_SERVICE_TOKEN`（可选 `RR_SERVICE_ENDPOINT`）即可，未配则不注册、
+  不影响原有功能，详见 [`llm_server.md`](./llm_server.md)。
+- **响应字段单位**：周期/配置类用毫秒（`*_millis`），已过时长用秒（`*_secs`）。
+
+排障入口：
+
+```bash
+curl -s https://<域名>/rr/api/services | jq
+# 关注 hash / transport / heartbeat_age_secs / stale 字段
+```
+
+### 5.5 防火墙与证书
 
 - 云端放通 `8088`（server 入口）、`443`（HTTPS/WSS，由 `deploy/` 的 nginx 前置 TLS）。
 - 证书：`deploy/certs/fullchain.pem` + `privkey.pem`（当前为自签名，仅内网可用；
@@ -194,7 +239,8 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 
 - **健康探针**：harness `GET /health`（经 nginx 为 `/api/health`）；llm_server `GET /healthz`
   （无上游→`degraded`）；rrserver `GET /healthz`（`ok`）；
-  隧道通断 `GET /t/<name>/v1/models`，harness 隧道可用 `GET /t/tcm/skills` 验证。
+  隧道通断 `GET /t/<name>/v1/models`，harness 隧道可用 `GET /t/tcm/skills` 验证；
+  注册维护状态 `GET /api/services`（每条含 `hash` / `stale` / `heartbeat_age_secs`）。
 - **全链路 E2E**（用 stub，不需真实 LLM）：`e2e_tests/run_full_chain_e2e.ps1`，见 [`e2e.md`](./e2e.md)。
 - **人工验收**（需真实 LLM）：`e2e_tests/run_manual_e2e.ps1`，产出见 [`samples/`](./samples/README.md)。
 - **后端测试**（Docker 内）：见 [`testing.md`](./testing.md)。

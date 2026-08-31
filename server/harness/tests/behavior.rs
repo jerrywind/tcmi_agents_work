@@ -67,7 +67,13 @@ fn no_red_flag_when_text_is_benign() {
 fn treatment_owns_formula_and_care_skills() {
     let res = bundle();
     let cfg = HarnessConfig::default();
-    let reg = build_default_registry(&cfg, &res, reqwest::Client::new());
+    // 末位是编排器与技能共享的「当前科室」，测试里用空列表即可
+    let reg = build_default_registry(
+        &cfg,
+        &res,
+        reqwest::Client::new(),
+        std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+    );
 
     let names = |c: Capability| -> Vec<String> {
         reg.for_capability(c)
@@ -106,7 +112,18 @@ fn capability_parses_slug_and_chinese_name() {
     );
     assert_eq!(Capability::from_name("治疗"), Some(Capability::Treatment));
     assert_eq!(Capability::from_name("不存在的步骤"), None);
-    assert_eq!(Capability::ALL.len(), 7);
+    // 13 个：四诊 4 + 医案参考 + 辨证 + 安全门 + 立法 / 用药 / 开方 + 调护 / 针灸 + 治疗
+    assert_eq!(Capability::ALL.len(), 13);
+    // 新增的治疗期三步：slug 与中文名都要能解析（前端按中文名过滤技能 owner）
+    assert_eq!(
+        Capability::from_name("prescription"),
+        Some(Capability::Prescription)
+    );
+    assert_eq!(
+        Capability::from_name("开方"),
+        Some(Capability::Prescription)
+    );
+    assert_eq!(Capability::COLLECTION.len(), 4);
 }
 
 // ---------------- T2.4 MCP 配置解析 ----------------
@@ -224,6 +241,7 @@ fn diagnosis_payload_exposes_blocked_skipped_and_trace() {
             error: None,
         }],
         structured: vec![],
+        ..Default::default()
     };
 
     let v = diagnosis_payload(&d);
@@ -374,6 +392,7 @@ fn diagnosis_payload_exposes_structured_differentiation() {
             Capability::Differentiation,
             serde_json::to_value(&r).unwrap(),
         )],
+        ..Default::default()
     };
 
     let v = diagnosis_payload(&d);
@@ -645,6 +664,7 @@ fn safety_step_cannot_be_removed_by_routing() {
         routing: Routing {
             active: vec!["differentiation".to_string(), "treatment".to_string()],
             default: None,
+            ..Default::default()
         },
         ..ResourceBundle::default()
     };
@@ -671,6 +691,7 @@ fn safety_step_cannot_be_removed_by_routing() {
         routing: Routing {
             active: vec!["safety".to_string(), "treatment".to_string()],
             default: None,
+            ..Default::default()
         },
         ..ResourceBundle::default()
     };
@@ -691,9 +712,12 @@ fn chat_payload_carries_disclaimer() {
         blocked: None,
         trace: vec![],
         structured: vec![],
+        ..Default::default()
     };
     let v = diagnosis_payload(&d);
     assert_eq!(v["disclaimer"], json!(DISCLAIMER));
+    // 未启用 loop 时不该出现 awaiting_input，避免调用方误以为还要继续追问
+    assert_eq!(v["status"], json!("completed"));
     assert!(
         v["disclaimer"].as_str().unwrap().contains("不构成医疗诊断"),
         "免责声明内容应完整：{}",

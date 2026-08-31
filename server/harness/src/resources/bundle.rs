@@ -43,6 +43,11 @@ pub fn load(dir: &Path) -> Result<ResourceBundle> {
         load_yaml::<PromptBundle>(dir.join("prompts.yaml")).context("加载 prompts.yaml 失败")?;
     bundle.routing =
         load_yaml::<Routing>(dir.join("routing.yaml")).context("加载 routing.yaml 失败")?;
+    // 检索域是可选文件：老部署的 resources/ 里没有它，热重载不该因此失败，
+    // 只是所有 agent 退回「不按域过滤」的宽检索。
+    bundle.rag_scopes = load_yaml_opt::<RagScopes>(dir.join("rag_scopes.yaml"))
+        .context("加载 rag_scopes.yaml 失败")?
+        .unwrap_or_default();
 
     Ok(bundle)
 }
@@ -51,6 +56,18 @@ fn load_yaml<T: serde::de::DeserializeOwned>(path: std::path::PathBuf) -> Result
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("找不到文件: {}", path.display()))?;
     serde_yaml::from_str(&text).with_context(|| format!("解析 YAML 失败: {}", path.display()))
+}
+
+/// 字典型 YAML（可选）：文件不存在时返回 `None` 并告警。
+///
+/// 用于后加入的资源文件（如 `rag_scopes.yaml`）：已有部署的 `resources/`
+/// 目录里没有它，热重载不应因此失败。
+fn load_yaml_opt<T: serde::de::DeserializeOwned>(path: std::path::PathBuf) -> Result<Option<T>> {
+    if !path.exists() {
+        tracing::warn!("可选资源缺失，按缺省处理：{}", path.display());
+        return Ok(None);
+    }
+    load_yaml(path).map(Some)
 }
 
 /// 列表型 YAML（可选）：文件不存在时返回空列表并告警。

@@ -18,8 +18,13 @@ max_tool_rounds: 3
 llm_max_retries: 2
 llm_retry_backoff_ms: 500        # 第 n 次重试等待 base * 2^n（上限 16 倍）
 
-# 可选 RAG 检索端点（留空则 tcm-rag 技能返回提示）
-# rag_endpoint: "http://127.0.0.1:8080/rag/retrieve/text"
+# RAG 检索端点（中医典籍 694 部）。
+# RAG 已挂载在 **llm_server 主应用**上（app/rag_router.py），故指向 llm_server
+# 而非独立 RAG 服务——llm_server 容器内端口 8000、宿主机映射 22010。
+#   docker 同一网络：http://llm_server:8000/rag/retrieve/text
+#   本地开发      ：http://localhost:8000/rag/retrieve/text
+# 配错/服务未起不会中断流程：tcm-rag 技能失败时返回 {"error": ...} 优雅降级。
+rag_endpoint: "http://llm_server:8000/rag/retrieve/text"
 
 # 外部 MCP server（可选）：启动时逐个 tools/list，把工具挂成 mcp__<name>__<tool>
 # 单个 server 不可达只告警、不影响启动。

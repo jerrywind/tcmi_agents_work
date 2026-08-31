@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 try:
     from .config import RAGConfig
@@ -83,7 +83,54 @@ class RAGService:
         return rid
 
     # ---- 检索 ----
-    async def retrieve_text(self, query: str, top_k: int | None = None) -> list[dict]:
+    def _corpus_search(self, query: str, k: int, *,
+                       tags: Sequence[str] | None = None,
+                       tag_groups: Sequence[Sequence[str]] | None = None):
+        """同步语料检索（在 `retrieve_corpus` / `retrieve_text` 里丢进线程池）。
+
+        `_corpus` 为 None（索引未构建/损坏）时返回空列表，而不是抛异常——
+        典籍检索是可降级能力，不该让整个 RAG 请求失败。
+        """
+        if self._corpus is None:
+            return []
+        return self._corpus.search(
+            query,
+            top_k=k,
+            top_docs=self.cfg.corpus_top_docs,
+            max_chars=self.cfg.corpus_max_chars,
+            overlap=self.cfg.corpus_overlap,
+            tags=tags,
+            tag_groups=tag_groups,
+        )
+
+    async def _corpus_search_async(self, query: str, k: int, **kw):
+        # 语料检索是**同步且读盘**的，放进线程池执行，避免阻塞事件循环
+        loop = __import__("asyncio").get_running_loop()
+        return await loop.run_in_executor(
+            None, lambda: self._corpus_search(query, k, **kw))
+
+    async def retrieve_corpus(self, query: str, top_k: int | None = None, *,
+                              tags: Sequence[str] | None = None,
+                              tag_groups: Sequence[Sequence[str]] | None = None
+                              ) -> list[dict]:
+        """只查典籍语料（离线 bigram 索引），**带知识域过滤**。
+
+        与 `retrieve_text` 里的语料补齐不同，这是**一等通道**而非兜底：
+        sub-agent 各有自己的检索域（开方只看方书、切诊只看脉学），
+        必须能主动、独立地检索，而不是等向量域召不满才轮到它。
+
+        `tag_groups` 做跨维度交集，如「体裁=方书方剂 AND 科室=儿科」，
+        语义见 `CorpusIndex.doc_ords_for_tags`。
+        """
+        k = top_k or self.cfg.top_k
+        return [self._chunk_to_dict(ch)
+                for ch in await self._corpus_search_async(
+                    query, k, tags=tags, tag_groups=tag_groups)]
+
+    async def retrieve_text(self, query: str, top_k: int | None = None, *,
+                            tags: Sequence[str] | None = None,
+                            tag_groups: Sequence[Sequence[str]] | None = None
+                            ) -> list[dict]:
         k = top_k or self.cfg.top_k
         vec = await self.text_embedder.embed_one(query)
         hits = self.store.search(vec, modality="text",
@@ -93,40 +140,36 @@ class RAGService:
         out = [self._hit_to_dict(h) for h in hits]
         # 典籍语料补充（T4.3）：向量域没召回满时，用离线索引补齐。
         # 两者是互补而非替代——向量擅长语义相近，bigram 索引擅长精确用词。
-        if len(out) < k and self._corpus is not None:
+        if len(out) < k:
             seen = {h["text"][:40] for h in out}
-            # 语料检索是**同步且读盘**的，放进线程池执行，避免阻塞事件循环
-            corpus_hits = await __import__("asyncio").get_running_loop().run_in_executor(
-                None,
-                lambda: self._corpus.search(
-                    query,
-                    top_k=k,
-                    top_docs=self.cfg.corpus_top_docs,
-                    max_chars=self.cfg.corpus_max_chars,
-                    overlap=self.cfg.corpus_overlap,
-                ),
-            )
+            corpus_hits = await self._corpus_search_async(
+                query, k, tags=tags, tag_groups=tag_groups)
             for ch in corpus_hits:
                 if ch.text[:40] in seen:
                     continue
                 seen.add(ch.text[:40])
-                out.append({
-                    "id": ch.id,
-                    "score": round(ch.score, 4),
-                    "modality": "text",
-                    "text": ch.text,
-                    "image_path": None,
-                    "image_caption": None,
-                    "meta": {
-                        **ch.meta,
-                        # 出处带上篇名：模型引用时能说清「出自哪一本的哪一篇」
-                        "source": f"《{ch.book}》{ch.meta.get('section', '')}".rstrip(),
-                        "kind": "corpus",
-                    },
-                })
+                out.append(self._chunk_to_dict(ch))
                 if len(out) >= k:
                     break
         return out
+
+    @staticmethod
+    def _chunk_to_dict(ch) -> dict:
+        """语料片段 -> 与向量命中同构的字典，方便调用方无差别处理。"""
+        return {
+            "id": ch.id,
+            "score": round(ch.score, 4),
+            "modality": "text",
+            "text": ch.text,
+            "image_path": None,
+            "image_caption": None,
+            "meta": {
+                **ch.meta,
+                # 出处带上篇名：模型引用时能说清「出自哪一本的哪一篇」
+                "source": f"《{ch.book}》{ch.meta.get('section', '')}".rstrip(),
+                "kind": "corpus",
+            },
+        }
 
     def corpus_stats(self) -> dict | None:
         return self._corpus.stats() if self._corpus else None

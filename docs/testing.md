@@ -20,9 +20,10 @@
 | 集成 | `server/harness/tests/cases.rs` | **案例回归**：以 `cases.jsonl` 真实病例校验资源与纯函数链路（不依赖 LLM） |
 | 集成 | `server/harness/tests/behavior.rs` | **行为回归**：红旗中断判定、技能归属（含 treatment 专属工具）、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**（均不依赖 LLM） |
 | 评测 | `server/harness/tests/llm_eval.rs` | **LLM 质量评分**（T4.4）：以 `cases.jsonl` 跑真实辨证并自动评分；默认跳过，`HARNESS_EVAL=1` 才启用 |
-| 隧道 | `server/rrserver/tests/integration.rs` | rrserver 端到端：注册鉴权、隧道转发、流式、CORS、断线重连、模型部署包装 |
+| 隧道 | `server/rrserver/tests/integration.rs` | rrserver 端到端：注册鉴权、**hash code 注册/心跳/探活/回收**、隧道转发、流式、CORS、断线重连、模型部署包装 |
 
-当前 **后端 129 个用例全绿**（harness 29：behavior 26 + cases 2 + llm_eval 1；rrserver 100）。
+当前 **后端 182 个用例全绿**（harness 35：lib 6 + behavior 26 + cases 2 + llm_eval 1；
+rrserver 147：lib 107 + main 4 + 集成 36）。
 
 ```powershell
 # 后端一律在 Docker 内跑，runner / 本机无需 Rust 工具链
@@ -97,7 +98,23 @@ npx vitest run            # 单测（jsdom）
 > `vitest.setup.ts` 的 Taro mock 必须是 `vi.fn()`（普通 async 函数会让
 > `mockImplementation` 不存在）；后端地址不能用旧 Python backend 的 `:22000`。
 
-### 2.1 RAG 语料（`llm_server/rag`，T4.3）
+### 2.1 llm_server 单元/组件测试（pytest）
+
+```bash
+cd llm_server
+pip install -r requirements-dev.txt     # 仅测试需要，运行服务不需要
+python -m pytest tests -q               # 8 条
+```
+
+| 文件 | 覆盖 |
+|---|---|
+| `tests/test_rrclient.py` | `app/rrclient.py`：注册换取 hash code 与毫秒周期、响应不完整判失败、心跳循环持续报活、注册被回收（404）后自动重新注册换新 hash、停止时注销、未启用时的空转 |
+| `tests/test_gateway_rr.py` | `GET /rr/heartbeat` 探活端点与 `GET /healthz` 里新增的 `rrserver` 注册状态字段 |
+
+假 rrserver 是进程内 ASGI 应用（经 `httpx.ASGITransport` 注入），**不占端口、不联网**，
+`Registrar` 构造函数为此保留了 `transport` 注入点。
+
+### 2.2 RAG 语料（`llm_server/rag`，T4.3）
 
 ```bash
 cd llm_server/rag
@@ -125,8 +142,12 @@ python -m unittest test_rag -v        # 检索服务（6 条，含网络降级�
 
 独立套件位于 `tcm_work/e2e_tests/`，一键编排 `run_full_chain_e2e.ps1`：
 
-- `test_rrserver_e2e.py`：rrserver 隧道转发（需 rrserver 二进制，缺失则 skip）
-- `test_llm_server_e2e.py`：llm_server 网关健康检查与透传（无上游→`degraded`/`503`）
+- `test_rrserver_e2e.py`：rrserver 隧道转发 + **注册/心跳/注销与自动重连**
+  （需 rrserver 二进制，缺失则 skip；默认被 `-k "not rrserver"` 排除，
+  `-WithRrserver` 时启用）
+- `test_llm_server_e2e.py`：llm_server 网关健康检查与透传（无上游→`degraded`/`503`）、
+  `GET /rr/heartbeat` 探活端点、`/healthz` 的注册状态字段、
+  **中继不可达时注册失败但服务照常可用**
 - 前端 `frontend/src/services/harness.contract.test.ts`（vitest，**默认开启**：
   连真实 harness 校验 `/health`、`/agents`、`/skills`、`POST /skills` 错误分支；
   后端不可达时自动 skip，`-SkipFrontend` 可关闭）

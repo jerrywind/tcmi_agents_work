@@ -77,6 +77,22 @@ async def healthz(request: Request):
         "service": "llm_server",
         "upstream": upstream,
         "tools": len(runtime.tools.list()),
+        "rrserver": runtime.registrar.status(),
+    }
+
+
+@router.get("/rr/heartbeat")
+async def rr_heartbeat(request: Request):
+    """rrserver 心跳探活端点。
+
+    以 `transport=http` 注册时，云端 40 分钟没收到心跳会来访问此端点；
+    1 分钟内没有回应或回应非 2xx，云端会记录日志并注销本条注册维护。
+    """
+    runtime = _get_runtime(request)
+    return {
+        "status": "ok",
+        "service": "llm_server",
+        "rrserver": runtime.registrar.status(),
     }
 
 

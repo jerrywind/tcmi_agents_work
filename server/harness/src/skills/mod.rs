@@ -7,10 +7,19 @@ pub mod builtin;
 pub mod toolcall;
 
 pub use builtin::{build_default_registry, mount_mcp, mount_mcp_clients};
-pub use toolcall::{dispatch, http_skill, mcp_skill, mcp_skill_named, Skill, SkillFn};
+pub use toolcall::{
+    dispatch, http_skill, mcp_skill, mcp_skill_named, Skill, SkillFn, CALLER_FIELD,
+};
 
 use crate::model::Capability;
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
+/// 编排器写入、技能读取的「当前科室」（临床学科标签）。
+///
+/// 辨证之前没有科室可言；辨证出「儿科」后，开方 agent 检索方书时应当
+/// 只翻儿科方书。技能执行体是闭包、拿不到 agent 上下文，故用一份共享状态传递。
+pub type SharedDepartments = Arc<RwLock<Vec<String>>>;
 
 /// 全局技能注册表（启动时根据配置/资源构建）
 #[derive(Clone)]

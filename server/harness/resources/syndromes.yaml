@@ -1,6 +1,7 @@
 # 证候库（可改）
 # 每条证候：slug(英文索引) / name(中文名) / meridian(脏腑经络) /
-#           symptoms(典型症状) / tongue(舌象) / pulse(脉象) / pathogenesis(病机)
+#           symptoms(典型症状) / tongue(舌象) / pulse(脉象) / pathogenesis(病机) /
+#           principles(治则，立法 agent 的依据)
 # slug 被 keywords.yaml / formulas.yaml / care.yaml 引用，请勿随意改动已引用的 slug。
 
 - slug: wind_cold_attack_lung
@@ -19,6 +20,8 @@
   tongue: 舌淡红，苔薄白
   pulse: 脉浮紧
   pathogenesis: 风寒外束，肺卫不宣
+  principles: ["辛温解表", "宣肺散寒"]
+  departments: ["内科", "温病疫病"]
 
 - slug: wind_heat_attack_lung
   name: 风热犯肺证
@@ -36,6 +39,8 @@
   tongue: 舌尖红，苔薄黄
   pulse: 脉浮数
   pathogenesis: 风热犯表，肺失清肃
+  principles: ["辛凉解表", "清肺透热"]
+  departments: ["内科", "温病疫病"]
 
 - slug: dampness_encumbering_spleen
   name: 脾虚湿困证
@@ -50,6 +55,8 @@
   tongue: 舌淡胖，边有齿痕，苔白腻
   pulse: 脉濡缓
   pathogenesis: 脾虚运化失司，湿浊内停
+  principles: ["健脾益气", "燥湿运脾"]
+  departments: ["内科"]
 
 - slug: liver_qi_stagnation
   name: 肝郁气滞
@@ -65,6 +72,8 @@
   tongue: 舌淡红，苔薄白
   pulse: 脉弦
   pathogenesis: 肝失疏泄，气机郁滞
+  principles: ["疏肝理气", "解郁散结"]
+  departments: ["内科", "妇科"]
 
 - slug: qi_and_yin_deficiency
   name: 气阴两虚证
@@ -80,6 +89,8 @@
   tongue: 舌红少苔
   pulse: 脉细弱
   pathogenesis: 久病气阴耗伤
+  principles: ["益气养阴", "生津润燥"]
+  departments: ["内科"]
 
 - slug: spleen_stomach_damp_heat
   name: 脾胃湿热
@@ -97,3 +108,5 @@
   tongue: 舌红，苔黄腻
   pulse: 脉滑数
   pathogenesis: 湿热蕴结中焦，脾胃升降失常
+  principles: ["清热利湿", "理气和中"]
+  departments: ["内科"]

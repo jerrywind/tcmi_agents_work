@@ -9,11 +9,13 @@ use std::sync::Arc;
 
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use crate::protocol::{RequestMsg, ResponseChunkMsg, ResponseMsg};
+use crate::protocol::{HeartbeatAck, HeartbeatProbe, RequestMsg, ResponseChunkMsg, ResponseMsg};
 
 /// 发给家庭端的控制命令。
 pub enum TunnelCommand {
     Request(RequestMsg),
+    /// 心跳探活：确认服务是否还在运行。
+    Heartbeat(HeartbeatProbe),
 }
 
 /// 等待中的响应。
@@ -32,6 +34,8 @@ pub struct Registry {
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<PendingResponse>>>>,
     /// 流式响应通道：请求 id → 家庭端回传的分片发送端。
     streams: Arc<Mutex<HashMap<String, ChunkTx>>>,
+    /// 心跳探活：probe id → 等待探活回应的一方。
+    probes: Arc<Mutex<HashMap<String, oneshot::Sender<HeartbeatAck>>>>,
 }
 
 impl Registry {
@@ -40,6 +44,7 @@ impl Registry {
             tunnels: Arc::new(Mutex::new(HashMap::new())),
             pending: Arc::new(Mutex::new(HashMap::new())),
             streams: Arc::new(Mutex::new(HashMap::new())),
+            probes: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -93,6 +98,38 @@ impl Registry {
             Some(tx) => tx.send(TunnelCommand::Request(req)).is_ok(),
             None => false,
         }
+    }
+
+    /// 向某个隧道下发心跳探活；若隧道未连接返回 false。
+    pub async fn send_heartbeat(&self, name: &str, probe_id: &str) -> bool {
+        let tx = self.tunnels.lock().await.get(name).cloned();
+        match tx {
+            Some(tx) => tx
+                .send(TunnelCommand::Heartbeat(HeartbeatProbe {
+                    probe_id: probe_id.to_string(),
+                }))
+                .is_ok(),
+            None => false,
+        }
+    }
+
+    /// 登记一次探活的等待端，返回 oneshot Receiver（收到 `HeartbeatAck` 后被唤醒）。
+    pub async fn new_probe(&self, probe_id: &str) -> oneshot::Receiver<HeartbeatAck> {
+        let (tx, rx) = oneshot::channel();
+        self.probes.lock().await.insert(probe_id.to_string(), tx);
+        rx
+    }
+
+    /// 家庭端回传探活回应，唤醒等待方。
+    pub async fn resolve_probe(&self, ack: HeartbeatAck) {
+        if let Some(tx) = self.probes.lock().await.remove(&ack.probe_id) {
+            let _ = tx.send(ack);
+        }
+    }
+
+    /// 探活超时 / 通道不可用时清理登记，避免泄漏。
+    pub async fn cancel_probe(&self, probe_id: &str) {
+        self.probes.lock().await.remove(probe_id);
     }
 
     /// 登记一个等待响应的接收端，返回 oneshot Receiver。
@@ -205,6 +242,7 @@ mod tests {
                 })
                 .await;
             }
+            TunnelCommand::Heartbeat(_) => panic!("expected Request command"),
         }
 
         let pending = prx.try_recv().expect("waiter should be woken");
@@ -216,6 +254,65 @@ mod tests {
     async fn send_request_to_unknown_tunnel_returns_false() {
         let reg = Registry::new();
         assert!(!reg.send_request("nope", sample_req("z")).await);
+    }
+
+    #[tokio::test]
+    async fn heartbeat_probe_delivered_and_ack_awakens_waiter() {
+        use crate::protocol::HeartbeatAck;
+
+        let reg = Registry::new();
+        let (tx, mut rx) = mpsc::unbounded_channel::<TunnelCommand>();
+        reg.register("home", tx).await;
+
+        let mut ack_rx = reg.new_probe("p1").await;
+        assert!(reg.send_heartbeat("home", "p1").await);
+        match rx.recv().await.expect("probe should be delivered") {
+            TunnelCommand::Heartbeat(p) => {
+                assert_eq!(p.probe_id, "p1");
+                reg.resolve_probe(HeartbeatAck {
+                    probe_id: p.probe_id,
+                    alive: true,
+                })
+                .await;
+            }
+            other => panic!("expected Heartbeat command, got {:?}", other_name(&other)),
+        }
+        let ack = ack_rx.try_recv().expect("waiter should be woken");
+        assert!(ack.alive);
+    }
+
+    #[cfg(test)]
+    fn other_name(cmd: &TunnelCommand) -> &'static str {
+        match cmd {
+            TunnelCommand::Request(_) => "Request",
+            TunnelCommand::Heartbeat(_) => "Heartbeat",
+        }
+    }
+
+    #[tokio::test]
+    async fn heartbeat_probe_to_unknown_tunnel_returns_false() {
+        let reg = Registry::new();
+        assert!(!reg.send_heartbeat("nope", "p1").await);
+    }
+
+    #[tokio::test]
+    async fn cancel_probe_makes_waiter_return_error() {
+        let reg = Registry::new();
+        let mut ack_rx = reg.new_probe("p9").await;
+        reg.cancel_probe("p9").await;
+        assert!(ack_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn resolve_probe_without_waiter_is_noop() {
+        use crate::protocol::HeartbeatAck;
+
+        let reg = Registry::new();
+        reg.resolve_probe(HeartbeatAck {
+            probe_id: "missing".into(),
+            alive: true,
+        })
+        .await;
     }
 
     #[tokio::test]

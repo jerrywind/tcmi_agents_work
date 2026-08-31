@@ -28,6 +28,15 @@ services:
       AGENT_MAX_ROUNDS: "8"
       ENABLE_MCP: "true"
       MCP_CLIENTS: "${MCP_CLIENTS:-[]}"
+      # ---- rrserver 注册与心跳（留空即不启用）----
+      # 启用后本服务会主动向 rrserver 注册并换取独立 hash code，随后按周期心跳。
+      RR_SERVER_BASE: "${RR_SERVER_BASE:-}"                # 如 https://<域名>/rr
+      RR_SERVICE_NAME: "${RR_SERVICE_NAME:-llm-server}"    # 须与 rrserver [[tunnels]] 的 name 一致
+      RR_SERVICE_TOKEN: "${RR_SERVICE_TOKEN:-}"            # 与 rrserver 对应隧道的 token 一致
+      # 本服务可被 rrserver 直达的基址（同一 docker 网络内）；留空则按 ws 反向隧道注册
+      RR_SERVICE_ENDPOINT: "${RR_SERVICE_ENDPOINT:-}"
+      RR_TIMEOUT_SECS: "${RR_TIMEOUT_SECS:-10}"
+      RR_RETRY_INTERVAL_SECS: "${RR_RETRY_INTERVAL_SECS:-30}"
     extra_hosts:
       - "host.docker.internal:host-gateway"   # 让容器能访问宿主机上的 LM Studio
     restart: unless-stopped
