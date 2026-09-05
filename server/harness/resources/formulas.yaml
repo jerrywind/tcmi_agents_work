@@ -1,6 +1,31 @@
 # 方剂库（可改）
 # 每条：slug(英文索引) / name(中文名) / for_syndromes(适用证候 slug) /
-#       composition(组成) / usage(用法) / caution(禁忌注意)
+#       composition(组成) / usage(用法) / caution(禁忌注意) / source(出处)
+#
+# ⚠️ 组成与剂量须由执业中医师复核：本库用于**约束模型输出**（开方步要求
+# 采用库载方剂时药味照抄本表），写错就等于把错误固化下来。
+#
+# 为什么必须扩容：人工验收时模型开出「麻黄汤：麻黄、桂枝、杏仁、白术、甘草」
+# （原方无白术），又把脾胃湿热证开成清肝胆湿热的龙胆泻肝汤——
+# 根因是库里既没有麻黄汤也没有脾胃湿热的贴切方，模型只能凭记忆生成。
+# 「靠提示词硬掰」压不住幻觉，得让模型有正确的表可查。
+
+# ---------------- 风寒袭肺 ----------------
+- slug: ma_huang_tang
+  name: 麻黄汤
+  for_syndromes: ["wind_cold_attack_lung"]
+  composition: ["麻黄", "桂枝", "杏仁", "甘草"]
+  usage: 水煎服，发汗解表、宣肺平喘；主治风寒表实证（恶寒发热、无汗而喘）
+  caution: 表虚自汗、血虚、淋家、疮家及产妇忌用；高血压、心悸者慎用麻黄
+  source: 《伤寒论》
+
+- slug: gui_zhi_tang
+  name: 桂枝汤
+  for_syndromes: ["wind_cold_attack_lung"]
+  composition: ["桂枝", "芍药", "甘草", "生姜", "大枣"]
+  usage: 水煎服，解肌发表、调和营卫；主治风寒表虚证（汗出恶风）
+  caution: 表实无汗者不宜；服药后须啜热粥助汗，不可令大汗淋漓
+  source: 《伤寒论》
 
 - slug: ma_xing_gan_shi
   name: 麻杏甘石汤
@@ -8,20 +33,68 @@
   composition: ["麻黄", "杏仁", "甘草", "石膏"]
   usage: 水煎服，辛凉宣泄、清肺平喘
   caution: 风寒咳嗽无汗者不宜
+  source: 《伤寒论》
 
-- slug: jing_fang_bai_du
-  name: 荆防败毒散
-  for_syndromes: ["wind_cold_attack_lung"]
-  composition: ["荆芥", "防风", "羌活", "独活", "柴胡", "前胡", "川芎", "枳壳", "茯苓", "甘草"]
-  usage: 水煎服，辛温解表、散寒除湿
-  caution: 风热证忌用
+# ---------------- 风热犯肺 ----------------
+- slug: yin_qiao_san
+  name: 银翘散
+  for_syndromes: ["wind_heat_attack_lung"]
+  composition: ["连翘", "银花", "桔梗", "薄荷", "竹叶", "荆芥穗", "淡豆豉", "牛蒡子", "甘草"]
+  usage: 水煎服（不宜久煎），辛凉透表、清热解毒；主治风热表证（发热咽痛）
+  caution: 风寒感冒忌用；方中多芳香轻清之品，久煎则药力散失
+  source: 《温病条辨》
 
+- slug: sang_ju_yin
+  name: 桑菊饮
+  for_syndromes: ["wind_heat_attack_lung"]
+  composition: ["桑叶", "菊花", "杏仁", "连翘", "薄荷", "桔梗", "甘草", "芦根"]
+  usage: 水煎服，疏风清热、宣肺止咳；主治风温初起、咳嗽为主而身热不甚
+  caution: 风寒咳嗽不宜；肺热壅盛之咳喘非本方所宜
+  source: 《温病条辨》
+
+# ---------------- 脾虚湿困 ----------------
+- slug: ping_wei_san
+  name: 平胃散
+  for_syndromes: ["dampness_encumbering_spleen"]
+  composition: ["苍术", "厚朴", "陈皮", "甘草"]
+  usage: 水煎服，燥湿运脾、行气和胃；主治湿滞脾胃（脘腹胀满、苔白腻）
+  caution: 阴虚气滞、脾虚明显者不宜单用；常与四君子汤合方
+  source: 《太平惠民和剂局方》
+
+# 二陈汤同时归属脾虚湿困与痰湿阻肺：湿痰同源，治痰先理脾
+- slug: er_chen_tang
+  name: 二陈汤
+  for_syndromes: ["dampness_encumbering_spleen", "phlegm_damp_obstructing_lung"]
+  composition: ["半夏", "陈皮", "茯苓", "甘草"]
+  usage: 水煎服，燥湿化痰、理气和中；为治湿痰之基础方
+  caution: 阴虚燥咳、痰中带血者不宜；半夏生用有毒，须用炮制品
+  source: 《太平惠民和剂局方》
+
+# 参苓白术散兼健脾益气与渗湿，脾气虚与脾虚湿困皆可参用
 - slug: shen_ling_bai_zhu
   name: 参苓白术散
-  for_syndromes: ["dampness_encumbering_spleen"]
+  for_syndromes: ["dampness_encumbering_spleen", "spleen_qi_deficiency"]
   composition: ["人参", "白术", "茯苓", "山药", "扁豆", "莲子", "砂仁", "薏苡仁", "甘草"]
   usage: 健脾益气、渗湿止泻
   caution: 实证腹胀慎用
+  source: 《太平惠民和剂局方》
+
+# ---------------- 肝郁气滞 ----------------
+- slug: chai_hu_shu_gan_san
+  name: 柴胡疏肝散
+  for_syndromes: ["liver_qi_stagnation"]
+  composition: ["柴胡", "陈皮", "川芎", "香附", "枳壳", "芍药", "甘草"]
+  usage: 水煎服，疏肝行气、活血止痛；主治肝气郁滞（胁肋疼痛、胸闷太息）
+  caution: 药性辛燥，肝阴不足、舌红少苔者慎用，不宜久服
+  source: 《景岳全书》
+
+- slug: si_ni_san
+  name: 四逆散
+  for_syndromes: ["liver_qi_stagnation"]
+  composition: ["柴胡", "枳实", "芍药", "甘草"]
+  usage: 水煎服，透邪解郁、疏肝理脾；主治阳郁厥逆与肝脾不和
+  caution: 药仅四味力缓，重证须加减；阴虚火旺者慎用柴胡
+  source: 《伤寒论》
 
 - slug: xiao_yao_san
   name: 逍遥散
@@ -29,6 +102,24 @@
   composition: ["柴胡", "当归", "白芍", "白术", "茯苓", "甘草", "薄荷", "生姜"]
   usage: 疏肝解郁、健脾养血
   caution: 阴虚火旺者慎用
+  source: 《太平惠民和剂局方》
+
+# ---------------- 气阴两虚 ----------------
+- slug: sha_shen_mai_dong_tang
+  name: 沙参麦冬汤
+  for_syndromes: ["qi_and_yin_deficiency"]
+  composition: ["沙参", "麦冬", "玉竹", "桑叶", "天花粉", "扁豆", "甘草"]
+  usage: 水煎服，清养肺胃、生津润燥；主治燥伤肺胃阴分（口干咽燥）
+  caution: 脾胃虚寒、痰湿内盛者不宜
+  source: 《温病条辨》
+
+- slug: zhi_gan_cao_tang
+  name: 炙甘草汤
+  for_syndromes: ["qi_and_yin_deficiency"]
+  composition: ["炙甘草", "生姜", "人参", "生地黄", "桂枝", "阿胶", "麦门冬", "麻仁", "大枣"]
+  usage: 水煎服（阿胶烊化），益气滋阴、通阳复脉；主治气阴两虚之心悸脉结代
+  caution: 阴虚火旺、痰湿中阻者慎用；阿胶滋腻，脾虚便溏者须配伍健脾药
+  source: 《伤寒论》
 
 - slug: sheng_mai_yin
   name: 生脉饮
@@ -36,6 +127,26 @@
   composition: ["人参", "麦冬", "五味子"]
   usage: 益气生津、敛阴止汗
   caution: 实热证不宜
+  source: 《医学启源》
+
+# ---------------- 脾胃湿热 ----------------
+# 注：本证常被误开「龙胆泻肝汤」（清肝胆湿热）。脾胃湿热在中焦，
+# 当以辛开苦降、清热化湿为法，故选方如下。
+- slug: lian_po_yin
+  name: 连朴饮
+  for_syndromes: ["spleen_stomach_damp_heat"]
+  composition: ["黄连", "厚朴", "石菖蒲", "半夏", "淡豆豉", "山栀", "芦根"]
+  usage: 水煎服，清热化湿、理气和中；主治湿热蕴伏中焦（脘痞吐泻、苔黄腻）
+  caution: 寒湿困脾、舌苔白腻者不宜
+  source: 《霍乱论》
+
+- slug: san_ren_tang
+  name: 三仁汤
+  for_syndromes: ["spleen_stomach_damp_heat"]
+  composition: ["杏仁", "滑石", "白通草", "白蔻仁", "竹叶", "厚朴", "生薏苡仁", "半夏"]
+  usage: 水煎服，宣畅气机、清热利湿；主治湿温初起、湿重于热（身重胸闷、午后身热）
+  caution: 热重于湿、见高热口渴者非本方所宜
+  source: 《温病条辨》
 
 - slug: yin_chen_hao
   name: 茵陈蒿汤
@@ -43,6 +154,7 @@
   composition: ["茵陈", "栀子", "大黄"]
   usage: 清热利湿退黄，主治湿热黄疸
   caution: 寒湿发黄、脾虚便溏者忌用
+  source: 《伤寒论》
 
 - slug: ge_gen_qin_lian
   name: 葛根芩连汤
@@ -50,3 +162,169 @@
   composition: ["葛根", "黄芩", "黄连", "甘草"]
   usage: 清热化湿、升清止泻，主治湿热泄泻
   caution: 虚寒泄泻不宜
+  source: 《伤寒论》
+
+# ---------------- 风热犯肺（续，原麻杏甘石汤已列于前）----------------
+# 兼容旧 slug：荆防败毒散归属风寒袭肺，见下
+- slug: jing_fang_bai_du
+  name: 荆防败毒散
+  for_syndromes: ["wind_cold_attack_lung"]
+  composition: ["荆芥", "防风", "羌活", "独活", "柴胡", "前胡", "川芎", "枳壳", "茯苓", "甘草"]
+  usage: 水煎服，辛温解表、散寒除湿
+  caution: 风热证忌用
+  source: 《摄生众妙方》
+
+# ==================== H8：新增 10 个证候的配套方剂 ====================
+# 扩容动机：证候库只有 6 个证候时，库外的证 `assess()` 必然辨不出来，
+# 系统只能在 6 个里挑一个最像的（H3 之前连「挑不出来」这个出口都没有）。
+# 库越厚，挑错的区间越小。
+#
+# ⚠️ 组成与剂量须由执业中医师复核（同上）。
+
+# ---------------- 风燥伤肺 ----------------
+- slug: sang_xing_tang
+  name: 桑杏汤
+  for_syndromes: ["wind_dryness_attacking_lung"]
+  composition: ["桑叶", "杏仁", "沙参", "象贝", "香豉", "栀皮", "梨皮"]
+  usage: 水煎服，清宣温燥、润肺止咳；主治外感温燥（干咳无痰、咽干鼻燥）
+  caution: 凉燥（恶寒无汗、咳嗽痰稀）非本方所宜，当用杏苏散
+  source: 《温病条辨》
+
+- slug: xing_su_san
+  name: 杏苏散
+  for_syndromes: ["wind_dryness_attacking_lung"]
+  composition: ["苏叶", "杏仁", "半夏", "茯苓", "橘皮", "前胡", "桔梗", "枳壳", "甘草", "生姜", "大枣"]
+  usage: 水煎服，轻宣凉燥、理肺化痰；主治外感凉燥（恶寒无汗、咳嗽痰稀）
+  caution: 温燥（咽干口渴、痰黏）忌用，当用桑杏汤
+  source: 《温病条辨》
+
+# ---------------- 痰湿阻肺 ----------------
+- slug: san_zi_yang_qin_tang
+  name: 三子养亲汤
+  for_syndromes: ["phlegm_damp_obstructing_lung"]
+  composition: ["白芥子", "苏子", "莱菔子"]
+  usage: 水煎服（微炒捣碎），温肺化痰、降气消食；主治痰壅气滞（咳喘痰多、胸闷食少）
+  caution: 药性偏温燥，阴虚燥咳、痰中带血者不宜；不宜久服
+  source: 《韩氏医通》
+
+# ---------------- 肺气虚 ----------------
+- slug: yu_ping_feng_san
+  name: 玉屏风散
+  for_syndromes: ["lung_qi_deficiency"]
+  composition: ["黄芪", "白术", "防风"]
+  usage: 水煎服（亦可作散剂），益气固表止汗；主治表虚自汗、易感风邪
+  caution: 外感表证未解、阴虚盗汗者不宜单用
+  source: 《丹溪心法》
+
+# ---------------- 脾气虚 ----------------
+- slug: si_jun_zi_tang
+  name: 四君子汤
+  for_syndromes: ["spleen_qi_deficiency"]
+  composition: ["人参", "白术", "茯苓", "甘草"]
+  usage: 水煎服，益气健脾；为补气基础方（食少便溏、气短乏力）
+  caution: 实热、阴虚火旺者不宜
+  source: 《太平惠民和剂局方》
+
+- slug: bu_zhong_yi_qi_tang
+  name: 补中益气汤
+  for_syndromes: ["spleen_qi_deficiency"]
+  composition: ["黄芪", "甘草", "人参", "当归", "橘皮", "升麻", "柴胡", "白术"]
+  usage: 水煎服，补中益气、升阳举陷；主治脾胃气虚、气虚下陷（久泻脱肛、内脏下垂）
+  caution: 阴虚发热、肝阳上亢者忌用；内有实热者不宜
+  source: 《脾胃论》
+
+# ---------------- 胃火炽盛 ----------------
+- slug: qing_wei_san
+  name: 清胃散
+  for_syndromes: ["stomach_fire"]
+  composition: ["生地黄", "当归身", "牡丹皮", "黄连", "升麻"]
+  usage: 水煎服，清胃凉血；主治胃火牙痛（牙龈肿痛溃烂、口气热臭）
+  caution: 风寒牙痛、虚火上炎之牙痛不宜；黄连苦寒，脾胃素虚者慎用
+  source: 《脾胃论》
+
+- slug: yu_nv_jian
+  name: 玉女煎
+  for_syndromes: ["stomach_fire"]
+  composition: ["石膏", "熟地", "麦冬", "知母", "牛膝"]
+  usage: 水煎服，清胃热、滋肾阴；主治胃热阴虚（烦热口渴、齿松牙衄）
+  caution: 大便溏泄者不宜（熟地、麦冬滋腻）；纯实火者非本方所宜
+  source: 《景岳全书》
+
+# ---------------- 食积胃脘 ----------------
+- slug: bao_he_wan
+  name: 保和丸
+  for_syndromes: ["food_retention"]
+  composition: ["山楂", "神曲", "半夏", "茯苓", "陈皮", "连翘", "莱菔子"]
+  usage: 水泛为丸，亦可作汤剂；消食和胃，主治食积停滞（脘腹胀痛、嗳腐吞酸）
+  caution: 脾虚无积滞者不宜久服；哺乳期妇女慎用麦芽类消导药
+  source: 《丹溪心法》
+
+- slug: zhi_shi_dao_zhi_wan
+  name: 枳实导滞丸
+  for_syndromes: ["food_retention"]
+  composition: ["大黄", "枳实", "神曲", "茯苓", "黄芩", "黄连", "白术", "泽泻"]
+  usage: 水泛为丸；消导化积、清热利湿，主治湿热食积（脘腹胀痛、下痢泄泻）
+  caution: 含大黄，孕妇忌用；体虚久泻者不宜
+  source: 《内外伤辨惑论》
+
+# ---------------- 肝火上炎 ----------------
+# 注意：龙胆泻肝汤清泻**肝胆**实火与湿热。脾胃湿热在中焦，
+# 当用连朴饮/三仁汤，误用本方即「方证不对口」（人工验收点名的问题）。
+- slug: long_dan_xie_gan_tang
+  name: 龙胆泻肝汤
+  for_syndromes: ["liver_fire_flaring"]
+  composition: ["龙胆草", "黄芩", "栀子", "泽泻", "木通", "车前子", "当归", "生地黄", "柴胡", "甘草"]
+  usage: 水煎服，清泻肝胆实火、清利肝经湿热；主治头痛目赤、胁痛口苦、耳肿耳聋
+  caution: 药性苦寒，脾胃虚弱者慎用，不宜久服；关木通有肾毒性，须用川木通/白木通
+  source: 《医方集解》
+
+- slug: zuo_jin_wan
+  name: 左金丸
+  for_syndromes: ["liver_fire_flaring"]
+  composition: ["黄连", "吴茱萸"]
+  usage: 水泛为丸（黄连与吴茱萸 6:1），清泻肝火、降逆止呕；主治肝火犯胃（胁痛口苦、吞酸呕吐）
+  caution: 脾胃虚寒、食少便溏者忌用
+  source: 《丹溪心法》
+
+# ---------------- 气滞血瘀 ----------------
+- slug: xue_fu_zhu_yu_tang
+  name: 血府逐瘀汤
+  for_syndromes: ["qi_stagnation_blood_stasis"]
+  composition: ["桃仁", "红花", "当归", "生地黄", "川芎", "赤芍", "牛膝", "桔梗", "柴胡", "枳壳", "甘草"]
+  usage: 水煎服，活血化瘀、行气止痛；主治胸中血瘀（胸痛、痛如针刺有定处）
+  caution: 孕妇忌用；无瘀血征象者不宜；月经过多者慎用
+  source: 《医林改错》
+
+- slug: shi_xiao_san
+  name: 失笑散
+  for_syndromes: ["qi_stagnation_blood_stasis"]
+  composition: ["五灵脂", "蒲黄"]
+  usage: 研末黄酒或醋冲服，亦可包煎；活血祛瘀、散结止痛，主治瘀血停滞之心腹剧痛
+  caution: 孕妇忌用；五灵脂与人参存在「十九畏」配伍禁忌，不可同用
+  source: 《太平惠民和剂局方》
+
+# ---------------- 肾阳虚 ----------------
+- slug: jin_kui_shen_qi_wan
+  name: 金匮肾气丸
+  for_syndromes: ["kidney_yang_deficiency"]
+  composition: ["干地黄", "山药", "山茱萸", "泽泻", "茯苓", "牡丹皮", "桂枝", "附子"]
+  usage: 蜜丸，温补肾阳、化气行水；主治肾阳不足（腰膝酸软、畏寒肢冷、夜尿多）
+  caution: 阴虚火旺、咽干口燥者忌用；附子有毒，须炮制后入药
+  source: 《金匮要略》
+
+- slug: you_gui_wan
+  name: 右归丸
+  for_syndromes: ["kidney_yang_deficiency"]
+  composition: ["熟地黄", "山药", "山茱萸", "枸杞", "菟丝子", "鹿角胶", "杜仲", "肉桂", "当归", "制附子"]
+  usage: 蜜丸，温补肾阳、填精益髓；主治肾阳不足、命门火衰（久病气衰神疲、畏寒肢冷）
+  caution: 阴虚火旺者忌用；含附子、肉桂，实热证禁用
+  source: 《景岳全书》
+
+# ---------------- 心脾两虚 ----------------
+- slug: gui_pi_tang
+  name: 归脾汤
+  for_syndromes: ["heart_spleen_deficiency"]
+  composition: ["白术", "茯神", "黄芪", "龙眼肉", "酸枣仁", "人参", "木香", "甘草", "当归", "远志"]
+  usage: 水煎服（可加生姜、大枣），益气补血、健脾养心；主治心悸失眠、食少体倦、面色萎黄
+  caution: 内有痰湿、食积、实热者不宜；滋腻碍胃，纳呆苔腻者慎用
+  source: 《济生方》

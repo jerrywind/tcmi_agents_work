@@ -45,4 +45,9 @@ install.*
 e2e_tests/images/
 # 人工端到端验收时容器落盘的报告（含问诊原文，虽已脱敏仍不入库）
 e2e_tests/_reports/
+# 验收脚本的原始响应与后台日志（含问诊原文）
+e2e_tests/_resp.json
+e2e_tests/_*.log
+# 多轮问诊闭环验证的输入、脚本与响应（含问诊原文）
+e2e_tests/_mr_*
 rag_data

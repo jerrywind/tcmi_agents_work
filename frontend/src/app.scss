@@ -29,3 +29,139 @@ page, body {
   margin-bottom: 20px;
   color: #2a6f4e;
 }
+
+// 性别点选标签。刻意不用 Picker：Picker 打开后不滑直接点「确定」会写入
+// 定位值，等于替用户选了一个性别且没有任何提示。
+.gender-group {
+  display: flex;
+  flex: 1;
+  gap: 14px;
+}
+
+.gender-chip {
+  padding: 8px 26px;
+  border-radius: 26px;
+  font-size: 26px;
+  color: #55655c;
+  background: #f3f7f5;
+  border: 1px solid #dfe9e4;
+
+  &.active {
+    background: #2a6f4e;
+    color: #fff;
+    border-color: #2a6f4e;
+  }
+}
+
+/* ---------- Markdown 渲染（后端步骤输出为 Markdown，统一在这里排版） ---------- */
+.md-h {
+  font-weight: 700;
+  color: #1d5c3e;
+  margin: 18px 0 10px;
+  line-height: 1.4;
+}
+.md-h:first-child { margin-top: 0; }
+.md-h1 { font-size: 34px; }
+.md-h2 { font-size: 31px; }
+.md-h3 { font-size: 28px; }
+.md-h4 { font-size: 26px; color: #2a6f4e; }
+
+.md-p {
+  font-size: 27px;
+  line-height: 1.75;
+  margin: 8px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.md-bold { font-weight: 700; }
+.md-italic { font-style: italic; }
+.md-code {
+  font-size: 24px;
+  background: #eef2f0;
+  border: 1px solid #dde5e1;
+  border-radius: 8px;
+  padding: 2px 8px;
+  color: #2a6f4e;
+}
+
+.md-ul, .md-ol {
+  margin: 8px 0;
+  padding-left: 8px;
+}
+.md-li {
+  display: flex;
+  align-items: flex-start;
+  margin: 6px 0;
+  font-size: 27px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+.md-li-mark {
+  flex-shrink: 0;
+  width: 40px;
+  color: #2a6f4e;
+  font-weight: 600;
+}
+.md-li-text { flex: 1; }
+
+.md-quote {
+  display: block;
+  margin: 10px 0;
+  padding: 12px 18px;
+  background: #f6faf8;
+  border-left: 6px solid #9cc3b0;
+  border-radius: 0 10px 10px 0;
+  font-size: 25px;
+  line-height: 1.7;
+  color: #55655c;
+}
+
+/* ---------- 出生日期选择器 BirthDatePicker ----------
+ * 放在 app.scss 而不是组件 .scss：Taro 4 默认开启组件级样式隔离
+ * （类名带 hash），组件内裸类名匹配不上，sheet 会坍缩成一条窄缝、
+ * 三列不并排；这里全局生效才能正确布局。
+ */
+.bdp-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.5);
+  /* 点空白处关闭：空白处触摸不滚动背景（背景页已 overflow:hidden 兜底） */
+  touch-action: none;
+}
+
+.bdp-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: bdp-slide-up 0.28s ease;
+}
+
+@keyframes bdp-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.bdp-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  border-bottom: 1px solid #f0f2f0;
+}
+
+.bdp-action {
+  font-size: 30px;
+
+  &.cancel { color: #888; }
+  &.ok { color: #2a6f4e; font-weight: 600; }
+}
+
+/* 注：bdp-bd / bdp-indicator / bdp-col-wrap / bdp-col / bdp-item 的尺寸与配色
+ * 改在组件内用内联 style 实现——Taro 会把 scss 里的 px 按 designWidth:750 转成
+ * 响应式单位（在 390 屏上会被缩放约 0.4 倍），导致轮盘被压扁、初始 scrollTop 越界
+ * 错乱。内联 style 不经 pxtransform，是精确像素，轮盘尺寸与定位才稳定。 */

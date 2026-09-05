@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react'
 import Taro from '@tarojs/taro'
-import { View, Text, Input, Picker } from '@tarojs/components'
+import { View, Text, Input, Textarea, Picker } from '@tarojs/components'
 import { listMembers, newMemberId, removeMember, upsertMember } from '../../services/members'
-import type { Member, PatientProfile } from '../../types'
+import {
+  EMPTY_PROFILE_FORM, GENDER_OPTIONS, buildProfile, defaultBirthDate, describeProfile,
+  toProfileForm, todayISO, validateProfileForm,
+} from '../../utils/profile'
+import type { ProfileForm } from '../../utils/profile'
+import type { Member } from '../../types'
 import './index.scss'
 
 const RELATIONS = ['本人', '父亲', '母亲', '配偶', '子女', '其他']
-const GENDERS = ['男', '女', '未知']
+const BIRTH_DATE_START = '1900-01-01'
 
-const EMPTY_FORM = { name: '', relationIdx: 0, age: '', genderIdx: 2, note: '' }
+type MemberForm = ProfileForm & { relationIdx: number }
+
+const EMPTY_FORM: MemberForm = { ...EMPTY_PROFILE_FORM, relationIdx: 0 }
 
 /**
  * 家庭成员档案（**仅存本机**）。
@@ -20,11 +27,16 @@ export default function FamilyPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
-  const [form, setForm] = useState({ ...EMPTY_FORM })
+  const [form, setForm] = useState<MemberForm>({ ...EMPTY_FORM })
+  // 选择器只定位到这里，不是默认值：只有用户真的点过「确定」才会写进档案
+  const [shownDate] = useState(defaultBirthDate())
+  const [maxDate] = useState(todayISO())
 
   useEffect(() => {
     setMembers(listMembers())
   }, [])
+
+  const patch = (p: Partial<MemberForm>) => setForm({ ...form, ...p })
 
   const openAdd = () => {
     setEditing(null)
@@ -34,13 +46,7 @@ export default function FamilyPage() {
 
   const openEdit = (m: Member) => {
     setEditing(m)
-    setForm({
-      name: m.name,
-      relationIdx: Math.max(0, RELATIONS.indexOf(m.relation)),
-      age: m.patient.age ? String(m.patient.age) : '',
-      genderIdx: Math.max(0, GENDERS.indexOf(m.patient.gender)),
-      note: m.note,
-    })
+    setForm({ ...toProfileForm(m.patient), name: m.name, relationIdx: Math.max(0, RELATIONS.indexOf(m.relation)) })
     setShowAdd(true)
   }
 
@@ -49,19 +55,16 @@ export default function FamilyPage() {
       Taro.showToast({ title: '请填写称呼', icon: 'none' })
       return
     }
-    const patient: PatientProfile = {
-      age: parseInt(form.age, 10) || undefined,
-      gender: GENDERS[form.genderIdx],
-      region: editing?.patient.region,
-      height_cm: editing?.patient.height_cm,
-      weight_kg: editing?.patient.weight_kg,
+    const err = validateProfileForm(form)
+    if (err) {
+      Taro.showToast({ title: err, icon: 'none' })
+      return
     }
     const m: Member = {
       id: editing?.id || newMemberId(),
       name: form.name.trim(),
       relation: RELATIONS[form.relationIdx],
-      patient,
-      note: form.note.trim(),
+      patient: buildProfile(form),
     }
     upsertMember(m)
     setMembers(listMembers())
@@ -99,13 +102,9 @@ export default function FamilyPage() {
                 <View className='mini-btn danger' onClick={() => del(m)}>删除</View>
               </View>
             </View>
-            <Text className='member-meta'>
-              {m.patient.gender}
-              {m.patient.age ? ` · ${m.patient.age}岁` : ''}
-              {m.patient.height_cm ? ` · ${m.patient.height_cm}cm` : ''}
-              {m.patient.weight_kg ? ` · ${m.patient.weight_kg}kg` : ''}
+            <Text className={`member-meta ${describeProfile(m.patient) ? '' : 'muted'}`}>
+              {describeProfile(m.patient) || '档案不完整，点编辑补齐'}
             </Text>
-            {m.note ? <Text className='member-note'>备注：{m.note}</Text> : null}
           </View>
         ))}
       </View>
@@ -124,33 +123,48 @@ export default function FamilyPage() {
               <Text className='form-label'>称呼</Text>
               <Input className='form-input' placeholder='如 父亲 / 女儿'
                 value={form.name}
-                onInput={e => setForm({ ...form, name: e.detail.value })} />
+                onInput={e => patch({ name: e.detail.value })} />
             </View>
             <Picker mode='selector' range={RELATIONS} value={form.relationIdx}
-              onChange={e => setForm({ ...form, relationIdx: Number(e.detail.value) })}>
+              onChange={e => patch({ relationIdx: Number(e.detail.value) })}>
               <View className='form-row'>
                 <Text className='form-label'>关系</Text>
                 <Text className='form-input'>{RELATIONS[form.relationIdx]}</Text>
               </View>
             </Picker>
-            <Picker mode='selector' range={GENDERS} value={form.genderIdx}
-              onChange={e => setForm({ ...form, genderIdx: Number(e.detail.value) })}>
+            <Picker mode='date' start={BIRTH_DATE_START} end={maxDate}
+              value={form.birthDate || shownDate}
+              onChange={e => patch({ birthDate: e.detail.value as string })}>
               <View className='form-row'>
-                <Text className='form-label'>性别</Text>
-                <Text className='form-input'>{GENDERS[form.genderIdx]}</Text>
+                <Text className='form-label'>出生日期</Text>
+                <Text className={`form-input ${form.birthDate ? '' : 'placeholder'}`}>
+                  {form.birthDate || '请选择'}
+                </Text>
               </View>
             </Picker>
             <View className='form-row'>
-              <Text className='form-label'>年龄</Text>
-              <Input className='form-input' type='number' placeholder='选填'
-                value={form.age}
-                onInput={e => setForm({ ...form, age: e.detail.value })} />
+              <Text className='form-label'>性别</Text>
+              <View className='gender-group'>
+                {GENDER_OPTIONS.map(g => (
+                  <View key={g} className={`gender-chip ${form.gender === g ? 'active' : ''}`}
+                    onClick={() => patch({ gender: g })}>
+                    {g}
+                  </View>
+                ))}
+              </View>
             </View>
             <View className='form-row'>
-              <Text className='form-label'>备注</Text>
-              <Input className='form-input' placeholder='过敏史/慢病等'
-                value={form.note}
-                onInput={e => setForm({ ...form, note: e.detail.value })} />
+              <Text className='form-label'>常住地</Text>
+              <Input className='form-input' placeholder='如：广州'
+                value={form.region}
+                onInput={e => patch({ region: e.detail.value })} />
+            </View>
+            <View className='form-row col'>
+              <Text className='form-label'>既往病史（选填）</Text>
+              <Textarea className='history-input' maxlength={500}
+                placeholder='慢病、过敏史、手术史、长期用药等'
+                value={form.history}
+                onInput={e => patch({ history: e.detail.value })} />
             </View>
             <View className='btn-primary' onClick={save}>
               {editing ? '保存修改' : '添加'}

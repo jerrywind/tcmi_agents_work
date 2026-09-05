@@ -48,8 +48,17 @@ async fn mcp(State(st): State<AppState>, Json(req): Json<Value>) -> Response {
     }
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health(State(st): State<AppState>) -> Json<Value> {
+    // T7.5：RAG 决定「结论有没有典籍支撑」。它不可达时技能是静默降级的，
+    // 输出看上去与「典籍里查不到」一模一样——那不是结论，那是故障，
+    // 必须让调用方看得见。
+    //
+    // 字段仍保留 `status: "ok"`：/health 只表达「进程活着」，RAG 状态单独成键，
+    // 免得把典籍检索的故障误报成整个服务挂了（那会让编排误以为要重启）。
+    Json(json!({
+        "status": "ok",
+        "rag": st.rag_status(),
+    }))
 }
 
 async fn list_agents(State(st): State<AppState>) -> Json<Value> {
@@ -75,6 +84,7 @@ async fn chat(State(st): State<AppState>, Json(req): Json<Value>) -> Json<Value>
         &st.departments,
         &messages,
         &payload,
+        &st.rag,
     )
     .await
     {
@@ -164,7 +174,12 @@ async fn list_skills(
             json!({
                 "name": s.name,
                 "description": s.description,
-                "owner": s.owner.map(|c| c.zh()).unwrap_or("全局"),
+                // 无 owner 约束即全局；否则列出全部可用步骤（T7.2 起支持多归属）
+                "owner": if s.owners.is_empty() {
+                    "全局".to_string()
+                } else {
+                    s.owners.iter().map(|c| c.zh()).collect::<Vec<_>>().join("、")
+                },
             })
         })
         .collect();

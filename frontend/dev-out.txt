@@ -1,0 +1,2286 @@
+
+> tcm-consult@0.1.0 dev:h5
+> taro build --type h5 --watch
+
+👽 Taro v4.0.9
+
+Tips:
+1. 建议开启持久化缓存功能，能有效提升二次编译速度，详情请参考: https://docs.taro.zone/docs/config-detail#cache。
+
+
+
+<i> [webpack-dev-server] [HPM] Proxy created: /api  -> http://127.0.0.1:8011
+<i> [webpack-dev-server] [HPM] Proxy rewrite rule created: "^/api" ~> ""
+
+● Webpack █████████████████████████ setup (3%)  
+ watch run
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%) 0/4 entries 2/4 dependencie
+s 0/2 modules 1 active 
+ node_modules\webpack\hot\only-dev-server.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%)  
+ ...port loader .\node_modules\@pmmmwh\react-refresh-webpack-plugin\loader\ind
+ex.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%)  
+ import loader .\node_modules\@tarojs\taro-loader\lib\h5.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%) 0/4 entries 27/35 dependenc
+ies 6/19 modules 9 active 
+ node_modules\webpack-dev-server\client\utils\log.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%) 0/4 entries 52/64 dependenc
+ies 16/37 modules 12 active 
+ node_modules\react\index.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%) 0/4 entries 59/76 dependenc
+ies 18/42 modules 23 active 
+ babel-loader › node_modules\@tarojs\router\dist\index.esm.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (10%) 0/4 entries 106/149 depende
+ncies 21/54 modules 27 active 
+ ....js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (23%) 1/4 entries 157/177 depende
+ncies 28/76 modules 35 active 
+ style-loader › css-loader › node_modules\@tarojs\components\global.css
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (23%) 1/4 entries 157/177 depende
+ncies 28/76 modules 35 active 
+ style-loader › css-loader › node_modules\@tarojs\components\global.css
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (23%)  
+ import loader .\node_modules\sass-loader\dist\cjs.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (23%) 1/4 entries 185/253 depende
+ncies 28/88 modules 49 active 
+ css-loader › node_modules\@tarojs\components\global.css
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 250/278 depende
+ncies 36/96 modules 55 active 
+ node_modules\style-loader\dist\runtime\injectStylesIntoStyleTag.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 270/293 depende
+ncies 44/98 modules 53 active 
+ ...blue_tech\tcm_work\frontend\node_modules\core-js-pure\modules\es.global-th
+is.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 323/405 depende
+ncies 50/141 modules 49 active 
+ ...windblue_tech\tcm_work\frontend\node_modules\core-js-pure\stable\global-th
+is.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 459/543 depende
+ncies 59/215 modules 116 active 
+ ...ader › node_modules\@tarojs\components\dist\taro-components\taro-component
+s.css
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 498/590 depende
+ncies 59/225 modules 136 active 
+ ...ader › node_modules\@tarojs\components\dist\components\taro-swiper-item-co
+re.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 623/672 depende
+ncies 81/232 modules 149 active 
+ ... \.entry\.js$\|exclude: \.system\.entry\.js$\|groupOptions: {}|namespace o
+bject
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 813/868 depende
+ncies 89/398 modules 161 active 
+ node_modules\resolve-pathname\esm\resolve-pathname.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 945/1028 depend
+encies 97/445 modules 224 active 
+ babel-loader › node_modules\@tarojs\taro-h5\dist\api\location\index.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 1111/1193 depen
+dencies 102/455 modules 295 active 
+ babel-loader › node_modules\@tarojs\taro-h5\dist\api\ui\sticky.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 1279/1359 depen
+dencies 245/485 modules 233 active 
+ babel-loader › node_modules\@tarojs\taro-h5\dist\api\network\utils.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 1332/1367 depen
+dencies 292/508 modules 198 active 
+ ...|D:\labs\windblue_tech\tcm_work\frontend\node_modules\lodash-es\_equalArra
+ys.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 1421/1457 depen
+dencies 318/542 modules 204 active 
+ babel-loader › node_modules\@tarojs\api\dist\index.esm.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (37%) 2/4 entries 1516/1525 depen
+dencies 483/578 modules 95 active 
+ ...ipt\esm|D:\labs\windblue_tech\tcm_work\frontend\node_modules\lodash-es\_Ha
+sh.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (51%) 3/4 entries 1591/1595 depen
+dencies 583/622 modules 39 active 
+ ...\labs\windblue_tech\tcm_work\frontend\node_modules\nanoid\url-alphabet\ind
+ex.js
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (51%) 3/4 entries 1616/1616 depen
+dencies 621/628 modules 7 active 
+ ...ostcss-loader › resolve-url-loader › sass-loader › src\pages\consult\index
+.scss
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (88%)  
+ runtime requirements
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (92%)  
+ asset processing
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ done (99%)  
+ plugins
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 4.36s
+
+- 即将开始启动编译，请稍等~
+<i> [webpack-dev-server] Project is running at:
+<i> [webpack-dev-server] Loopback: [36mhttp://localhost:10086/[39m
+<i> [webpack-dev-server] Content not from webpack is served from '[36mD:\labs\windblue_tech\tcm_work\frontend\dist[39m' directory
+<i> [webpack-dev-server] 404s will fallback to '[36m/index.html[39m'
+<i> [webpack-dev-middleware] wait until bundle finished: /
+→ Watching... [2026/9/4 17:53:22]
+
+✅  编译成功 2026/9/4 17:53:22
+
+
+ℹ️  Listening at http://192.168.3.130:10086/
+
+监听文件修改中...
+
+assets by path [1m[32mchunk/*.js[39m[22m 19.7 MiB
+  asset [1m[32mchunk/node_modules_hls_js_dist_hls_mjs.js[39m[22m 3.23 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/src_pages_report_index_tsx.js[39m[22m 2.86 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 2.84 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/src_pages_reports_index_tsx.js[39m[22m 2.75 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/src_pages_skills_index_tsx.js[39m[22m 2.74 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/src_pages_family_index_tsx.js[39m[22m 2.64 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.63 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mchunk/node_modules_stencil_core_internal_client_shadow-css_js.js[39m[22m 41 KiB [1m[32m[emitted][39m[22m
+assets by path [1m[32m*.js[39m[22m 5.95 MiB
+  asset [1m[32mapp.js[39m[22m 4.79 MiB [1m[32m[emitted][39m[22m (name: app)
+  asset [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32m[emitted][39m[22m (name: taro) (id hint: taro)
+  asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+asset [1m[32mindex.html[39m[22m 425 bytes [1m[32m[emitted][39m[22m
+Entrypoint [1mapp[39m[22m 5.95 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.79 MiB
+orphan modules 561 KiB [1m[33m[orphan][39m[22m 286 modules
+runtime modules 32.2 KiB 18 modules
+modules by path [1m./node_modules/[39m[22m 4.26 MiB 396 modules
+modules by path [1m./src/[39m[22m 173 KiB
+  modules by path [1m./src/pages/[39m[22m 134 KiB 18 modules
+  modules by path [1m./src/services/*.ts[39m[22m 14.6 KiB 3 modules
+  modules by path [1m./src/utils/*.ts[39m[22m 13.7 KiB 3 modules
+  modules by path [1m./src/*.ts[39m[22m 5.08 KiB
+    [1m./src/app.config.ts[39m[22m 3.98 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./src/app.ts[39m[22m 1.1 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  modules by path [1m./src/*.scss[39m[22m 5.77 KiB
+    [1m./src/app.scss[39m[22m 2.88 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    ./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/app.scss[39m[22m 2.89 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+[1mdata:application/octet-stream;base64,AAEAAAALAIAAAwAw..[39m[22m 6.1 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 4365 ms
+(node:24736) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (43%) 3/4 entries 54/54 dependenc
+ies 625/35 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 111.31ms
+
+→ Watching... [2026/9/4 18:49:54]
+
+✅  编译成功 2026/9/4 18:49:55
+
+assets by status 20.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by status 4.87 MiB [1m[32m[emitted][39m[22m
+  assets by info 20.6 KiB [1m[32m[immutable][39m[22m
+    asset [1m[32mapp.a59afe470d3cee48160f.hot-update.js[39m[22m 19.7 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: app)
+    asset [1m[32mruntime.a59afe470d3cee48160f.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32mruntime.a59afe470d3cee48160f.hot-update.json[39m[22m 37 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  asset [1m[32mapp.js[39m[22m 4.8 MiB [1m[32m[emitted][39m[22m (name: app)
+  asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+Entrypoint [1mapp[39m[22m 5.98 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.a59afe470d3cee48160f.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB [1m[32mapp.a59afe470d3cee48160f.hot-update.js[39m[22m 19.7 KiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 710 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/app.scss[39m[22m 6.44 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 112 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 57/58 dependenc
+ies 603/39 modules 1 active 
+ babel-loader › src\pages\consult\index.tsx
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (93%)  
+ recording
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 119.17ms
+
+→ Watching... [2026/9/4 18:50:19]
+
+✅  编译成功 2026/9/4 18:50:20
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.91 MiB
+  assets by path [1m[32m*.js[39m[22m 83.7 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.5ff44d893a3fc8a9d85e.hot-update.js[39m[22m 34.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.5ff44d893a3fc8a9d85e.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 2.83 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.5ff44d893a3fc8a9d85e.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.5ff44d893a3fc8a9d85e.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 710 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 10.9 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 119 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 63/63 dependenc
+ies 627/41 modules 1 active 
+ babel-loader › src\pages\consult\index.tsx
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 106.61ms
+
+→ Watching... [2026/9/4 18:50:25]
+
+✅  编译成功 2026/9/4 18:50:25
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.24 MiB
+  assets by path [1m[32m*.js[39m[22m 255 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.7b6e81165f0826232a2c.hot-update.js[39m[22m 205 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.7b6e81165f0826232a2c.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.7b6e81165f0826232a2c.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.7b6e81165f0826232a2c.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.92 MiB [1m[32m[cached][39m[22m 705 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 73.6 KiB
+  modules by path [1m./node_modules/[39m[22m 59.3 KiB
+    modules by path [1m./node_modules/@tarojs/taro-h5/dist/api/[39m[22m 16.5 KiB
+      [1m./node_modules/@tarojs/taro-h5/dist/api/media/video/chooseMedia.js[39m[22m 7.44 KiB [1m[33m[code generated][39m[22m
+      [1m./node_modules/@tarojs/taro-h5/dist/api/base/system.js[39m[22m 8.21 KiB [1m[33m[code generated][39m[22m
+      [1m./node_modules/@tarojs/taro-h5/dist/api/files/index.js[39m[22m 843 bytes [1m[33m[code generated][39m[22m
+    [1m./node_modules/is-mobile/index.js[39m[22m 1.17 KiB [1m[33m[code generated][39m[22m
+    [1m./node_modules/platform/platform.js[39m[22m 41.7 KiB [1m[33m[code generated][39m[22m
+  built modules 14.3 KiB [1m[33m[built][39m[22m
+    [1m./src/pages/consult/index.tsx[39m[22m 11.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./src/utils/image.ts[39m[22m 2.62 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 107 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (60%) 2/4 entries 59/59 dependenc
+ies 577/41 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 103.79ms
+
+→ Watching... [2026/9/4 18:50:29]
+
+✅  编译成功 2026/9/4 18:50:29
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.08 MiB
+  assets by path [1m[32m*.js[39m[22m 86.2 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.4329e13885d284d6e541.hot-update.js[39m[22m 36.7 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.4329e13885d284d6e541.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.4329e13885d284d6e541.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.4329e13885d284d6e541.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 711 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 11.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 105 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 59/59 dependenc
+ies 577/41 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 130.48ms
+
+→ Watching... [2026/9/4 18:50:37]
+
+✅  编译成功 2026/9/4 18:50:37
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.08 MiB
+  assets by path [1m[32m*.js[39m[22m 86.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.ee616e3df1babf99a8a5.hot-update.js[39m[22m 36.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.ee616e3df1babf99a8a5.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.ee616e3df1babf99a8a5.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.ee616e3df1babf99a8a5.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 711 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 11.8 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 131 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 59/59 dependenc
+ies 577/41 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 132.78ms
+
+→ Watching... [2026/9/4 18:50:44]
+
+✅  编译成功 2026/9/4 18:50:44
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.09 MiB
+  assets by path [1m[32m*.js[39m[22m 89.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.1b2f8db24d83d6aa0396.hot-update.js[39m[22m 39.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.1b2f8db24d83d6aa0396.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.1b2f8db24d83d6aa0396.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.1b2f8db24d83d6aa0396.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 711 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 12.9 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 133 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ plugins
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 94.93ms
+
+→ Watching... [2026/9/4 18:50:50]
+
+✅  编译成功 2026/9/4 18:50:50
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.09 MiB
+  assets by path [1m[32m*.js[39m[22m 89.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.a92463265c22681ae971.hot-update.js[39m[22m 39.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.a92463265c22681ae971.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.a92463265c22681ae971.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.a92463265c22681ae971.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 711 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 12.9 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 95 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 59/59 dependenc
+ies 580/41 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 103.06ms
+
+→ Watching... [2026/9/4 18:50:55]
+
+✅  编译成功 2026/9/4 18:50:56
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.09 MiB
+  assets by path [1m[32m*.js[39m[22m 93.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.63478378ec4f5eb75b5b.hot-update.js[39m[22m 43.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.63478378ec4f5eb75b5b.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.63478378ec4f5eb75b5b.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.63478378ec4f5eb75b5b.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 711 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 14.2 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 103 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (65%) 2/4 entries 60/60 dependenc
+ies 549/42 modules 2 active 
+ babel-loader › src\utils\markdown.tsx
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (87%)  
+ code generation
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 149.42ms
+
+→ Watching... [2026/9/4 18:51:00]
+
+✅  编译成功 2026/9/4 18:51:00
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 110 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.4f2dbd3948a81b25e3de.hot-update.js[39m[22m 60.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.4f2dbd3948a81b25e3de.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.02 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.4f2dbd3948a81b25e3de.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.4f2dbd3948a81b25e3de.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.98 MiB [1m[32m[cached][39m[22m 711 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 20 KiB
+  [1m./src/pages/consult/index.tsx[39m[22m 14.4 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/utils/markdown.tsx[39m[22m 5.58 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 150 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (59%) 2/4 entries 60/60 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 98.72ms
+
+→ Watching... [2026/9/4 18:51:04]
+
+✅  编译成功 2026/9/4 18:51:04
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.11 MiB
+  assets by path [1m[32m*.js[39m[22m 94 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.adb9c15ae1df06b7922f.hot-update.js[39m[22m 44.4 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.adb9c15ae1df06b7922f.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.02 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.adb9c15ae1df06b7922f.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.adb9c15ae1df06b7922f.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 14.4 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 99 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (57%) 3/4 entries 53/53 dependenc
+ies 605/35 modules 1 active 
+ ...ostcss-loader › resolve-url-loader › sass-loader › src\pages\consult\index
+.scss
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (87%)  
+ code generation
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 149.90ms
+
+→ Watching... [2026/9/4 18:51:14]
+
+✅  编译成功 2026/9/4 18:51:14
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 106 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.07c653967e5219282087.hot-update.js[39m[22m 56.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.07c653967e5219282087.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.07c653967e5219282087.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.07c653967e5219282087.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/pages/consult/index.scss[39m[22m 21.2 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 150 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (65%) 3/4 entries 60/60 dependenc
+ies 605/42 modules 1 active 
+ babel-loader › src\pages\report\index.tsx
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 127.22ms
+
+→ Watching... [2026/9/4 18:51:23]
+
+✅  编译成功 2026/9/4 18:51:23
+
+assets by status 23 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.95 MiB
+  assets by path [1m[32m*.js[39m[22m 89.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_report_index_tsx.f59483c3430d0e0f6e36.hot-update.js[39m[22m 39.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.f59483c3430d0e0f6e36.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_report_index_tsx.js[39m[22m 2.86 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.f59483c3430d0e0f6e36.hot-update.json[39m[22m 60 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.f59483c3430d0e0f6e36.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/report/index.tsx[39m[22m 13.1 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 127 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (65%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 113.19ms
+
+→ Watching... [2026/9/4 18:51:27]
+
+✅  编译成功 2026/9/4 18:51:28
+
+assets by status 23 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.98 MiB
+  assets by path [1m[32m*.js[39m[22m 106 KiB
+    asset [1m[32msrc_pages_report_index_tsx.670a63fb656ca7c875f3.hot-update.js[39m[22m 56.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.670a63fb656ca7c875f3.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_report_index_tsx.js[39m[22m 2.88 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.670a63fb656ca7c875f3.hot-update.json[39m[22m 60 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.670a63fb656ca7c875f3.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/report/index.tsx[39m[22m 13.2 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 113 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 94.02ms
+
+→ Watching... [2026/9/4 18:51:31]
+
+✅  编译成功 2026/9/4 18:51:31
+
+assets by status 23 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.97 MiB
+  assets by path [1m[32m*.js[39m[22m 89.8 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_report_index_tsx.22f068b8e7bd766304c4.hot-update.js[39m[22m 40.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.22f068b8e7bd766304c4.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_report_index_tsx.js[39m[22m 2.88 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.22f068b8e7bd766304c4.hot-update.json[39m[22m 60 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.22f068b8e7bd766304c4.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/report/index.tsx[39m[22m 13.3 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 95 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 99.61ms
+
+→ Watching... [2026/9/4 18:51:35]
+
+✅  编译成功 2026/9/4 18:51:35
+
+assets by status 23 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.97 MiB
+  assets by path [1m[32m*.js[39m[22m 90 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_report_index_tsx.90e81943ec38709ded94.hot-update.js[39m[22m 40.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.90e81943ec38709ded94.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_report_index_tsx.js[39m[22m 2.88 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.90e81943ec38709ded94.hot-update.json[39m[22m 60 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.90e81943ec38709ded94.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/report/index.tsx[39m[22m 13.3 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 100 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (59%) 3/4 entries 56/56 dependenc
+ies 627/37 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 121.22ms
+
+→ Watching... [2026/9/4 18:53:25]
+
+✅  编译成功 2026/9/4 18:53:25
+
+assets by status 21.1 MiB [1m[32m[cached][39m[22m 10 assets
+assets by status 4.87 MiB [1m[32m[emitted][39m[22m
+  assets by info 20.3 KiB [1m[32m[immutable][39m[22m
+    asset [1m[32mapp.7ebe524eb6d226470d4f.hot-update.js[39m[22m 19.4 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: app)
+    asset [1m[32mruntime.7ebe524eb6d226470d4f.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32mruntime.7ebe524eb6d226470d4f.hot-update.json[39m[22m 37 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  asset [1m[32mapp.js[39m[22m 4.8 MiB [1m[32m[emitted][39m[22m (name: app)
+  asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+Entrypoint [1mapp[39m[22m 5.98 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.7ebe524eb6d226470d4f.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB [1m[32mapp.7ebe524eb6d226470d4f.hot-update.js[39m[22m 19.4 KiB
+cached modules 5 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/app.scss[39m[22m 6.34 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 122 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 61/61 dependenc
+ies 593/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (89%)  
+ after hashing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 174.00ms
+
+→ Watching... [2026/9/4 20:38:25]
+
+✅  编译成功 2026/9/4 20:38:25
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.12 MiB
+  assets by path [1m[32m*.js[39m[22m 94.5 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.96077bd69c5f0e03d4d1.hot-update.js[39m[22m 45 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.96077bd69c5f0e03d4d1.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.96077bd69c5f0e03d4d1.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.96077bd69c5f0e03d4d1.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 14.6 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 175 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (91%)  
+ chunk assets processing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 118.89ms
+
+→ Watching... [2026/9/4 20:38:31]
+
+✅  编译成功 2026/9/4 20:38:31
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.12 MiB
+  assets by path [1m[32m*.js[39m[22m 94.8 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.1ec100ea1f19cb9f352e.hot-update.js[39m[22m 45.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.1ec100ea1f19cb9f352e.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.1ec100ea1f19cb9f352e.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.1ec100ea1f19cb9f352e.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 14.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 119 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ done (99%) plugins 
+ WebpackBar:done
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 137.23ms
+
+→ Watching... [2026/9/4 20:38:38]
+
+✅  编译成功 2026/9/4 20:38:38
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 96.7 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.d9d921d7220d0c01c5ef.hot-update.js[39m[22m 47.1 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.d9d921d7220d0c01c5ef.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.d9d921d7220d0c01c5ef.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.d9d921d7220d0c01c5ef.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 15.4 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 137 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 110.78ms
+
+→ Watching... [2026/9/4 20:38:42]
+
+✅  编译成功 2026/9/4 20:38:42
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 96.8 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.4ea1a085e5a65de82ff2.hot-update.js[39m[22m 47.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.4ea1a085e5a65de82ff2.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.4ea1a085e5a65de82ff2.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.4ea1a085e5a65de82ff2.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 15.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 111 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (57%) 3/4 entries 54/54 dependenc
+ies 605/35 modules 1 active 
+ ...ostcss-loader › resolve-url-loader › sass-loader › src\pages\consult\index
+.scss
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (73%)  
+ after chunk graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 139.30ms
+
+→ Watching... [2026/9/4 20:38:45]
+
+✅  编译成功 2026/9/4 20:38:46
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.14 MiB
+  assets by path [1m[32m*.js[39m[22m 107 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.71f4bf8a7adcf4b9f695.hot-update.js[39m[22m 57.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.71f4bf8a7adcf4b9f695.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.71f4bf8a7adcf4b9f695.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.71f4bf8a7adcf4b9f695.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/pages/consult/index.scss[39m[22m 21.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 140 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 57/57 dependenc
+ies 587/38 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (92%)  
+ asset processing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 135.40ms
+
+→ Watching... [2026/9/4 20:52:30]
+
+✅  编译成功 2026/9/4 20:52:30
+
+assets by status 17.6 MiB [1m[32m[cached][39m[22m 8 assets
+assets by path [1m[32m.[39m[22m 8.44 MiB
+  assets by path [1m[32m*.js[39m[22m 134 KiB
+    assets by chunk 49.5 KiB (name: runtime)
+      asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+      asset [1m[32mruntime.3d5770d972c4bb41a241.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.3d5770d972c4bb41a241.hot-update.js[39m[22m 28.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_family_index_tsx.3d5770d972c4bb41a241.hot-update.js[39m[22m 28.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_index_index_tsx.3d5770d972c4bb41a241.hot-update.js[39m[22m 28.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  assets by path [1m[32mchunk/*.js[39m[22m 8.31 MiB
+    asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_family_index_tsx.js[39m[22m 2.64 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.63 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.3d5770d972c4bb41a241.hot-update.json[39m[22m 118 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.3d5770d972c4bb41a241.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.97 MiB [1m[32m[cached][39m[22m 708 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 44.8 KiB
+  modules by path [1m./src/pages/[39m[22m 32.3 KiB
+    [1m./src/pages/index/index.tsx[39m[22m 7.11 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/consult/index.tsx[39m[22m 15.5 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/family/index.tsx[39m[22m 9.72 KiB [1m[33m[code generated][39m[22m
+  [1m./src/services/members.ts[39m[22m 2.69 KiB [1m[33m[code generated][39m[22m
+  [1m./src/utils/profile.ts[39m[22m 9.76 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 136 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (65%) 2/4 entries 61/61 dependenc
+ies 596/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 121.84ms
+
+→ Watching... [2026/9/4 20:52:33]
+
+✅  编译成功 2026/9/4 20:52:33
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 96.8 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.f050a54eedd3f95a6b5e.hot-update.js[39m[22m 47.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.f050a54eedd3f95a6b5e.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.03 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.f050a54eedd3f95a6b5e.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.f050a54eedd3f95a6b5e.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 15.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 122 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 115.12ms
+
+→ Watching... [2026/9/4 20:52:37]
+
+✅  编译成功 2026/9/4 20:52:37
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 97.5 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.795fa7985d0e0b478928.hot-update.js[39m[22m 47.9 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.795fa7985d0e0b478928.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.04 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.795fa7985d0e0b478928.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.795fa7985d0e0b478928.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 15.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 116 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 108.38ms
+
+→ Watching... [2026/9/4 20:52:40]
+
+✅  编译成功 2026/9/4 20:52:41
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.13 MiB
+  assets by path [1m[32m*.js[39m[22m 98.3 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.9683433767380f4b1999.hot-update.js[39m[22m 48.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.9683433767380f4b1999.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.04 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.9683433767380f4b1999.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.9683433767380f4b1999.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 16.1 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 109 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (89%)  
+ after hashing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 166.16ms
+
+→ Watching... [2026/9/4 20:52:53]
+
+✅  编译成功 2026/9/4 20:52:53
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.14 MiB
+  assets by path [1m[32m*.js[39m[22m 102 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.1efa227574bcc6386313.hot-update.js[39m[22m 52.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.1efa227574bcc6386313.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.04 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.1efa227574bcc6386313.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.1efa227574bcc6386313.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/consult/index.tsx[39m[22m 17.3 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 168 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (57%) 3/4 entries 54/54 dependenc
+ies 605/35 modules 1 active 
+ ...ostcss-loader › resolve-url-loader › sass-loader › src\pages\consult\index
+.scss
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (59%) 3/4 entries 56/56 dependenc
+ies 627/37 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (84%)  
+ chunk ids
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 201.23ms
+
+→ Watching... [2026/9/4 20:52:58]
+
+✅  编译成功 2026/9/4 20:52:58
+
+assets by status 22.8 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 3.15 MiB
+  assets by path [1m[32m*.js[39m[22m 111 KiB
+    asset [1m[32msrc_pages_consult_index_tsx.3c3221166885ae2a4476.hot-update.js[39m[22m 61.4 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.3c3221166885ae2a4476.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.04 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.3c3221166885ae2a4476.hot-update.json[39m[22m 61 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.3c3221166885ae2a4476.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/pages/consult/index.scss[39m[22m 23.1 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 203 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 61/61 dependenc
+ies 603/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 129.73ms
+
+→ Watching... [2026/9/4 21:03:12]
+
+✅  编译成功 2026/9/4 21:03:13
+
+assets by status 23.2 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.7 MiB
+  assets by path [1m[32m*.js[39m[22m 71 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.3adcb13e7b0c366c698c.hot-update.js[39m[22m 21.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.3adcb13e7b0c366c698c.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.63 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.3adcb13e7b0c366c698c.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.3adcb13e7b0c366c698c.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.01 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/index/index.tsx[39m[22m 7.09 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 132 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 61/61 dependenc
+ies 578/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 119.49ms
+
+→ Watching... [2026/9/4 21:03:21]
+
+✅  编译成功 2026/9/4 21:03:21
+
+assets by status 23.2 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.7 MiB
+  assets by path [1m[32m*.js[39m[22m 70.8 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.0f8cef42bdcd214e0d76.hot-update.js[39m[22m 21.3 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.0f8cef42bdcd214e0d76.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.63 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.0f8cef42bdcd214e0d76.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.0f8cef42bdcd214e0d76.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.01 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/pages/index/index.tsx[39m[22m 7.02 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 120 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 61/62 dependenc
+ies 607/42 modules 1 active 
+ babel-loader › src\pages\index\index.tsx
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 83/83 dependenc
+ies 630/54 modules 3 active 
+ ...loader › resolve-url-loader › sass-loader › src\components\BirthDatePicker
+.scss
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (89%)  
+ after hashing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 212.20ms
+
+⚠️ Warnings: 
+
+ModuleDependencyWarning: export 'defaultBirthDate' (imported as 'defaultBirthDate') was not found in '../utils/birthdate' (possible exports: clampDay, daysInMonth, formatBirthDate, pad2, parseBirthDate, parseYearOf)
+
+→ Watching... [2026/9/4 21:03:30]
+
+⚠️  编译警告. 2026/9/4 21:03:31
+
+ModuleDependencyWarning: export 'defaultBirthDate' (imported as 'defaultBirthDate') was not found in '../utils/birthdate' (possible exports: clampDay, daysInMonth, formatBirthDate, pad2, parseBirthDate, parseYearOf)
+
+assets by status 23.2 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.82 MiB
+  assets by path [1m[32m*.js[39m[22m 133 KiB
+    asset [1m[32msrc_pages_index_index_tsx.74b67d4317eaa331f93c.hot-update.js[39m[22m 83.4 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32mruntime.74b67d4317eaa331f93c.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.74b67d4317eaa331f93c.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.74b67d4317eaa331f93c.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.01 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 25.2 KiB
+  modules by path [1m./src/components/[39m[22m 15.1 KiB
+    [1m./src/components/BirthDatePicker.tsx[39m[22m 7.21 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./src/components/BirthDatePicker.scss[39m[22m 2.97 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    ./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/components/BirthDatePicker.scss[39m[22m 4.92 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/pages/index/index.tsx[39m[22m 6.65 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/utils/birthdate.ts[39m[22m 3.41 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1m./src/components/BirthDatePicker.tsx[39m[22m [1m[32m51:57-73[39m[22m
+[1mexport 'defaultBirthDate' (imported as 'defaultBirthDate') was [1m[31mnot found[39m[22m[1m in '../utils/birthdate' (possible exports: [1m[32mclampDay, daysInMonth, formatBirthDate, pad2, parseBirthDate, parseYearOf[39m[22m[1m)[39m[22m
+ @ ./src/pages/index/index.tsx 10:0-63 87:28-43
+ @ ./src/app.config.ts 40:17-46
+
+webpack 5.94.0 compiled with [1m[33m1 warning[39m[22m in 213 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 96.60ms
+
+⚠️ Warnings: 
+
+ModuleDependencyWarning: export 'defaultBirthDate' (imported as 'defaultBirthDate') was not found in '../utils/birthdate' (possible exports: clampDay, daysInMonth, formatBirthDate, pad2, parseBirthDate, parseYearOf)
+
+→ Watching... [2026/9/4 21:03:44]
+
+⚠️  编译警告. 2026/9/4 21:03:44
+
+ModuleDependencyWarning: export 'defaultBirthDate' (imported as 'defaultBirthDate') was not found in '../utils/birthdate' (possible exports: clampDay, daysInMonth, formatBirthDate, pad2, parseBirthDate, parseYearOf)
+
+assets by status 23.2 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.75 MiB
+  assets by path [1m[32m*.js[39m[22m 59.7 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.58b9e54a1c4a75980bd4.hot-update.js[39m[22m 10.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.58b9e54a1c4a75980bd4.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.58b9e54a1c4a75980bd4.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.58b9e54a1c4a75980bd4.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.03 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/utils/birthdate.ts[39m[22m 3.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1m./src/components/BirthDatePicker.tsx[39m[22m [1m[32m51:57-73[39m[22m
+[1mexport 'defaultBirthDate' (imported as 'defaultBirthDate') was [1m[31mnot found[39m[22m[1m in '../utils/birthdate' (possible exports: [1m[32mclampDay, daysInMonth, formatBirthDate, pad2, parseBirthDate, parseYearOf[39m[22m[1m)[39m[22m
+ @ ./src/pages/index/index.tsx 10:0-63 87:28-43
+ @ ./src/app.config.ts 40:17-46
+
+webpack 5.94.0 compiled with [1m[33m1 warning[39m[22m in 97 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ plugins
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 92.66ms
+
+→ Watching... [2026/9/4 21:03:50]
+
+✅  编译成功 2026/9/4 21:03:50
+
+assets by status 23.2 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.75 MiB
+  assets by path [1m[32m*.js[39m[22m 61.7 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.83f39e4748883190fa5a.hot-update.js[39m[22m 12.1 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.83f39e4748883190fa5a.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.83f39e4748883190fa5a.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.83f39e4748883190fa5a.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 715 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 11.4 KiB
+  [1m./src/components/BirthDatePicker.tsx[39m[22m 7.21 KiB [1m[33m[code generated][39m[22m
+  [1m./src/utils/birthdate.ts[39m[22m 4.17 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 93 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✖ Webpack
+  Compiled with some errors in 106.44ms
+
+✖ Errors: 
+
+ModuleParseError: Module parse failed: Duplicate export 'defaultBirthDate' (65:16)
+File was processed with these loaders:
+ * ./node_modules/@pmmmwh/react-refresh-webpack-plugin/loader/index.js
+ * ./node_modules/babel-loader/lib/index.js
+You may need an additional loader to handle the result of these loaders.
+|  * （会回显在表单上），而不是一个荒谬的年龄。
+|  */
+> export function defaultBirthDate(today = new Date()) {
+|   const y = today.getFullYear() - 30;
+|   const m = today.getMonth() + 1;
+
+→ Watching... [2026/9/4 21:03:55]
+
+🙅   编译失败. 2026/9/4 21:03:55
+
+ModuleParseError: Module parse failed: Duplicate export 'defaultBirthDate' (65:16)
+File was processed with these loaders:
+ * ./node_modules/@pmmmwh/react-refresh-webpack-plugin/loader/index.js
+ * ./node_modules/babel-loader/lib/index.js
+You may need an additional loader to handle the result of these loaders.
+|  * （会回显在表单上），而不是一个荒谬的年龄。
+|  */
+> export function defaultBirthDate(today = new Date()) {
+|   const y = today.getFullYear() - 30;
+|   const m = today.getMonth() + 1;
+
+assets by status 17.6 MiB [1m[32m[cached][39m[22m 8 assets
+assets by path [1m[32m.[39m[22m 8.45 MiB
+  assets by path [1m[32m*.js[39m[22m 154 KiB
+    assets by chunk 49.5 KiB (name: runtime)
+      asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+      asset [1m[32mruntime.bbd7965723df030450ba.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.bbd7965723df030450ba.hot-update.js[39m[22m 53.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_family_index_tsx.bbd7965723df030450ba.hot-update.js[39m[22m 30.4 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_index_index_tsx.bbd7965723df030450ba.hot-update.js[39m[22m 21 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  assets by path [1m[32mchunk/*.js[39m[22m 8.3 MiB
+    asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.02 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.67 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_family_index_tsx.js[39m[22m 2.62 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.bbd7965723df030450ba.hot-update.json[39m[22m 118 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.bbd7965723df030450ba.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 46.3 KiB
+  modules by path [1m./src/pages/[39m[22m 33.7 KiB
+    [1m./src/pages/index/index.tsx[39m[22m 6.65 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/consult/index.tsx[39m[22m 17.3 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/family/index.tsx[39m[22m 9.72 KiB [1m[33m[code generated][39m[22m
+  [1m./src/services/members.ts[39m[22m 2.69 KiB [1m[33m[code generated][39m[22m
+  [1m./src/utils/profile.ts[39m[22m 9.97 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m [1m[31m[1 error][39m[22m
+
+[1m[31mERROR[39m[22m in [1m./src/utils/profile.ts[39m[22m [1m[32m65:16[39m[22m
+[1mModule parse [1m[31mfailed[39m[22m[1m: [1m[31mDuplicate[39m[22m[1m export 'defaultBirthDate' (65:16)
+File was processed with these loaders:
+ * ./node_modules/@pmmmwh/react-refresh-webpack-plugin/loader/index.js
+ * ./node_modules/babel-loader/lib/index.js
+You may need an additional loader to handle the result of these loaders.
+|  * （会回显在表单上），而不是一个荒谬的年龄。
+|  */
+> export function defaultBirthDate(today = new Date()) {
+|   const y = today.getFullYear() - 30;
+|   const m = today.getMonth() + 1;[39m[22m
+ @ ./src/pages/index/index.tsx 9:0-133 32:15-28 33:9-27 37:29-37 45:9-22 54:16-35 62:17-29 101:20-38
+ @ ./src/app.config.ts 40:17-46
+
+webpack 5.94.0 compiled with [1m[31m1 error[39m[22m in 106 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 104.51ms
+
+→ Watching... [2026/9/4 21:04:02]
+
+✅  编译成功 2026/9/4 21:04:02
+
+assets by status 17.6 MiB [1m[32m[cached][39m[22m 8 assets
+assets by path [1m[32m.[39m[22m 8.64 MiB
+  assets by path [1m[32m*.js[39m[22m 252 KiB
+    assets by chunk 49.5 KiB (name: runtime)
+      asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+      asset [1m[32mruntime.5c14a81749f47d7fb5c5.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.5c14a81749f47d7fb5c5.hot-update.js[39m[22m 89.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_family_index_tsx.5c14a81749f47d7fb5c5.hot-update.js[39m[22m 66.9 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_index_index_tsx.5c14a81749f47d7fb5c5.hot-update.js[39m[22m 46.1 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  assets by path [1m[32mchunk/*.js[39m[22m 8.4 MiB
+    asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.05 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_family_index_tsx.js[39m[22m 2.65 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.5c14a81749f47d7fb5c5.hot-update.json[39m[22m 118 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.5c14a81749f47d7fb5c5.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 45.4 KiB
+  modules by path [1m./src/pages/[39m[22m 33.7 KiB
+    [1m./src/pages/index/index.tsx[39m[22m 6.65 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/consult/index.tsx[39m[22m 17.3 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/family/index.tsx[39m[22m 9.72 KiB [1m[33m[code generated][39m[22m
+  [1m./src/services/members.ts[39m[22m 2.69 KiB [1m[33m[code generated][39m[22m
+  [1m./src/utils/profile.ts[39m[22m 9.02 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 105 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 63/63 dependenc
+ies 564/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (93%)  
+ recording
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 139.05ms
+
+→ Watching... [2026/9/4 21:04:12]
+
+✅  编译成功 2026/9/4 21:04:13
+
+assets by status 17.6 MiB [1m[32m[cached][39m[22m 8 assets
+assets by path [1m[32m.[39m[22m 8.52 MiB
+  assets by path [1m[32m*.js[39m[22m 129 KiB
+    assets by chunk 49.5 KiB (name: runtime)
+      asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+      asset [1m[32mruntime.55fe0837ce56e89e2bc4.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.55fe0837ce56e89e2bc4.hot-update.js[39m[22m 26.6 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_family_index_tsx.55fe0837ce56e89e2bc4.hot-update.js[39m[22m 26.6 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_index_index_tsx.55fe0837ce56e89e2bc4.hot-update.js[39m[22m 26.6 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  assets by path [1m[32mchunk/*.js[39m[22m 8.4 MiB
+    asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.05 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_family_index_tsx.js[39m[22m 2.65 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.55fe0837ce56e89e2bc4.hot-update.json[39m[22m 118 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.55fe0837ce56e89e2bc4.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 45.4 KiB
+  modules by path [1m./src/pages/[39m[22m 33.7 KiB
+    [1m./src/pages/index/index.tsx[39m[22m 6.65 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/consult/index.tsx[39m[22m 17.3 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/family/index.tsx[39m[22m 9.72 KiB [1m[33m[code generated][39m[22m
+  [1m./src/services/members.ts[39m[22m 2.69 KiB [1m[33m[code generated][39m[22m
+  [1m./src/utils/profile.ts[39m[22m 9.07 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 140 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 63/63 dependenc
+ies 481/42 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 117.03ms
+
+→ Watching... [2026/9/4 21:04:19]
+
+✅  编译成功 2026/9/4 21:04:20
+
+assets by status 17.6 MiB [1m[32m[cached][39m[22m 8 assets
+assets by path [1m[32m.[39m[22m 8.52 MiB
+  assets by path [1m[32m*.js[39m[22m 129 KiB
+    assets by chunk 49.5 KiB (name: runtime)
+      asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+      asset [1m[32mruntime.0b36fcb3ba59087413e0.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_consult_index_tsx.0b36fcb3ba59087413e0.hot-update.js[39m[22m 26.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_family_index_tsx.0b36fcb3ba59087413e0.hot-update.js[39m[22m 26.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32msrc_pages_index_index_tsx.0b36fcb3ba59087413e0.hot-update.js[39m[22m 26.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  assets by path [1m[32mchunk/*.js[39m[22m 8.4 MiB
+    asset [1m[32mchunk/src_pages_consult_index_tsx.js[39m[22m 3.05 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+    asset [1m[32mchunk/src_pages_family_index_tsx.js[39m[22m 2.65 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.0b36fcb3ba59087413e0.hot-update.json[39m[22m 118 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.0b36fcb3ba59087413e0.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 4.99 MiB [1m[32m[cached][39m[22m 712 modules
+runtime modules 32.2 KiB 18 modules
+javascript modules 45.4 KiB
+  modules by path [1m./src/pages/[39m[22m 33.7 KiB
+    [1m./src/pages/index/index.tsx[39m[22m 6.65 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/consult/index.tsx[39m[22m 17.3 KiB [1m[33m[code generated][39m[22m
+    [1m./src/pages/family/index.tsx[39m[22m 9.72 KiB [1m[33m[code generated][39m[22m
+  [1m./src/services/members.ts[39m[22m 2.69 KiB [1m[33m[code generated][39m[22m
+  [1m./src/utils/profile.ts[39m[22m 9.06 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 117 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 66/66 dependenc
+ies 608/45 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 127.57ms
+
+→ Watching... [2026/9/4 21:09:38]
+
+✅  编译成功 2026/9/4 21:09:38
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 72.5 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.00554c4cb0375964c367.hot-update.js[39m[22m 23 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.00554c4cb0375964c367.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.00554c4cb0375964c367.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.00554c4cb0375964c367.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.59 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 128 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (70%)  
+ finish module graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 102.05ms
+
+→ Watching... [2026/9/4 21:09:49]
+
+✅  编译成功 2026/9/4 21:09:49
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 72 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.3ec71457433561fc28bd.hot-update.js[39m[22m 22.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.3ec71457433561fc28bd.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.3ec71457433561fc28bd.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.3ec71457433561fc28bd.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.4 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 102 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 66/66 dependenc
+ies 581/45 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 98.27ms
+
+→ Watching... [2026/9/4 21:09:54]
+
+✅  编译成功 2026/9/4 21:09:54
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 72.1 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.8e4de8c125edf99f98e1.hot-update.js[39m[22m 22.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.8e4de8c125edf99f98e1.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.8e4de8c125edf99f98e1.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.8e4de8c125edf99f98e1.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.41 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 98 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 66/66 dependenc
+ies 609/45 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (92%)  
+ asset processing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 134.37ms
+
+→ Watching... [2026/9/4 21:10:39]
+
+✅  编译成功 2026/9/4 21:10:39
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 72.1 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.d57801c019771a8decc4.hot-update.js[39m[22m 22.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.d57801c019771a8decc4.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.d57801c019771a8decc4.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.d57801c019771a8decc4.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.41 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 135 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 66/66 dependenc
+ies 581/45 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 137.73ms
+
+→ Watching... [2026/9/4 21:10:45]
+
+✅  编译成功 2026/9/4 21:10:46
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 73.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.3eaff6004f208dc4feb5.hot-update.js[39m[22m 23.7 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.3eaff6004f208dc4feb5.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.3eaff6004f208dc4feb5.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.3eaff6004f208dc4feb5.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.84 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 138 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 66/66 dependenc
+ies 581/45 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (93%)  
+ recording
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 138.12ms
+
+→ Watching... [2026/9/4 21:10:56]
+
+✅  编译成功 2026/9/4 21:10:56
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 73.5 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.19368891fe1693326791.hot-update.js[39m[22m 24 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.19368891fe1693326791.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.19368891fe1693326791.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.19368891fe1693326791.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.95 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 139 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (60%) 3/4 entries 62/62 dependenc
+ies 630/41 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 131.95ms
+
+→ Watching... [2026/9/4 21:31:23]
+
+✅  编译成功 2026/9/4 21:31:23
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.76 MiB
+  assets by path [1m[32m*.js[39m[22m 66.7 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.e1f89e1155409a35389a.hot-update.js[39m[22m 17.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.e1f89e1155409a35389a.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.69 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.e1f89e1155409a35389a.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.96 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.e1f89e1155409a35389a.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.8 MiB
+cached modules 5.03 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/components/BirthDatePicker.scss[39m[22m 5.4 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 132 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 62/62 dependenc
+ies 631/41 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 111.40ms
+
+→ Watching... [2026/9/4 21:32:32]
+
+✅  编译成功 2026/9/4 21:32:33
+
+assets by status 21.2 MiB [1m[32m[cached][39m[22m 10 assets
+assets by status 4.89 MiB [1m[32m[emitted][39m[22m
+  assets by info 32.1 KiB [1m[32m[immutable][39m[22m
+    asset [1m[32mapp.ef78f34e59df7b3fb956.hot-update.js[39m[22m 31.2 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: app)
+    asset [1m[32mruntime.ef78f34e59df7b3fb956.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32mruntime.ef78f34e59df7b3fb956.hot-update.json[39m[22m 37 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  asset [1m[32mapp.js[39m[22m 4.81 MiB [1m[32m[emitted][39m[22m (name: app)
+  asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+Entrypoint [1mapp[39m[22m 6 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.ef78f34e59df7b3fb956.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB [1m[32mapp.ef78f34e59df7b3fb956.hot-update.js[39m[22m 31.2 KiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 716 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/app.scss[39m[22m 11.1 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 112 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 62/63 dependenc
+ies 608/42 modules 1 active 
+ babel-loader › src\components\BirthDatePicker.tsx
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 105.34ms
+
+→ Watching... [2026/9/4 21:32:36]
+
+✅  编译成功 2026/9/4 21:32:36
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.73 MiB
+  assets by path [1m[32m*.js[39m[22m 73.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.385865d5a9007154a05a.hot-update.js[39m[22m 23.8 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.385865d5a9007154a05a.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.66 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.385865d5a9007154a05a.hot-update.json[39m[22m 393 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.385865d5a9007154a05a.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 7.92 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 105 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 63/63 dependenc
+ies 598/43 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (89%)  
+ after hashing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 139.42ms
+
+→ Watching... [2026/9/4 21:33:50]
+
+✅  编译成功 2026/9/4 21:33:50
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.73 MiB
+  assets by path [1m[32m*.js[39m[22m 74.1 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.0f7c66a71d22fe55effe.hot-update.js[39m[22m 24.6 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.0f7c66a71d22fe55effe.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.66 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.0f7c66a71d22fe55effe.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.0f7c66a71d22fe55effe.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 8.22 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 140 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (60%) 3/4 entries 59/59 dependenc
+ies 629/39 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 123.34ms
+
+→ Watching... [2026/9/4 21:33:54]
+
+✅  编译成功 2026/9/4 21:33:54
+
+assets by status 21.1 MiB [1m[32m[cached][39m[22m 10 assets
+assets by status 4.89 MiB [1m[32m[emitted][39m[22m
+  assets by info 33.6 KiB [1m[32m[immutable][39m[22m
+    asset [1m[32mapp.9faa5e428038ab39935b.hot-update.js[39m[22m 32.7 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: app)
+    asset [1m[32mruntime.9faa5e428038ab39935b.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32mruntime.9faa5e428038ab39935b.hot-update.json[39m[22m 37 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  asset [1m[32mapp.js[39m[22m 4.81 MiB [1m[32m[emitted][39m[22m (name: app)
+  asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+Entrypoint [1mapp[39m[22m 6 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.9faa5e428038ab39935b.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB [1m[32mapp.9faa5e428038ab39935b.hot-update.js[39m[22m 32.7 KiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/app.scss[39m[22m 11.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 124 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 63/63 dependenc
+ies 597/43 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (92%)  
+ asset processing
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 116.65ms
+
+→ Watching... [2026/9/4 21:37:44]
+
+✅  编译成功 2026/9/4 21:37:44
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.74 MiB
+  assets by path [1m[32m*.js[39m[22m 75.4 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.3a1172db2717b4131d75.hot-update.js[39m[22m 25.9 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.3a1172db2717b4131d75.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.66 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.3a1172db2717b4131d75.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.3a1172db2717b4131d75.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 8.72 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 117 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 63/63 dependenc
+ies 538/43 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 118.30ms
+
+→ Watching... [2026/9/4 21:37:54]
+
+✅  编译成功 2026/9/4 21:37:54
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.74 MiB
+  assets by path [1m[32m*.js[39m[22m 76.6 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.49f39cfe45757054dee1.hot-update.js[39m[22m 27.1 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.49f39cfe45757054dee1.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.66 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.49f39cfe45757054dee1.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.49f39cfe45757054dee1.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 9.21 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 119 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (58%) 3/4 entries 57/57 dependenc
+ies 607/37 modules 1 active 
+ ...ss
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ sealing (73%)  
+ after chunk graph
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 146.45ms
+
+→ Watching... [2026/9/4 21:38:17]
+
+✅  编译成功 2026/9/4 21:38:17
+
+assets by status 21.1 MiB [1m[32m[cached][39m[22m 10 assets
+assets by status 4.88 MiB [1m[32m[emitted][39m[22m
+  assets by info 28.8 KiB [1m[32m[immutable][39m[22m
+    asset [1m[32mapp.dd42a032e6b1fa752409.hot-update.js[39m[22m 27.9 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: app)
+    asset [1m[32mruntime.dd42a032e6b1fa752409.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+    asset [1m[32mruntime.dd42a032e6b1fa752409.hot-update.json[39m[22m 37 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+  asset [1m[32mapp.js[39m[22m 4.81 MiB [1m[32m[emitted][39m[22m (name: app)
+  asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+Entrypoint [1mapp[39m[22m 5.99 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.dd42a032e6b1fa752409.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB [1m[32mapp.dd42a032e6b1fa752409.hot-update.js[39m[22m 27.9 KiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].oneOf[0].use[0]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[3].use[0]!./node_modules/resolve-url-loader/index.js!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[5].use[1]![1m./src/app.scss[39m[22m 9.83 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 147 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 3/4 entries 63/63 dependenc
+ies 597/43 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 127.08ms
+
+→ Watching... [2026/9/4 22:55:45]
+
+✅  编译成功 2026/9/4 22:55:45
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.74 MiB
+  assets by path [1m[32m*.js[39m[22m 78.3 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.7c7362161e1ed112e8c4.hot-update.js[39m[22m 28.7 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.7c7362161e1ed112e8c4.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.67 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.7c7362161e1ed112e8c4.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.7c7362161e1ed112e8c4.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 9.82 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 127 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 63/63 dependenc
+ies 538/43 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ emitting (98%)  
+ after emit
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 113.55ms
+
+→ Watching... [2026/9/4 22:55:53]
+
+✅  编译成功 2026/9/4 22:55:53
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.74 MiB
+  assets by path [1m[32m*.js[39m[22m 78.1 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.246362f06aa75af6fd8f.hot-update.js[39m[22m 28.6 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.246362f06aa75af6fd8f.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.67 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.246362f06aa75af6fd8f.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.246362f06aa75af6fd8f.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 9.78 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 114 ms
+
+● Webpack █████████████████████████ setup (7%) compile 
+ ExternalsPlugin
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+● Webpack █████████████████████████ building (64%) 2/4 entries 63/63 dependenc
+ies 538/43 modules 0 active 
+ 
+
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G
+✔ Webpack
+  Compiled successfully in 108.13ms
+
+→ Watching... [2026/9/4 22:55:57]
+
+✅  编译成功 2026/9/4 22:55:57
+
+assets by status 23.3 MiB [1m[32m[cached][39m[22m 10 assets
+assets by path [1m[32m.[39m[22m 2.74 MiB
+  assets by path [1m[32m*.js[39m[22m 78 KiB
+    asset [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32m[emitted][39m[22m (name: runtime)
+    asset [1m[32msrc_pages_index_index_tsx.1c612865a38e939d97c0.hot-update.js[39m[22m 28.5 KiB [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+    asset [1m[32mruntime.1c612865a38e939d97c0.hot-update.js[39m[22m 869 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m (name: runtime)
+  asset [1m[32mchunk/src_pages_index_index_tsx.js[39m[22m 2.67 MiB [1m[32m[emitted][39m[22m
+  asset [1m[32mruntime.1c612865a38e939d97c0.hot-update.json[39m[22m 59 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mapp[39m[22m 5.97 MiB = [1m[32mruntime.js[39m[22m 48.7 KiB [1m[32mruntime.1c612865a38e939d97c0.hot-update.js[39m[22m 869 bytes [1m[32mtaro.js[39m[22m 1.11 MiB [1m[32mapp.js[39m[22m 4.81 MiB
+cached modules 5.02 MiB [1m[32m[cached][39m[22m 714 modules
+runtime modules 32.2 KiB 18 modules
+[1m./src/components/BirthDatePicker.tsx[39m[22m 9.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+webpack 5.94.0 compiled [1m[32msuccessfully[39m[22m in 108 ms

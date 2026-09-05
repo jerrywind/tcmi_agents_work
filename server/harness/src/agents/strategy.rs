@@ -29,15 +29,10 @@ impl SubAgent for StrategyAgent {
     ) -> Result<String> {
         let mut rule_part = String::new();
 
-        let slug = payload
-            .get("syndrome")
-            .and_then(|s| s.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                crate::agents::infer_syndrome_slug(&ctx.resources, messages)
-                    .into_iter()
-                    .next()
-            });
+        // 证候来自「证候锁定」：辨证步的主证（编排器注入）或调用方显式给定；
+        // 只在都没有时才退回文本推断。立法依据的主证必须与辨证一致，
+        // 否则后面「据证立法」立的就是另一个证的法。
+        let slug = crate::agents::resolve_syndrome(&ctx.resources, messages, payload);
 
         if let Some(slug) = &slug {
             if let Some(s) = ctx.resources.syndrome(slug) {
@@ -51,10 +46,34 @@ impl SubAgent for StrategyAgent {
             }
         }
 
-        let system = &ctx.resources.prompts.strategy;
+        // 同开方步：证候库给出的治则必须进 system。
+        // 治则是「法」，是后面「方」的标尺；模型看不到就会自造治则名
+        // （如把「辛温解表」写成「发散风寒」这类自造词）。
+        // H6：证候没锁定（未定证 / 置信度不足）时必须让模型知道，
+        // 否则它会把推断出的证候当定论，一板一眼地立出「法」来。
+        let uncertainty = crate::agents::syndrome_uncertainty_note(payload);
+
+        // 没有规则结论时不拼这个小节：标题写着「来自证候库，确定性」，
+        // 底下却是空的，等于拿一个空的权威标题去压模型。
+        let rule_block = if rule_part.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\n【证候与治则（来自证候库，确定性）】\n{rule_part}\n\
+                 请据此立法；治则名沿用上述表述，不要自造同义说法。"
+            )
+        };
+        let system = if rule_block.is_empty() && uncertainty.is_empty() {
+            ctx.resources.prompts.strategy.clone()
+        } else {
+            format!(
+                "{}{}{}",
+                ctx.resources.prompts.strategy, rule_block, uncertainty
+            )
+        };
         let llm = ctx
             .caller()
-            .chat_with_tools(system, messages, Capability::Strategy)
+            .chat_with_tools(&system, messages, Capability::Strategy)
             .await?;
         Ok(format!("{llm}\n{rule_part}"))
     }

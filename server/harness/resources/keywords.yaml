@@ -2,6 +2,17 @@
 # 每条：slug(英文索引) / label(中文标签) / keywords(触发关键词) /
 #       syndromes(指向的证候 slug) / note(说明)
 # 四诊 agent 命中关键词即叠加证据，辨证 agent 据此初筛证候。
+#
+# ## H1：这里只填「症状表之外的线索」
+#
+# 与证候自身 `key_symptoms` / `minor_symptoms` / `tongue` / `pulse`
+# **互为子串的关键词不再重复计分**（见 `differentiation::score_syndrome`）。
+# 此前多数条目是症状表的原样复制（脾胃湿热 10 个关键词里 9 个就是它的症状），
+# 于是同一句「口苦」先按症状计 1.0、再按关键词计 0.5，
+# 证据量被系统性放大约 1.5 倍，置信度虚高。
+#
+# 所以这里该写的是：**同义说法**（痰白黏 ↔ 白黏痰）、
+# **舌脉片段**（苔腻、脉细）、**患者口语**（易感冒、动则汗出）。
 
 - slug: wind_cold
   label: 风寒证据
@@ -38,3 +49,66 @@
   keywords: ["乏力", "气短", "盗汗", "口干", "心悸", "少苔", "脉细"]
   syndromes: ["qi_and_yin_deficiency"]
   note: 气阴耗伤
+
+# ---------------- H8：新增证候的关键词证据 ----------------
+# 只填症状表之外的同义说法 / 舌脉片段 / 患者口语（见文件头 H1 说明）。
+
+- slug: wind_dryness
+  label: 风燥伤肺证据
+  keywords: ["干咳", "少痰", "唇干", "鼻干", "口渴欲饮", "痰少而黏", "苔干", "秋季"]
+  syndromes: ["wind_dryness_attacking_lung"]
+  note: 燥邪伤津，肺失濡润
+
+- slug: phlegm_damp_lung
+  label: 痰湿阻肺证据
+  keywords: ["痰多易咯", "喉中痰鸣", "白黏痰", "苔腻", "晨起咳甚", "胸闷气憋"]
+  syndromes: ["phlegm_damp_obstructing_lung"]
+  note: 痰湿壅肺，肺失宣降
+
+- slug: lung_qi_def
+  label: 肺气虚证据
+  keywords: ["易感冒", "反复感冒", "动则汗出", "声音低微", "气短懒言", "畏风怕冷"]
+  syndromes: ["lung_qi_deficiency"]
+  note: 肺气不足，卫外不固
+
+- slug: spleen_qi_def
+  label: 脾气虚证据
+  keywords: ["食后腹胀", "大便溏薄", "肢体倦怠", "少气懒言", "面色萎黄", "齿痕"]
+  syndromes: ["spleen_qi_deficiency"]
+  note: 脾气不足，运化失健
+
+- slug: stomach_fire
+  label: 胃火炽盛证据
+  keywords: ["牙龈出血", "消谷善饥", "口气热臭", "喜冷饮", "便秘", "苔黄"]
+  syndromes: ["stomach_fire"]
+  note: 胃火炽盛，腐熟太过
+
+- slug: food_retention
+  label: 食积胃脘证据
+  keywords: ["嗳腐", "吞酸", "厌食", "矢气臭", "吐后痛减", "苔厚腐", "暴饮暴食"]
+  syndromes: ["food_retention"]
+  note: 饮食停滞，胃失和降
+
+- slug: liver_fire
+  label: 肝火上炎证据
+  keywords: ["目赤", "耳鸣如潮", "头胀痛", "口苦咽干", "急躁", "便秘尿黄", "面红"]
+  syndromes: ["liver_fire_flaring"]
+  note: 肝郁化火，上扰清窍
+
+- slug: blood_stasis
+  label: 气滞血瘀证据
+  keywords: ["刺痛", "固定不移", "肌肤甲错", "面色黧黑", "瘀斑", "舌有瘀点", "脉涩"]
+  syndromes: ["qi_stagnation_blood_stasis"]
+  note: 气滞血瘀，络脉不通
+
+- slug: kidney_yang_def
+  label: 肾阳虚证据
+  keywords: ["畏寒", "肢冷", "夜尿频", "腰膝冷", "五更泄", "水肿", "脉沉"]
+  syndromes: ["kidney_yang_deficiency"]
+  note: 肾阳不足，温煦失职
+
+- slug: heart_spleen_def
+  label: 心脾两虚证据
+  keywords: ["心悸怔忡", "多梦易醒", "健忘", "纳差", "面色无华", "月经量少", "脉细"]
+  syndromes: ["heart_spleen_deficiency"]
+  note: 心脾两虚，气血生化不足

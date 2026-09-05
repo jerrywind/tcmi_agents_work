@@ -4,6 +4,112 @@
   height: 100vh;
 }
 
+/* ---------- 首诊：档案摘要 + 病情自述 ---------- */
+.profile-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 24px 0;
+  padding: 18px 24px;
+  background: #eaf3ee;
+  border-radius: 16px;
+}
+
+.summary-main {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex: 1;
+}
+
+.summary-label {
+  font-size: 24px;
+  color: #7a8c83;
+  flex-shrink: 0;
+}
+
+.summary-text {
+  font-size: 26px;
+  color: #2a6f4e;
+  flex: 1;
+}
+
+.summary-edit {
+  font-size: 24px;
+  color: #2a6f4e;
+  text-decoration: underline;
+  flex-shrink: 0;
+}
+
+.complaint-input {
+  width: 100%;
+  min-height: 180px;
+  font-size: 28px;
+  line-height: 1.6;
+}
+
+.card-note {
+  margin-top: 16px;
+  font-size: 24px;
+  line-height: 1.6;
+  color: #7a8c83;
+}
+
+.card-subnote {
+  display: block;
+  margin-top: 16px;
+  font-size: 22px;
+  line-height: 1.6;
+  color: #97a8a0;
+}
+
+/* ---------- 当前居住地采集 ---------- */
+.residence-input {
+  width: 100%;
+  margin-top: 16px;
+  height: 80px;
+  padding: 0 24px;
+  box-sizing: border-box;
+  font-size: 28px;
+  background: #f4f6f4;
+  border-radius: 16px;
+}
+
+.duration-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.duration-chip {
+  padding: 12px 28px;
+  border: 2px solid #bcd4c8;
+  color: #2a6f4e;
+  border-radius: 32px;
+  font-size: 26px;
+  background: #f6faf8;
+
+  &.active {
+    background: #2a6f4e;
+    color: #fff;
+    border-color: #2a6f4e;
+  }
+  &:active { opacity: 0.85; }
+}
+
+.submit-wrap {
+  margin: 40px 24px;
+}
+
+.disclaimer {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 22px;
+  color: #97a8a0;
+}
+
 .progress-bar {
   background: #fff;
   padding: 20px 24px;
@@ -219,6 +325,87 @@
   margin-top: 18px;
 }
 
+/* ---------- 结论可信度提示（H4/H5：未定证 / 低置信度 / 强制放行） ---------- */
+/* 用醒目的琥珀色，区别于待补充条目的浅黄：后者是「还差信息」，
+   前者是「结论本身不可信」——后者补完即消除，前者补完也可能仍在。 */
+.confidence-banner {
+  background: #fff4e5;
+  border-top: 1px solid #f0d9b5;
+  border-bottom: 1px solid #f0d9b5;
+  padding: 18px 24px;
+}
+
+.confidence-note {
+  display: block;
+  font-size: 24px;
+  color: #8a5a12;
+  line-height: 1.6;
+}
+
+/* 「还差哪些表现就能定证」（I3）：near 是规则确定性算出来的，
+   把缺的主症列出来，用户才知道下一步该补充什么 */
+.near-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed #e8cfa8;
+}
+
+.near-tip {
+  display: block;
+  font-size: 22px;
+  color: #8a5a12;
+  margin-bottom: 10px;
+}
+
+.near-item {
+  margin-bottom: 8px;
+}
+
+.near-name {
+  font-size: 24px;
+  color: #6b4a12;
+  font-weight: 600;
+}
+
+.near-missing {
+  display: block;
+  font-size: 22px;
+  color: #97a8a0;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+/* ---------- 待补充条目（反馈式辨证：信息不足时后端停下追问） ---------- */
+.pending-panel {
+  background: #fffaf0;
+  border-top: 1px solid #f0e4c8;
+  padding: 18px 24px;
+}
+
+.pending-tip {
+  display: block;
+  font-size: 24px;
+  color: #8a6d3b;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.pending-item {
+  background: #fff;
+  border: 1px solid #f0e4c8;
+  border-radius: 16px;
+  padding: 14px 20px;
+  margin-bottom: 12px;
+
+  &:active { background: #fdf6e8; }
+}
+
+.pending-text {
+  font-size: 26px;
+  color: #234;
+  line-height: 1.5;
+}
+
 .ppg-btn {
   font-size: 24px;
   color: #fff;
@@ -227,4 +414,90 @@
   border-radius: 20px;
 
   &.disabled { opacity: 0.5; }
+}
+
+/* ---------- 体征图片采集（舌苔 / 手相） ---------- */
+.image-slots {
+  display: flex;
+  gap: 24px;
+  margin-top: 18px;
+}
+
+.image-slot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.image-slot-label {
+  font-size: 24px;
+  color: #2a6f4e;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.image-pick {
+  width: 100%;
+  height: 200px;
+  border: 2px dashed #bcd4c8;
+  border-radius: 16px;
+  background: #f6faf8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  &:active { background: #eaf3ee; }
+}
+
+.image-pick-plus {
+  font-size: 56px;
+  color: #9cc3b0;
+  line-height: 1;
+}
+
+.image-pick-text {
+  margin-top: 8px;
+  font-size: 24px;
+  color: #7a8c83;
+}
+
+.image-preview {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.image-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.image-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  line-height: 38px;
+  text-align: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 32px;
+}
+
+.image-retake {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 4px 16px;
+  border-radius: 16px;
+  background: rgba(42, 111, 78, 0.85);
+  color: #fff;
+  font-size: 22px;
 }

@@ -1,0 +1,13 @@
+﻿{
+    "messages":  [
+                     {
+                         "content":  "最近一周口苦口臭，大便粘滞不爽，肢体困重，舌红苔黄腻，脉滑数",
+                         "role":  "user"
+                     }
+                 ],
+    "capability":  "treatment",
+    "payload":  {
+                    "gender":  "male",
+                    "syndrome":  "spleen_stomach_damp_heat"
+                }
+}

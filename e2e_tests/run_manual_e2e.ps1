@@ -35,8 +35,13 @@
   把报告目录**挂载**到容器（`-v`）。默认不挂载：报告写在容器内的
   /data/reports，回查走 HTTP 接口验证即可，避免不必要的宿主机目录权限要求。
 
-.PARAMETER NoStore
-  不启用报告归档（只跑问诊，不验证 T5.1 存证）。
+.PARAMETER SkipConvergence
+  在 `payload.syndrome` 里预置证候，跳过反馈式辨证的追问环节，直接跑完
+  「立法 → 用药 → 开方」。
+
+  为什么需要它：单轮用例的信息覆盖率通常只有 30% 左右，反馈式辨证会
+  （正确地）停在辨证并返回追问，治疗期根本执行不到——想验证治疗期输出
+  （方剂是否与主证对口、经方药味是否正确）就必须走这条路。
 
 .EXAMPLE
   $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'
@@ -49,6 +54,7 @@ param(
   [switch]$KeepContainer,
   [switch]$NoStore,
   [switch]$BindStore,
+  [switch]$SkipConvergence,
   [string]$ImageName = 'tcm-harness:e2e',
   [int]$Port = 8011
 )
@@ -69,12 +75,14 @@ $Cases = @{
     complaint  = '最近一周口苦口臭，大便粘滞不爽，肢体困重，舌红苔黄腻，脉滑数'
     payload    = @{ gender = '男'; age = 34; region = '广州' }
     expect     = '主证应为脾胃/湿热类证候，且给出方剂与调护'
+    syndrome   = 'spleen_stomach_damp_heat'
   }
   'wind-cold' = @{
     title     = '风寒感冒（表寒实证）'
     complaint = '昨天受凉后恶寒重发热轻，无汗，头痛身痛，鼻塞流清涕，舌苔薄白，脉浮紧'
     payload   = @{ gender = '女'; age = 28; region = '北京' }
     expect    = '主证应为风寒束表类证候，治疗以辛温解表为主'
+    syndrome  = 'wind_cold_attack_lung'
   }
   'red-flag' = @{
     title     = '红旗症状（应被安全门拦截）'
@@ -158,16 +166,28 @@ try {
   Write-Host "[manual-e2e] harness 已就绪" -ForegroundColor Green
 
   # ---------------- 3. 跑一次完整问诊 ----------------
+  # -SkipConvergence：预置证候即跳过反馈式辨证的追问（`lock_syndrome` 不会
+  # 覆盖调用方显式给定的 syndrome），直接跑完治疗期。
+  $payload = @{}
+  foreach ($k in $C.payload.Keys) { $payload[$k] = $C.payload[$k] }
+  if ($SkipConvergence -and $C.syndrome) { $payload['syndrome'] = $C.syndrome }
+
   $body = @{
     messages = @(@{ role = 'user'; content = $C.complaint })
-    payload  = $C.payload
+    payload  = $payload
   } | ConvertTo-Json -Depth 8
 
-  Write-Host "`n[manual-e2e] === POST /chat（$($C.complaint.Length) 字主诉，7 步，请耐心等）===" -ForegroundColor Yellow
+  Write-Host "`n[manual-e2e] === POST /chat（$($C.complaint.Length) 字主诉，请耐心等）===" -ForegroundColor Yellow
   $sw = [Diagnostics.Stopwatch]::StartNew()
+  # 响应**先按原始字节落盘、再按 UTF-8 读回**：
+  # Invoke-RestMethod 会用系统 ANSI（中文 Windows 是 GBK）去解码 UTF-8 响应，
+  # 结果归档的 README 全文乱码——而「让人读一遍」正是本脚本存在的理由，
+  # 这一步错了整个验收就白跑了。
+  $respFile = Join-Path $PSScriptRoot '_resp.json'
   try {
-    $resp = Invoke-RestMethod -Uri "$BASE/chat" -Method Post -Body $body `
-      -ContentType 'application/json; charset=utf-8' -TimeoutSec 900
+    Invoke-WebRequest -Uri "$BASE/chat" -Method Post -Body $body `
+      -ContentType 'application/json; charset=utf-8' -OutFile $respFile -TimeoutSec 900 | Out-Null
+    $resp = Get-Content $respFile -Encoding UTF8 -Raw | ConvertFrom-Json
   } catch {
     Write-Host "[manual-e2e] /chat 失败：$($_.Exception.Message)" -ForegroundColor Red
     Write-Host '  最常见原因：LM Studio 未启动 / 令牌不对 / 模型未加载' -ForegroundColor DarkYellow
@@ -188,7 +208,13 @@ try {
   $stored = $null
   if (-not $NoStore -and $resp.report_id) {
     try {
-      $stored = Invoke-RestMethod -Uri "$BASE/reports/$($resp.report_id)" -TimeoutSec 15
+      # 与主响应同理，不能直接用 Invoke-RestMethod：它会按系统 ANSI（GBK）
+      # 解码 UTF-8 响应。上一轮只修了 /chat，漏了这里，于是归档的 report.json
+      # 全文乱码——而它正是用来核对「落盘与脱敏是否正确」的凭据。
+      $reportFile = Join-Path $PSScriptRoot '_report.json'
+      Invoke-WebRequest -Uri "$BASE/reports/$($resp.report_id)" `
+        -OutFile $reportFile -TimeoutSec 15 | Out-Null
+      $stored = Get-Content $reportFile -Encoding UTF8 -Raw | ConvertFrom-Json
       Write-Utf8 (Join-Path $outDir 'report.json') ($stored | ConvertTo-Json -Depth 12)
     } catch {
       Write-Host "[manual-e2e] 报告回查失败：$($_.Exception.Message)" -ForegroundColor DarkYellow
@@ -200,12 +226,21 @@ try {
   $add = { param($name, $ok, $detail) [void]$checks.Add([pscustomobject]@{ 项 = $name; 结果 = $(if ($ok) { 'PASS' } else { 'FAIL' }); 说明 = $detail }) }
 
   $stepCaps = @($resp.steps | ForEach-Object { $_.capability })
-  & $add '步骤齐全' ($stepCaps.Count -ge 5) ('实际 ' + $stepCaps.Count + ' 步：' + ($stepCaps -join '→'))
   $primary = $resp.structured.differentiation.primary
-  $treatment = $resp.steps | Where-Object { $_.capability -eq 'treatment' } | Select-Object -First 1
+  # 治疗期早已从一步到位拆成「立法 → 用药 → 开方」，兼容档才保留 `treatment`；
+  # 只认 treatment 会让 standard 档永远报「缺治疗步」。
+  $treatmentCaps = @('strategy', 'herbology', 'prescription', 'treatment')
+  $treatment = $resp.steps | Where-Object { $treatmentCaps -contains $_.capability } | Select-Object -First 1
   $concurrent = @($resp.structured.differentiation.concurrent)
 
+  if ($Case -ne 'red-flag') {
+    & $add '步骤齐全' ($stepCaps.Count -ge 5) ('实际 ' + $stepCaps.Count + ' 步：' + ($stepCaps -join '→'))
+  }
+
   if ($Case -eq 'red-flag') {
+    # 红旗若被**预检**命中（纯函数、零延迟），流程只跑安全门 1 步就返回（T7.7）：
+    # 此时「步骤少」恰恰是正确行为——让心梗患者先等四诊采集完再弹警示是危险的。
+    & $add '安全门已执行' ($stepCaps -contains 'safety') ('实际 ' + $stepCaps.Count + ' 步：' + ($stepCaps -join '→'))
     # 红旗场景：主诉是急症（胸痛/咯血/呼吸困难），
     # 辨不出中医证候、且不给治疗方案，**恰恰是正确行为**——
     # 若这里要求「有主证有方剂」，等于逼系统对急症开方。
@@ -213,10 +248,18 @@ try {
     & $add '红旗被拦截' ([bool]$resp.blocked) $(if ($resp.blocked) { $resp.block_reason } else { '未拦截！这是合规红线' })
     & $add '拦截后无治疗方案' (-not $treatment) $(if ($treatment) { '仍给出了治疗方案' } else { '治疗步已跳过' })
     & $add '拦截原因含行动指引' ([string]$resp.block_reason -match '就医|急救|拨打|') $([string]$resp.block_reason)
+  } elseif ($resp.status -eq 'awaiting_input') {
+    # 反馈式辨证：信息覆盖率不足时**停在辨证并返回追问**是设计行为，不是失败。
+    # 若在这里硬要求「有治疗步」，等于逼系统在信息不足时开方——
+    # 那正是引入收敛判定要避免的事。
+    $pending = @($resp.loop.pending_questions)
+    & $add '结构化辨证有主证' ([bool]$primary) $(if ($primary) { "$($primary.name) $([math]::Round($primary.confidence * 100))%" } else { '无' })
+    & $add '信息不足时停下追问' ($pending.Count -gt 0) ('覆盖率 ' + [math]::Round($resp.loop.coverage * 100) + '%，待补 ' + $pending.Count + ' 项：' + (($pending | ForEach-Object { $_.slug }) -join '、'))
+    & $add '未冒进给出治疗建议' (-not $treatment) $(if ($treatment) { '信息不足仍给出治疗步，需复核' } else { '已停在辨证，符合预期' })
   } else {
     & $add '结构化辨证有主证' ([bool]$primary) $(if ($primary) { "$($primary.name) $([math]::Round($primary.confidence * 100))%" } else { '无' })
     & $add '兼证可判读' ($true) $(if ($concurrent.Count) { ($concurrent | ForEach-Object { $_.name }) -join '、' } else { '无' })
-    & $add '治疗步有内容' ([bool]$treatment -and $treatment.text.Length -gt 30) $(if ($treatment) { $treatment.text.Length.ToString() + ' 字' } else { '缺治疗步' })
+    & $add '治疗步有内容' ([bool]$treatment -and $treatment.text.Length -gt 30) $(if ($treatment) { $treatment.capability + ' ' + $treatment.text.Length + ' 字' } else { '缺治疗步' })
   }
   & $add '无失败步骤' (-not $resp.partial) $(if ($resp.failures) { ($resp.failures | ForEach-Object { "$($_.capability): $($_.error)" }) -join '；' } else { '全部成功' })
   if (-not $NoStore) {
@@ -258,6 +301,11 @@ try {
   [void]$md.Add("| 模型 | $modelShort |")
   [void]$md.Add('| 运行方式 | Docker 容器（镜像内编译） |')
   [void]$md.Add("| 步骤 | $($stepCaps -join ' → ') |")
+  if ($SkipConvergence) {
+    [void]$md.Add("| 收敛判定 | **已跳过**（payload.syndrome=$($C.syndrome)），用于验证治疗期输出 |")
+  } else {
+    [void]$md.Add("| 收敛判定 | 正常（status=$($resp.status)，覆盖率 $([math]::Round($resp.loop.coverage * 100))%） |")
+  }
   [void]$md.Add('')
   [void]$md.Add('## 3. 输出摘要')
   [void]$md.Add('')

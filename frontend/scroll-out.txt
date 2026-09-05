@@ -1,0 +1,9 @@
+﻿SCROLL_TEST {
+  "before": "1996年",
+  "afterScroll": "2016年",
+  "afterScroll2": "2026年",
+  "birthAfter": "2026-09-04",
+  "yearChanged": true,
+  "notReset": true,
+  "errors": []
+}

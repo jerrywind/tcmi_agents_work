@@ -55,3 +55,104 @@
     - 规律三餐，忌暴饮暴食、过饱
     - 保持大便通畅，避免久坐
     - 可配合按揉阴陵泉、足三里穴
+
+# ---------------- H8：新增证候的调护 ----------------
+
+- slug: wind_dryness_care
+  label: 风燥伤肺调护
+  for_syndromes: ["wind_dryness_attacking_lung"]
+  items:
+    - 保持室内湿度，避免干燥与烟尘刺激
+    - 宜食润燥生津：梨、百合、银耳、蜂蜜、芝麻
+    - 多饮温水，忌辛辣燥热、烧烤煎炸
+    - 减少用嗓，避免大声说话与久处空调房
+
+- slug: phlegm_damp_lung_care
+  label: 痰湿阻肺调护
+  for_syndromes: ["phlegm_damp_obstructing_lung"]
+  items:
+    - 忌生冷甜腻、肥甘厚味，以免助湿生痰
+    - 宜食化痰燥湿：陈皮、萝卜、薏米、杏仁
+    - 戒烟酒，避免接触刺激性气味
+    - 适度运动助气机宣畅，可练习腹式呼吸
+    - 可配合按揉丰隆、肺俞、中脘穴
+
+- slug: lung_qi_def_care
+  label: 肺气虚调护
+  for_syndromes: ["lung_qi_deficiency"]
+  items:
+    - 注意保暖避风，季节交替时减少去人群密集处
+    - 宜食补肺健脾：山药、黄芪炖鸡、百合、大枣
+    - 循序渐进锻炼：太极拳、八段锦、慢走
+    - 忌过劳与大汗，汗后及时擦干更衣
+    - 可配合艾灸肺俞、膏肓、足三里穴
+
+- slug: spleen_qi_def_care
+  label: 脾气虚调护
+  for_syndromes: ["spleen_qi_deficiency"]
+  items:
+    - 三餐规律，宜温热细软易消化，忌生冷
+    - 宜食健脾益气：山药、小米、大枣、莲子、芡实
+    - 避免过劳与思虑过度，保证睡眠
+    - 饭后缓行，可顺时针摩腹助运化
+    - 可配合艾灸中脘、足三里、脾俞穴
+
+- slug: stomach_fire_care
+  label: 胃火炽盛调护
+  for_syndromes: ["stomach_fire"]
+  items:
+    - 忌辛辣烧烤、烈酒、浓茶咖啡
+    - 宜食清胃泻火：绿豆汤、苦瓜、冬瓜、梨、藕
+    - 保持口腔清洁，牙龈肿痛可用淡盐水含漱
+    - 规律作息，避免熬夜与情绪过激
+    - 保持大便通畅，忌久忍便秘
+
+- slug: food_retention_care
+  label: 食积胃脘调护
+  for_syndromes: ["food_retention"]
+  items:
+    - 暂减食量，宜清淡流质，必要时短时禁食
+    - 宜食消食导滞：山楂、萝卜、麦芽、陈皮
+    - 进食细嚼慢咽，忌暴饮暴食与睡前加餐
+    - 餐后缓步走动，顺时针摩腹
+    - 可配合按揉中脘、天枢、足三里穴
+
+- slug: liver_fire_care
+  label: 肝火上炎调护
+  for_syndromes: ["liver_fire_flaring"]
+  items:
+    - 调畅情志，戒躁怒，避免熬夜与用眼过度
+    - 宜食清肝泻火：菊花茶、决明子、苦瓜、芹菜、绿豆
+    - 忌辛辣燥热、烈酒烧烤
+    - 保证睡眠，可练习静坐、冥想
+    - 可配合按揉太冲、行间、风池穴
+
+- slug: blood_stasis_care
+  label: 气滞血瘀调护
+  for_syndromes: ["qi_stagnation_blood_stasis"]
+  items:
+    - 适度有氧运动促进气血运行，忌久坐久卧
+    - 宜食行气活血：山楂、黑木耳、玫瑰花茶、桃仁（少量）
+    - 注意保暖，避免寒凝加重血瘀
+    - 情志舒畅，气行则血行
+    - 可配合按揉血海、三阴交、太冲穴
+
+- slug: kidney_yang_def_care
+  label: 肾阳虚调护
+  for_syndromes: ["kidney_yang_deficiency"]
+  items:
+    - 注意腰腹与下肢保暖，忌贪凉饮冷
+    - 宜食温补肾阳：羊肉、韭菜、核桃、桂圆、生姜
+    - 节制房事，避免过劳
+    - 可于睡前温热水泡脚，配合搓揉命门、涌泉
+    - 适度户外运动，多晒太阳
+
+- slug: heart_spleen_def_care
+  label: 心脾两虚调护
+  for_syndromes: ["heart_spleen_deficiency"]
+  items:
+    - 规律作息，保证睡眠，避免熬夜与思虑过度
+    - 宜食健脾养心：桂圆、大枣、莲子、山药、小米
+    - 忌浓茶咖啡，晚餐宜清淡少量
+    - 适度运动如散步、太极，避免剧烈耗气
+    - 可配合按揉神门、内关、三阴交穴

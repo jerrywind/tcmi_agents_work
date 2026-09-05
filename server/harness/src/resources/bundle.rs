@@ -24,8 +24,14 @@ use std::path::Path;
 pub fn load(dir: &Path) -> Result<ResourceBundle> {
     let mut bundle = ResourceBundle::default();
 
-    bundle.syndromes =
+    // 归一化必须在**加载后、使用前**做一次：旧格式 `symptoms:` 要并入次症，
+    // 否则主症为空会让所有证候都过不了「主症必备」（H3）。
+    let mut syndromes =
         load_list::<Syndrome>(dir.join("syndromes.yaml")).context("加载 syndromes.yaml 失败")?;
+    for s in &mut syndromes {
+        s.normalize();
+    }
+    bundle.syndromes = syndromes;
     bundle.questions = load_list::<QuestionItem>(dir.join("questions.yaml"))
         .context("加载 questions.yaml 失败")?;
     bundle.keyword_evidence = load_list::<KeywordEvidence>(dir.join("keywords.yaml"))

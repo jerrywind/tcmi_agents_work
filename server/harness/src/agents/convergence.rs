@@ -165,8 +165,18 @@ fn confidence_and_margin(diff: &DifferentiationResult) -> (f64, f64, String) {
     let Some(p) = &diff.primary else {
         return (0.0, 0.0, String::new());
     };
-    // 次证取兼证第一名；没有兼证说明一骑绝尘，差距视为足够大
-    let second = diff.concurrent.first().map(|c| c.score).unwrap_or(0.0);
+    // H5：取**真实第二名**，而不是兼证第一名。
+    //
+    // `concurrent` 已被「score ≥ 主证 × CONCURRENT_RATIO」过滤过：
+    // 第二名一旦被滤掉，`concurrent.first()` 为 None，margin 就退化成
+    // 主证自身分数——于是「没有兼证」恒等于「鉴别度达标」，
+    // 鉴别度判定形同虚设。真实第二名才能反映「有没有和第二名拉开」。
+    let second = diff
+        .ranked
+        .iter()
+        .find(|s| s.slug != p.slug)
+        .map(|s| s.score)
+        .unwrap_or(0.0);
     (p.confidence, (p.score - second).max(0.0), p.slug.clone())
 }
 
@@ -219,21 +229,38 @@ fn build_questions(
     uncovered.sort_by_key(|q| q.priority);
     out.extend(uncovered);
 
-    // 3) 证候补全：主证里尚未提及的典型症状
-    if let Some(p) = &diff.primary {
+    // 3) 证候补全：主证里尚未提及的典型症状。
+    //
+    // H3 配套：未匹配到主证时以 `near` 中最接近的候选为目标——
+    // 此时**最该问的就是它缺的那几条主症**，因为缺主症正是没匹配上的原因。
+    let target = diff.primary.as_ref().or_else(|| diff.near.first());
+    if let Some(p) = target {
         if let Some(s) = res.syndrome(&p.slug) {
-            let missing: Vec<&String> = s
-                .symptoms
+            let missing_keys: Vec<&String> = s
+                .key_symptoms()
                 .iter()
                 .filter(|sym| !corpus.contains(sym.as_str()))
-                .take(3)
                 .collect();
+            let missing: Vec<&String> = if missing_keys.is_empty() {
+                s.all_symptoms()
+                    .into_iter()
+                    .filter(|sym| !corpus.contains(sym.as_str()))
+                    .take(3)
+                    .collect()
+            } else {
+                missing_keys.into_iter().take(3).collect()
+            };
             if !missing.is_empty() {
                 let list: Vec<String> = missing.iter().map(|s| s.to_string()).collect();
+                let is_primary = diff.primary.is_some();
                 out.push(PendingQuestion {
                     slug: format!("{}_confirm", p.slug),
                     text: format!("是否出现以下表现：{}？", list.join("、")),
-                    reason: format!("核实主证「{}」的典型表现", s.name),
+                    reason: if is_primary {
+                        format!("核实主证「{}」的典型表现", s.name)
+                    } else {
+                        format!("尚未定证，最接近「{}」，需核实其主症", s.name)
+                    },
                     source: "syndrome".into(),
                     agent: "inquiry".into(),
                     priority: u8::MAX,
@@ -255,10 +282,20 @@ fn discriminator_questions(
     diff: &DifferentiationResult,
     corpus: &str,
 ) -> Vec<PendingQuestion> {
-    let (Some(p), Some(q)) = (&diff.primary, diff.concurrent.first()) else {
-        return Vec::new();
+    // H3 配套：未匹配到主证时，改用 `near` 里最接近的两个候选做鉴别——
+    // 此时正是最需要「问一句就能分开」的时候（如问「怕冷还是怕热」）。
+    let (first, second) = match (&diff.primary, diff.concurrent.first()) {
+        (Some(p), Some(q)) => (p.slug.clone(), q.slug.clone()),
+        (Some(p), None) => match diff.ranked.iter().find(|s| s.slug != p.slug) {
+            Some(q) => (p.slug.clone(), q.slug.clone()),
+            None => return Vec::new(),
+        },
+        (None, _) => match (diff.near.first(), diff.near.get(1)) {
+            (Some(a), Some(b)) => (a.slug.clone(), b.slug.clone()),
+            _ => return Vec::new(),
+        },
     };
-    let (Some(a), Some(b)) = (res.syndrome(&p.slug), res.syndrome(&q.slug)) else {
+    let (Some(a), Some(b)) = (res.syndrome(&first), res.syndrome(&second)) else {
         return Vec::new();
     };
 
@@ -266,8 +303,8 @@ fn discriminator_questions(
     // 主证独有 + 次证独有，各取最能区分的一条
     for (only_in, other_name) in [(a, &b.name), (b, &a.name)] {
         let diff_syms: Vec<&String> = only_in
-            .symptoms
-            .iter()
+            .all_symptoms()
+            .into_iter()
             .filter(|s| !corpus.contains(s.as_str()))
             .collect();
         if let Some(sym) = diff_syms.first() {

@@ -120,6 +120,23 @@ impl<'a> LlmCaller<'a> {
         Ok(extract_content(&v))
     }
 
+    /// 最简聊天补全（无工具，支持视觉图片）
+    pub async fn chat_imgs(
+        &self,
+        system: &str,
+        messages: &[Message],
+        images: &[Value],
+    ) -> Result<String> {
+        let body = json!({
+            "model": self.model,
+            "messages": build_messages_with(system, messages, images),
+            "temperature": 0.3,
+            "stream": false,
+        });
+        let v = self.post(&body).await?;
+        Ok(extract_content(&v))
+    }
+
     /// 带工具的聊天补全：模型可在工具结果之上继续查证（`max_tool_rounds` 轮）
     ///
     /// 仅暴露该 capability 专属、或全局（无 owner）的技能；
@@ -130,6 +147,23 @@ impl<'a> LlmCaller<'a> {
         messages: &[Message],
         capability: Capability,
     ) -> Result<String> {
+        self.chat_with_tools_imgs(system, messages, capability, &[]).await
+    }
+
+    /// 带工具的聊天补全（支持视觉图片）。
+    ///
+    /// `images` 是 OpenAI 视觉 content-part（`{"type":"image_url","image_url":{"url":...}}`），
+    /// 会挂到消息历史里的**第一条 user 消息**上——舌象 / 手相等望诊依据应随主诉
+    /// 一起进模型。空数组时等价于 [`LlmCaller::chat_with_tools`]，行为不变。
+    ///
+    /// 仅望诊 agent 在收到前端上传的图片时调用；其余 agent 走无图版本，互不影响。
+    pub async fn chat_with_tools_imgs(
+        &self,
+        system: &str,
+        messages: &[Message],
+        capability: Capability,
+        images: &[Value],
+    ) -> Result<String> {
         let tools: Vec<Skill> = match self.skills {
             Some(reg) => reg
                 .for_capability(capability)
@@ -139,7 +173,7 @@ impl<'a> LlmCaller<'a> {
             None => Vec::new(),
         };
         if tools.is_empty() {
-            return self.chat(system, messages).await;
+            return self.chat_imgs(system, messages, images).await;
         }
 
         let tool_defs: Vec<Value> = tools
@@ -156,7 +190,7 @@ impl<'a> LlmCaller<'a> {
             })
             .collect();
 
-        let mut body_msgs = build_messages(system, messages);
+        let mut body_msgs = build_messages_with(system, messages, images);
         let rounds = self.max_tool_rounds.max(1);
 
         for round in 0..rounds {
@@ -308,12 +342,32 @@ impl<'a> LlmCaller<'a> {
 
 /// 构造 messages 数组（可选 system + 对话历史）
 fn build_messages(system: &str, messages: &[Message]) -> Vec<Value> {
+    build_messages_with(system, messages, &[])
+}
+
+/// 同 [`build_messages`]，但把 `images`（OpenAI 视觉 content-part）挂到第一条
+/// user 消息上。无图时等价于 [`build_messages`]。
+fn build_messages_with(
+    system: &str,
+    messages: &[Message],
+    images: &[Value],
+) -> Vec<Value> {
     let mut body_msgs = Vec::new();
     if !system.is_empty() {
         body_msgs.push(json!({"role": "system", "content": system}));
     }
+    let mut attached = false;
     for m in messages {
-        body_msgs.push(json!({"role": m.role, "content": m.content}));
+        if !attached && m.role == "user" && !images.is_empty() {
+            let mut content = vec![json!({"type": "text", "text": m.content})];
+            for img in images {
+                content.push(img.clone());
+            }
+            body_msgs.push(json!({ "role": "user", "content": content }));
+            attached = true;
+        } else {
+            body_msgs.push(json!({ "role": m.role, "content": m.content }));
+        }
     }
     body_msgs
 }

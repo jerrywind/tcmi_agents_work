@@ -5,6 +5,7 @@
 
 use crate::agents::base::{AgentContext, SubAgent};
 use crate::model::{Capability, Message};
+use crate::resources::model::Gender;
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -20,9 +21,13 @@ impl SubAgent for InquiryAgent {
         &self,
         ctx: &AgentContext,
         messages: &[Message],
-        _payload: &serde_json::Value,
+        payload: &serde_json::Value,
     ) -> Result<String> {
-        // 1) 规则层：从问题库挑选尚未覆盖的提问
+        // 0) 患者人群（T7.3）：`payload.gender` 由前端患者档案传入，
+        //    此前本步的 payload 参数名是 `_payload`——传了也从未读过。
+        let gender = Gender::from_payload(payload);
+
+        // 1) 规则层：从问题库挑选尚未覆盖、且适用于本患者的提问
         let collected: String = messages
             .iter()
             .filter(|m| m.role == "user" || m.role == "assistant")
@@ -34,6 +39,7 @@ impl SubAgent for InquiryAgent {
             .resources
             .questions
             .iter()
+            .filter(|q| q.applies_to_gender(gender))
             .filter(|q| !q.evidence_keys.iter().any(|k| collected.contains(k)))
             .collect();
         pending.sort_by_key(|q| q.priority);
@@ -48,10 +54,22 @@ impl SubAgent for InquiryAgent {
         }
 
         // 2) LLM 层：综合生成自然语言问诊（可用 tcm-inquiry 等技能）
-        let system = &ctx.resources.prompts.inquiry;
+        //
+        // 性别必须显式告诉模型：规则层过滤掉了月经条目，模型若不知道
+        // 患者是男性，仍会照着提示词里的「经带」二字自己追问一遍。
+        let system = match gender {
+            Gender::Male => format!(
+                "{}\n\n【患者性别】男。禁止追问月经、带下、胎产等女性专属问题。",
+                ctx.resources.prompts.inquiry
+            ),
+            Gender::Female => format!("{}\n\n【患者性别】女。", ctx.resources.prompts.inquiry),
+            // 性别未采集时不加限定：宁可让模型多问一句，
+            // 也不要在信息缺失时替它排除妇科鉴别线索。
+            Gender::Unknown => ctx.resources.prompts.inquiry.clone(),
+        };
         let llm_part = ctx
             .caller()
-            .chat_with_tools(system, messages, Capability::Inquiry)
+            .chat_with_tools(&system, messages, Capability::Inquiry)
             .await?;
 
         Ok(format!("{llm_part}\n{rule_part}"))

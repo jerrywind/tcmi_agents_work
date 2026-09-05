@@ -183,6 +183,30 @@
   color: #333;
 }
 
+// 与首页档案表单一套样式：页面样式是全局的，但本页可能先于首页加载
+.form-row {
+  &.col {
+    flex-direction: column;
+    align-items: stretch;
+
+    .form-label {
+      width: auto;
+      margin-bottom: 14px;
+    }
+  }
+}
+
+.form-input {
+  &.placeholder { color: #b3c0ba; }
+}
+
+.history-input {
+  width: 100%;
+  min-height: 140px;
+  font-size: 28px;
+  line-height: 1.6;
+}
+
 .btn-primary {
   margin: 32px 0 0;
   background: #2a6f4e;

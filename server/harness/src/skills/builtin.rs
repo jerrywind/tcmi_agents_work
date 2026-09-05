@@ -170,20 +170,29 @@ pub fn build_default_registry(
         reg.register(Skill::new(name, desc, obj_param(), exec).with_owner(cap));
     }
 
-    // 治疗专属：方剂 / 调护检索（T2.3）
+    // 治疗期专属：方剂 / 调护检索（T2.3 引入，T7.2 改为多归属）
     //
-    // 此前 treatment 只能用全局技能，方剂与调护虽已在 knowledge 层实现，
-    // 却没有暴露给模型——治疗步只能拿规则拼好的文本，模型无法按需查证。
-    for (name, desc, kind) in [
+    // 此前 owner 只能填单个 capability（`Treatment`），而默认 `standard` 档
+    // 早已把治疗拆成「立法 → 用药 → 开方」——拆完的这三步一件专属工具都拿不到，
+    // 只能靠模型记忆开方，于是出现「经方药味记错」与「7 步只调用 1 次工具」。
+    // 故改为多归属：方剂检索对用药、开方、旧的综合治疗同时可见；
+    // 调护检索对调护步与旧的综合治疗可见。
+    for (name, desc, kind, owners) in [
         (
             "tcm-formula",
             "方剂检索：按证候查适用方剂、组成、用法与禁忌",
             "formula",
+            vec![
+                Capability::Herbology,
+                Capability::Prescription,
+                Capability::Treatment,
+            ],
         ),
         (
             "tcm-care",
             "调护方案：按证候查饮食/起居/情志调护条目",
             "care",
+            vec![Capability::Care, Capability::Treatment],
         ),
     ] {
         let r = res.clone();
@@ -209,9 +218,7 @@ pub fn build_default_registry(
                 Ok(json!({"result": result, "syndrome": slug}))
             })
         });
-        reg.register(
-            Skill::new(name, desc, syndrome_param(), exec).with_owner(Capability::Treatment),
-        );
+        reg.register(Skill::new(name, desc, syndrome_param(), exec).with_owners(owners));
     }
 
     // 全局工具：知识库 / 食疗 / RAG
@@ -315,8 +322,13 @@ pub fn build_default_registry(
 
                 Box::pin(async move {
                     let Some(endpoint) = rag.as_ref() else {
+                        // 措辞必须是「没连上」而不是「查无此书」：
+                        // 若说成后者，模型会当成「典籍里没有相关记载」，
+                        // 然后继续一本正经地引用出处。
                         return Ok(json!({
-                            "result": "RAG 未配置（设置 HARNESS_RAG_ENDPOINT）",
+                            "error": "RAG 未配置（设置 HARNESS_RAG_ENDPOINT）：\
+                                      本次未检索到任何典籍，不得杜撰书名与篇名；\
+                                      缺少依据时请直接说明。",
                             "query": q
                         }));
                     };

@@ -6,6 +6,14 @@
 
 .card-title.danger { color: #c0392b; }
 
+/* 结论可信度提示（H4/H5）：未定证 / 置信度不足 / 强制放行。
+   与红旗警示同级的显眼度——这两类信息都是「结论有问题」，
+   只是前者是证据不足，后者是要命。 */
+.card-alert {
+  border: 2px solid #e0a44c;
+  background: #fffaf2;
+}
+
 .danger-advice {
   display: block;
   margin-top: 16px;

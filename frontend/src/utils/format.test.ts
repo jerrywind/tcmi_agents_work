@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   confidencePercent, categoryClass, truncate, TREATMENT_CATEGORY_ORDER,
-  syndromeSummary,
+  syndromeSummary, stripMarkdown,
 } from './format'
 
 describe('confidencePercent', () => {
@@ -65,5 +65,30 @@ describe('TREATMENT_CATEGORY_ORDER', () => {
     expect(TREATMENT_CATEGORY_ORDER).toEqual([
       '中药方剂', '针灸推拿', '外治法', '西医检查', '生活调护', '膳食',
     ])
+  })
+})
+
+// 后端 confidence_note 带 Markdown 强调：正文里按 Markdown 渲染需要它，
+// 但提示条是纯文本，星号会原样露出来（真机验证时看到过）
+describe('stripMarkdown', () => {
+  it('removes bold markers but keeps the text', () => {
+    expect(stripMarkdown('本次**未匹配到明确证候**：请线下就诊'))
+      .toBe('本次未匹配到明确证候：请线下就诊')
+  })
+
+  it('handles multiple occurrences', () => {
+    expect(stripMarkdown('**甲**与**乙**')).toBe('甲与乙')
+  })
+
+  it('leaves plain text untouched', () => {
+    expect(stripMarkdown('已达最大追问轮次（3 轮）')).toBe('已达最大追问轮次（3 轮）')
+  })
+
+  it('leaves single asterisks alone: only ** is emphasis', () => {
+    expect(stripMarkdown('a*b*c')).toBe('a*b*c')
+  })
+
+  it('handles empty input', () => {
+    expect(stripMarkdown('')).toBe('')
   })
 })

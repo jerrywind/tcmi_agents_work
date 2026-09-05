@@ -1,0 +1,14 @@
+﻿CLAMP_TEST {
+  "initial": [
+    "1996年",
+    "9月",
+    "4日"
+  ],
+  "dayTo31": "30日",
+  "monthToFeb": "2月",
+  "dayClampedAfterFeb": "29日",
+  "expectedDayClamp": "28日",
+  "birthAfter": "1996-02-29",
+  "clampOk": false,
+  "errors": []
+}

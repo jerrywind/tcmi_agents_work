@@ -7,6 +7,7 @@
 //! - `agents`   七个 sub-agent（望闻问切/辨证/安全/治疗）+ 注册表
 //! - `orchestrator` 诊断 Loop 流程引擎
 //! - `knowledge`  PPG 解析 / 用药安全 / 方剂检索
+//! - `rag_health` RAG 服务可达性探测（T7.5，`/health` 暴露）
 //! - `skills`    工具调用（MCP / HTTP）
 //! - `mcp`       MCP client/server
 //! - `trace`     调用级埋点（耗时 / token / 工具 / 错误）
@@ -19,6 +20,7 @@ pub mod knowledge;
 pub mod mcp;
 pub mod model;
 pub mod orchestrator;
+pub mod rag_health;
 pub mod resources;
 pub mod skills;
 pub mod store;
@@ -49,6 +51,19 @@ pub struct AppState {
     pub departments: skills::SharedDepartments,
     /// 报告存储（T5.1；未配置 store_dir 时为空实现）
     pub store: Arc<ReportStore>,
+    /// RAG 服务可达性（T7.5）：后台任务定期探测，`/health` 读这份缓存。
+    /// 用 std 的 RwLock：读的是快照、不跨 await，异步锁没有意义。
+    pub rag: rag_health::SharedRagStatus,
+}
+
+impl AppState {
+    /// RAG 状态快照（锁中毒时仍返回内容，诊断信息不该因中毒而拿不到）
+    pub fn rag_status(&self) -> rag_health::RagStatus {
+        match self.rag.read() {
+            Ok(g) => g.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
 }
 
 impl AppState {
@@ -89,14 +104,21 @@ impl AppState {
             );
         }
 
+        // RAG 可达性探测（T7.5）：先 Arc 化配置，探测任务与 AppState 共用同一份
+        let cfg = Arc::new(config);
+        let rag: rag_health::SharedRagStatus =
+            Arc::new(std::sync::RwLock::new(rag_health::RagStatus::default()));
+        rag_health::spawn_probe_task(cfg.clone(), rag.clone());
+
         Ok(Self {
-            config: Arc::new(config),
+            config: cfg,
             resources: Arc::new(RwLock::new(resources)),
             llm,
             registry,
             skills: Arc::new(skills),
             departments,
             store: Arc::new(store),
+            rag,
         })
     }
 

@@ -42,6 +42,8 @@ RUN cargo build --release -p harness
 COPY harness/src ./harness/src
 COPY harness/resources ./harness/resources
 COPY harness/cases.jsonl ./harness/cases.jsonl
+# 黄金病例集（H7）：tests/golden.rs 的输入，CI 在镜像内跑测试时需要
+COPY harness/golden_cases.jsonl ./harness/golden_cases.jsonl
 COPY harness/tests ./harness/tests
 COPY rrserver/src ./rrserver/src
 

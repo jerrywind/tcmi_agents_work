@@ -52,12 +52,14 @@ impl SkillRegistry {
         list
     }
 
-    /// 返回某 capability 可用（专属或全局）的技能
+    /// 返回某 capability 可用（专属或全局）的技能，**按名称稳定排序**
+    ///
+    /// 内部用 HashMap 存储，过滤后直接 collect 会得到随机顺序；
+    /// 与 `all()` 一样按名排序，保证 `GET /skills?owner=` 输出可预测。
     pub fn for_capability(&self, cap: Capability) -> Vec<&Skill> {
-        self.map
-            .values()
-            .filter(|s| s.owner.is_none() || s.owner == Some(cap))
-            .collect()
+        let mut list: Vec<&Skill> = self.map.values().filter(|s| s.visible_to(cap)).collect();
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        list
     }
 }
 

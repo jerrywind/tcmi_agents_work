@@ -31,11 +31,11 @@ tcm_work/
 │       └── utils/
 ├── server/            Rust workspace
 │   ├── harness/       诊断编排
-│   │   ├── src/       agents / orchestrator / knowledge / skills / mcp
-│   │   │              http / resources / store / trace
+│   │   ├── src/       agents / orchestrator / knowledge / rag_health / skills
+│   │   │              mcp / http / resources / store / trace
 │   │   ├── resources/ 可改 YAML 数据
 │   │   ├── tests/     cases.rs（案例回归）/ behavior.rs（行为）/ llm_eval.rs（LLM 评分）
-│   │   └── cases.jsonl  93 条真实病例基准
+│   │   └── cases.jsonl  病例基准（合成：5 种主诉 / 3 种证候组合，资源完整性护栏）
 │   └── rrserver/      反向隧道：server + client + llmsrv
 ├── llm_server/        纯 LM Studio 网关（Python，可选）；rag/ 为其检索子组件
 ├── deploy/            nginx 配置 + certs + docker-compose
@@ -46,7 +46,11 @@ tcm_work/
 ```
 
 产物目录（均已被 `.gitignore` 覆盖）：`server/target/`、`frontend/dist/`、
-`__pycache__/`、`e2e_tests/images/`、`e2e_tests/_reports/`。
+`__pycache__/`、`e2e_tests/images/`、`e2e_tests/_reports/`、
+`e2e_tests/_*.log`、`e2e_tests/_resp.json`、`e2e_tests/_mr_*`（验收与多轮验证的运行期产物）。
+
+> `server/target/` 会涨到数 GB（容器内编译经挂载卷落回宿主机），
+> 后端一律 Docker 验证，可安全删除。
 
 ---
 
@@ -111,6 +115,23 @@ npm run dev:weapp     # 微信小程序（需微信开发者工具）
   在前端维护（harness 无服务端会话）。
 - 跨端差异由 Taro 适配：H5 走 devServer 代理（`/api` → harness:8011），小程序直连后端地址。
 - 类型检查：`npx tsc --noEmit`。
+- ⚠️ **不要用 Taro 原生 `<Picker mode='date'>` 做出生日期**：Taro 4 在 H5 端把它实现成
+  Stencil 自定义元素 `<taro-picker-core>` 的 **transform 轮盘**，在手机浏览器上有两个修不掉的问题——
+  ① 轮盘的 `touchmove` 冒泡到 `document`，导致背景整页跟着上移/下拉；
+  ② transform 轮盘在滚动/重绘时留下空白项，年/月/日（尤其月、日）显示不全。
+  应用层抓不到它的内部事件、改不了它的渲染，只能换掉。出生日期已改用自建三列滚动选择器
+  `src/components/BirthDatePicker.tsx`（年/月/日各一列原生 `ScrollView`，`overscroll-behavior: contain`
+  锁住背景滚动、自己渲染每一项无空白），日期换算纯逻辑在 `src/utils/birthdate.ts`（有单测）。
+  同样原理：`<Input>`/`<Textarea>` 在 H5 渲染成 `<taro-input-core>`/`<taro-textarea-core>`，
+  Playwright 必须用 shadow-piercing（`taro-input-core >>> input`）选中，详见 `testing.md`。
+
+  **自建选择器踩过的两个 Taro H5 坑（已修，别再踩）**：
+  - **组件 `.scss` 样式隔离**：Taro 4 默认给组件级 `className` 加 hash，组件内裸类名匹配不上、sheet 会坍缩。
+    选择器的样式放在全局 `app.scss`（已在 `BirthDatePicker.tsx` 注释说明）。
+  - **`pxtransform` 缩放**：`config/index.ts` 的 `designWidth: 750` 会把 scss 里的 `px` 转成响应式单位，
+    在 390 屏上约缩到 0.4 倍，轮盘被压扁、初始 `scrollTop`（未缩放像素）越界错乱。
+    **轮盘的精确尺寸（body 高、项高、指示线位置、列宽）一律用组件内联 `style`**（不经 pxtransform，是精确像素）。
+    另外 `<ScrollView>` 渲染成 `<taro-scroll-view-core>`，host 不响应 `flex:1`，要**包一层 `<View>`** 来撑 flex 尺寸。
 
 ---
 
@@ -138,3 +159,4 @@ npm run dev:weapp     # 微信小程序（需微信开发者工具）
 | 前端连不上后端 | 检查 `VITE_API_BASE` / `config/dev.ts` 的 apiBase 是否指向 `:8011`（经 nginx 为 `/api`），以及容器是否在跑。 |
 | 改了 ps1 脚本后中文变乱码 | Windows PowerShell 5.1 按 ANSI 读取无 BOM 的脚本：含中文的 `.ps1` **必须存为 UTF-8 with BOM**。 |
 | 视觉识别无独立服务 | 视觉与文本共用 `google/gemma-4-12b-qat` 多模态端点。 |
+| 出生日期选择器在手机浏览器里背景跟着滚、月/日显示留空白 | Taro 4 的 `<Picker mode='date'>` 在 H5 是 Stencil transform 轮盘，触摸冒泡到 document 致背景滚动、transform 重绘留空白，应用层无法修复。已替换为自建三列滚动选择器 `src/components/BirthDatePicker.tsx`（逻辑在 `src/utils/birthdate.ts`，含单测），跨端可用，**不要再换回 Taro 原生日期 Picker**。 |

@@ -1,0 +1,21 @@
+{"id":"g01","kind":"positive","expect":"spleen_stomach_damp_heat","corpus":"最近两周口苦、口臭，脘腹胀满，大便溏黏，粘滞不爽，肢体困重，舌红，苔黄腻，脉滑数","note":"脾胃湿热典型：主症全中 + 舌脉合参"}
+{"id":"g02","kind":"positive","expect":"wind_cold_attack_lung","corpus":"昨天受凉后恶寒重发热轻，无汗，流清涕，头痛，身痛，咳嗽，痰白稀，舌淡红，苔薄白，脉浮紧","note":"风寒表实：恶寒重无汗 + 清涕 + 浮紧"}
+{"id":"g03","kind":"positive","expect":"wind_heat_attack_lung","corpus":"发热两天，咽痛，微恶风，流黄涕，痰黄稠，口渴，舌尖红，苔薄黄，脉浮数","note":"风热表证：咽痛 + 黄涕黄痰 + 浮数"}
+{"id":"g04","kind":"positive","expect":"dampness_encumbering_spleen","corpus":"脘腹胀满，纳呆，便溏，肢体困重，乏力，面色萎黄，舌淡胖，边有齿痕，苔白腻，脉濡缓","note":"脾虚湿困：脘腹胀满便溏 + 苔白腻脉濡缓（与脾气虚的鉴别点是湿象）"}
+{"id":"g05","kind":"positive","expect":"liver_qi_stagnation","corpus":"情志抑郁，胸胁胀闷，善太息，烦躁易怒，乳房胀痛，月经不调，舌淡红，苔薄白，脉弦","note":"肝郁气滞：情志 + 胸胁 + 脉弦"}
+{"id":"g06","kind":"positive","expect":"qi_and_yin_deficiency","corpus":"神疲乏力，气短，口干，盗汗，心悸，失眠，舌红少苔，脉细弱","note":"气阴两虚：神疲气短 + 盗汗 + 舌红少苔"}
+{"id":"g07","kind":"positive","expect":"kidney_yang_deficiency","corpus":"腰膝酸软冷痛，畏寒肢冷，夜尿多，面色㿠白，精神萎靡，舌淡胖，苔白滑，脉沉迟","note":"肾阳虚（H8 新增）：腰膝冷痛 + 夜尿多 + 脉沉迟"}
+{"id":"g08","kind":"positive","expect":"food_retention","corpus":"昨天聚餐后脘腹胀痛，嗳腐吞酸，厌食，大便酸臭，恶心呕吐，矢气臭秽，舌红，苔厚腻，脉滑","note":"食积胃脘（H8 新增）：嗳腐吞酸 + 大便酸臭 + 苔厚腻"}
+{"id":"g09","kind":"positive","expect":"heart_spleen_deficiency","corpus":"心悸，失眠多梦，食少乏力，健忘，面色萎黄，腹胀便溏，舌淡，苔薄白，脉细弱","note":"心脾两虚（H8 新增）：心悸失眠 + 食少 + 舌淡脉细弱"}
+{"id":"g10","kind":"positive","expect":"phlegm_damp_obstructing_lung","corpus":"咳嗽痰多，痰白黏，胸闷，气喘，脘痞，纳呆，乏力，喉中痰鸣，舌淡胖，苔白腻，脉滑","note":"痰湿阻肺（H8 新增）：痰多白黏 + 苔白腻脉滑"}
+{"id":"g11","kind":"positive","expect":"lung_qi_deficiency","corpus":"咳喘无力，自汗，畏风，易感冒，气短，声低懒言，痰清稀，舌淡，苔薄白，脉弱","note":"肺气虚（H8 新增）：咳喘无力 + 自汗畏风 + 脉弱"}
+{"id":"g12","kind":"positive","expect":"stomach_fire","corpus":"胃脘灼痛，口臭，牙龈肿痛，口渴喜冷饮，消谷善饥，便秘，小便短黄，舌红，苔黄，脉滑数","note":"胃火炽盛（H8 新增）：胃脘灼痛 + 牙龈肿痛 + 喜冷饮"}
+{"id":"g13","kind":"positive","expect":"wind_dryness_attacking_lung","corpus":"干咳少痰，咽干，鼻燥，痰黏难咯，声音嘶哑，唇干，舌红少津，苔薄，脉浮细","note":"风燥伤肺（H8 新增）：干咳少痰 + 鼻燥咽干 + 舌红少津"}
+{"id":"g14","kind":"positive","expect":"liver_fire_flaring","corpus":"头痛眩晕，面红目赤，口苦，急躁易怒，耳鸣，失眠多梦，便秘，小便黄，舌红，苔黄，脉弦数","note":"肝火上炎（H8 新增）：头目赤痛 + 口苦急躁 + 脉弦数（与肝郁的鉴别点是有火象）"}
+{"id":"g15","kind":"positive","expect":"qi_stagnation_blood_stasis","corpus":"刺痛固定不移，面色晦暗，肌肤甲错，胁肋胀痛，唇色紫暗，舌紫暗，有瘀点，脉涩","note":"气滞血瘀（H8 新增）：刺痛固定 + 舌紫暗有瘀点 + 脉涩"}
+{"id":"g16","kind":"positive","expect":"spleen_qi_deficiency","corpus":"食少纳呆，神疲乏力，便溏，腹胀，面色萎黄，肢体倦怠，消瘦，舌淡胖，边有齿痕，苔薄白，脉缓弱","note":"脾气虚（H8 新增）：食少 + 神疲乏力 + 脉缓弱（无湿困之肢体困重与腻苔）"}
+{"id":"n01","kind":"out_of_library","expect":null,"corpus":"腰膝酸软，头晕耳鸣，五心烦热，潮热，颧红，舌红少津，脉细数","note":"肾阴虚——库外。命不中任何库内证候的主症，必须说不知道"}
+{"id":"n02","kind":"out_of_library","expect":null,"corpus":"尿频尿急，尿道灼热刺痛，小便短赤，小腹胀痛，发热，舌红，苔黄腻，脉滑数","note":"膀胱湿热——库外。仅「发热」命中风热犯肺主症，孤证不立（1.0 < 1.5）"}
+{"id":"n03","kind":"out_of_library","expect":null,"corpus":"头晕目眩，头重脚轻，腰膝酸软，面赤，耳鸣，失眠多梦，舌红，苔薄黄，脉弦有力","note":"肝阳上亢——库外。心脾两虚仅中「失眠多梦」一条主症，孤证不立"}
+{"id":"n04","kind":"out_of_library","expect":null,"corpus":"我最近不太舒服","note":"信息不足：无一命中，不得出证"}
+{"id":"n05","kind":"out_of_library","expect":null,"corpus":"最近有点乏力，睡眠不太好，面色萎黄","note":"只命中次症（乏力 / 面色萎黄），无主症——过去会被判成脾虚湿困并锁定"}

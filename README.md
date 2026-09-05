@@ -3,7 +3,7 @@
 > ⚠️ 免责声明：本系统由 AI 生成，仅供健康参考，**不构成医疗诊断或处方建议**。如有不适或红旗症状，请及时线下就医。
 
 「望闻问切四诊 + 辨证 + 安全门 + 诊疗方案」的协议化中医智能问诊系统：
-前端（Taro 多端）经后端 **harness（Rust）** 调度 7 个 Sub-Agent，模型推理由宿主机
+前端（Taro 多端）经后端 **harness（Rust）** 调度 13 个 Sub-Agent，模型推理由宿主机
 **LM Studio** 提供（`llm_server` 为可选网关），家庭算力经 `rrserver` 反向隧道上云。
 
 ---
@@ -13,7 +13,7 @@
 ```
 ┌────────────────┐     ┌───────────────────────┐
 │  前端 Taro      │────▶│  harness (Rust)       │  望闻问切/辨证/安全门/治疗
-│  H5 / 微信小程序 │     │  7× Sub-Agent 编排     │
+│  H5 / 微信小程序 │     │  13× Sub-Agent 编排    │
 └────────────────┘     └───────────┬───────────┘
                                     │ OpenAI 兼容 (/v1/...)
                                     ▼
@@ -33,7 +33,7 @@
 | 组件 | 路径 | 角色 | 默认端口 |
 |---|---|---|---|
 | 前端 | `frontend/` | Taro 多端（H5 / 微信小程序），dev `:10086` | 10086 |
-| 后端 | `server/harness/` | Rust 编排 7 个 Sub-Agent（nginx 以 `/api` 前缀代理） | 8011 |
+| 后端 | `server/harness/` | Rust 编排 13 个 Sub-Agent（nginx 以 `/api` 前缀代理） | 8011 |
 | LLM 网关 | `llm_server/` | 纯 LM Studio 网关 + Agent 中间层（**不托管模型**，可选） | 8000 |
 | 模型推理 | 宿主机 LM Studio | `http://localhost:11223/v1`，模型 `google/gemma-4-12b-qat` | 11223 |
 | 反向隧道 | `server/rrserver/` | Rust 中继：云端 server `:8088` + 家庭端 client `:9000` | 8088 / 9000 |
@@ -75,7 +75,7 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
   -e HARNESS_LLM_API_KEY=<LM Studio 令牌> `
   tcm-harness:local
 
-# 2) 验证：http://127.0.0.1:8011/health 返回 ok
+# 2) 验证：http://127.0.0.1:8011/health 返回 {"status":"ok","rag":{...}}
 #    容器内访问宿主机 LM Studio 用 host.docker.internal（不是 localhost）
 
 # 3) 前端
@@ -109,19 +109,22 @@ cd frontend && npm install && npm run dev:h5     # http://localhost:10086
 ## 4. 测试
 
 ```powershell
-# 后端 129 用例（harness 29 + rrserver 100）+ fmt + clippy 严格门禁，全部在 Docker 内
+# 后端 200 用例（harness 53 + rrserver 147）+ fmt + clippy 严格门禁，全部在 Docker 内
 docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
   bash -c "rustup component add rustfmt clippy && cargo fmt --all -- --check && `
            cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
 
-# 前端 32 用例
+# 前端 36 用例（含 6 条直连真实 harness 的契约测试，后端不可达时自动 skip）
 cd frontend && npm run test
 
 # RAG 语料 12 用例 + 检索服务 6 用例
 cd llm_server/rag && python -m unittest test_corpus test_rag
 ```
 
-- `--test cases` 以 `cases.jsonl`（93 条真实病例）做**确定性回归**，不依赖 LLM。
+- `--test cases` 以 `cases.jsonl` 做**资源完整性护栏**（期望证候在库内、有方剂或调护、
+  关键词能命中），不依赖 LLM。注意它是**合成基准**：93 条只有 5 种主诉、3 种证候组合，
+  其中 37 条主诉是占位符 `x`——它守护的是「数据没写漏」，不是「辨证辨得对」，
+  详见 [`testing.md`](./docs/testing.md)。
 - 全链路 E2E：`e2e_tests/run_full_chain_e2e.ps1`（用 stub，无需真实 LLM）。
 - **人工验收**（需真实 LLM）：`e2e_tests/run_manual_e2e.ps1 -Case damp-heat`，
   产出归档在 [`docs/samples/`](./docs/samples/README.md)。

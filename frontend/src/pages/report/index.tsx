@@ -3,7 +3,9 @@ import Taro from '@tarojs/taro'
 import { View, Text, ScrollView } from '@tarojs/components'
 import { CAPABILITY_ZH } from '../../services/harness'
 import { getResult } from '../../services/session'
+import { nearHints } from '../../utils/differentiation'
 import { confidencePercent } from '../../utils/format'
+import { Markdown } from '../../utils/markdown'
 import type {
   DiagnosisResult, HarnessCapability, SyndromeAssessment,
 } from '../../types'
@@ -112,9 +114,23 @@ export default function ReportPage() {
   const diff = result.structured?.differentiation
   const transformations = diff?.transformations ?? []
 
+  // 未定证时「还差哪些表现就能定证」（I3）：同 consult 页。
+  // 最终报告是用户最会认真读的一页，更不该只留一句「未匹配到明确证候」。
+  const hints = nearHints(diff)
+
   return (
     <View className='report-page'>
       <ScrollView className='report-scroll' scrollY>
+        {/* 结论可信度提示（H4/H5）：未定证 / 置信度不足 / 强制放行。
+            此前这些情形在报告里毫无痕迹——报告看起来与正常报告一样，
+            读的人没有任何线索去怀疑它建立在证据不足之上。 */}
+        {result.low_confidence && result.confidence_note ? (
+          <View className='card card-alert'>
+            <View className='card-title'>结论可信度提示</View>
+            <View className='plan-reason'><Markdown text={result.confidence_note} /></View>
+          </View>
+        ) : null}
+
         {diff?.primary ? (
           <View className='card'>
             <View className='card-title'>
@@ -132,11 +148,37 @@ export default function ReportPage() {
               </View>
             ) : null}
           </View>
-        ) : null}
+        ) : (
+          /* 未定证（H3）：不渲染一张空的辨证结构卡片就完事。
+             把「最接近谁、还缺哪条主症」列出来，用户才知道下一步该补什么——
+             而这是规则确定性算出来的，不是模型编的。 */
+          <View className='card'>
+            <View className='card-title'>
+              辨证结构
+              <Text className='sub-title'>　本次未定证</Text>
+            </View>
+            <Text className='rv-empty'>
+              四诊信息未满足库内任一证候的主症必备条件，未辨出明确证候。
+              下方内容为一般性参考，不构成辨证结论。
+            </Text>
+            {hints.length ? (
+              <View className='chain-block'>
+                <Text className='chain-name'>补充这些表现可能就能定证</Text>
+                {hints.map(n => (
+                  <View key={n.slug} className='syndrome-row'>
+                    <Text className='plan-reason'>
+                      {n.name}：还缺 {n.missing.join('、')}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        )}
 
         <View className='card'>
           <View className='card-title'>辨证结论</View>
-          <Text className='report-summary'>{result.summary}</Text>
+          <View className='report-summary'><Markdown text={result.summary} /></View>
         </View>
 
         <View className='card'>
@@ -150,7 +192,7 @@ export default function ReportPage() {
                   <Text className='step-name'>{name}</Text>
                   <Text className='step-fold'>{open ? '收起' : '展开'}</Text>
                 </View>
-                {open && <Text className='step-detail'>{s.text}</Text>}
+                {open && <View className='step-detail'><Markdown text={s.text} /></View>}
               </View>
             )
           })}

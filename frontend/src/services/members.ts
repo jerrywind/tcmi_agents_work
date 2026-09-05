@@ -1,4 +1,5 @@
 import Taro from '@tarojs/taro'
+import { normalizeMember } from '../utils/profile'
 import type { Member } from '../types'
 
 /**
@@ -10,12 +11,22 @@ import type { Member } from '../types'
  */
 const STORAGE_KEY = 'tcm_members_v1'
 
+/**
+ * 读本地成员列表。
+ *
+ * 每条都过一遍 `normalizeMember`：存储里的档案可能是旧版结构
+ * （带 `age` / `gender` / `height_cm` / `note`，没有出生日期与既往病史），
+ * 代码改版不会顺带升级用户手机里已存的数据。
+ */
 export function listMembers(): Member[] {
   try {
     const raw = Taro.getStorageSync(STORAGE_KEY)
     if (!raw) return []
     const arr = typeof raw === 'string' ? JSON.parse(raw) : raw
-    return Array.isArray(arr) ? arr : []
+    if (!Array.isArray(arr)) return []
+    return arr
+      .map(normalizeMember)
+      .filter((m): m is Member => m !== null && m.id !== '')
   } catch {
     return []
   }

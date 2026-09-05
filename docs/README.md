@@ -12,7 +12,7 @@
 | `deployment.md` | 运维 | 怎么部署四组件？端口/配置/网络？ | 端口映射、`HARNESS_*` 环境变量全表、compose 编排、上线检查清单 |
 | `development.md` | 开发者 | 本地怎么开发调试？常见坑？ | 目录结构、开发流程、FAQ |
 | `agent-protocol.md` | 架构 / 扩展者 | Sub-Agent 的接口与注册方式？ | `Capability`、SubAgent trait（`run` + `structured`）、编排规则、trace |
-| `sub_agents.md` | Agent 开发者 | 7 个 Agent 各管什么、怎么改？ | 各 Agent 的规则层 + LLM 层实现、资源维护入口 |
+| `sub_agents.md` | Agent 开发者 | 13 个 Agent 各管什么、怎么改？ | 各 Agent 的规则层 + LLM 层实现、资源维护入口 |
 | `skills.md` | 技能开发者 | 11 个技能的入参与扩展方式？ | 技能清单、`Skill` 结构、多轮工具调用流程 |
 | `mcp.md` | 集成方 | MCP 怎么接进来、怎么暴露出去？ | client 挂载（`mcp_clients`）、Server 端 `/mcp` 工具表与错误约定 |
 | `llm_server.md` | 网关运维 | llm_server 是什么、怎么跑？ | 网关架构、API、配置项 |
@@ -33,8 +33,8 @@
    harness **无 MockProvider**。
 2. **端口** → [`deployment.md`](./deployment.md)「端口与地址」表（harness 为 `8011`）。
 3. **REST API 端点契约** → [`usage.md`](./usage.md) 第 2 节。
-4. **Capability 标识（7 个无前缀 slug）** → [`agent-protocol.md`](./agent-protocol.md) 第 1 节。
-5. **7 个 Sub-Agent 的实现细节** → [`sub_agents.md`](./sub_agents.md)。
+4. **Capability 标识（13 个无前缀 slug）** → [`agent-protocol.md`](./agent-protocol.md) 第 1 节。
+5. **13 个 Sub-Agent 的实现细节** → [`sub_agents.md`](./sub_agents.md)。
 6. **11 个技能的入参与归属** → [`skills.md`](./skills.md) 第 2 节。
 7. **MCP（client 挂载 + server `/mcp` 工具表）** → [`mcp.md`](./mcp.md)。
 8. **后端架构与 YAML 资源分离** → 根 [`README.md`](../README.md)「关键事实」与

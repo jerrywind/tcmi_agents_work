@@ -51,15 +51,9 @@ impl SubAgent for HerbologyAgent {
         }
 
         // 2) 候选方剂的组成，作为「药」层面的起点
-        let slug = payload
-            .get("syndrome")
-            .and_then(|s| s.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                crate::agents::infer_syndrome_slug(&ctx.resources, messages)
-                    .into_iter()
-                    .next()
-            });
+        // 与辨证步、立法步共用同一个主证（见 `resolve_syndrome`），
+        // 候选药物才可能落在正确的方上。
+        let slug = crate::agents::resolve_syndrome(&ctx.resources, messages, payload);
         if let Some(slug) = &slug {
             let formulas = crate::knowledge::find_formula(&ctx.resources, slug);
             let comps: Vec<String> = formulas
@@ -81,10 +75,30 @@ impl SubAgent for HerbologyAgent {
             }
         }
 
-        let system = &ctx.resources.prompts.herbology;
+        // 与开方步同理：候选组成必须进 system。
+        // 拼在输出末尾等于没给模型看，它会另起炉灶讨论一批别的药。
+        // H6：证候未锁定时同样的提示——证候是猜的，药就不该讲得斩钉截铁。
+        let uncertainty = crate::agents::syndrome_uncertainty_note(payload);
+
+        let rule_block = if rule_part.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\n【本地知识库的确定性结果】\n{rule_part}\n\
+                 请据此讨论药性、炮制与配伍，不要另起一批药物。"
+            )
+        };
+        let system = if rule_block.is_empty() && uncertainty.is_empty() {
+            ctx.resources.prompts.herbology.clone()
+        } else {
+            format!(
+                "{}{}{}",
+                ctx.resources.prompts.herbology, rule_block, uncertainty
+            )
+        };
         let llm = ctx
             .caller()
-            .chat_with_tools(system, messages, Capability::Herbology)
+            .chat_with_tools(&system, messages, Capability::Herbology)
             .await?;
         Ok(format!("{llm}\n{rule_part}"))
     }

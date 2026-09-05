@@ -25,15 +25,8 @@ impl SubAgent for CareAgent {
     ) -> Result<String> {
         let mut rule_part = String::new();
 
-        let slug = payload
-            .get("syndrome")
-            .and_then(|s| s.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                crate::agents::infer_syndrome_slug(&ctx.resources, messages)
-                    .into_iter()
-                    .next()
-            });
+        // 调护与辨证/立法/开方共用同一主证（见 `resolve_syndrome`）
+        let slug = crate::agents::resolve_syndrome(&ctx.resources, messages, payload);
 
         if let Some(slug) = &slug {
             let cares = crate::knowledge::find_care(&ctx.resources, slug);
@@ -49,10 +42,31 @@ impl SubAgent for CareAgent {
             }
         }
 
-        let system = &ctx.resources.prompts.care;
+        // 调护条目同理必须进 system（同 T7.6）：
+        // 拼在输出末尾对生成毫无影响，模型会另起一套说法。
+        // H6：调护同样要感知证候置信度——证候是猜的，调护也该说得留有余地
+        // （且调护条目本身会强化「这就是你的证」的错觉）。
+        let uncertainty = crate::agents::syndrome_uncertainty_note(payload);
+
+        let rule_block = if rule_part.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\n【本地调护库的确定性条目】\n{rule_part}\n\
+                 请据此给出饮食/起居/情志调护，不要另起一套。"
+            )
+        };
+        let system = if rule_block.is_empty() && uncertainty.is_empty() {
+            ctx.resources.prompts.care.clone()
+        } else {
+            format!(
+                "{}{}{}",
+                ctx.resources.prompts.care, rule_block, uncertainty
+            )
+        };
         let llm = ctx
             .caller()
-            .chat_with_tools(system, messages, Capability::Care)
+            .chat_with_tools(&system, messages, Capability::Care)
             .await?;
         Ok(format!("{llm}\n{rule_part}"))
     }

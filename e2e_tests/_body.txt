@@ -1,0 +1,13 @@
+﻿{
+    "messages":  [
+                     {
+                         "content":  "æè¿ä¸å¨å£è¦å£è­ï¼å¤§ä¾¿ç²æ»ä¸ç½ï¼è¢ä½å°éï¼èçº¢èé»è\u0085»ï¼èæ»æ°",
+                         "role":  "user"
+                     }
+                 ],
+    "capability":  "treatment",
+    "payload":  {
+                    "gender":  "male",
+                    "syndrome":  "spleen_stomach_damp_heat"
+                }
+}

@@ -13,17 +13,51 @@ import Taro from '@tarojs/taro'
  * 本模块是唯一的后端访问层（多轮状态见 `services/session.ts`）。
  */
 
-// H5 走 devServer 代理（config/dev.ts 已把 /api 转发到 harness:8011 并剥离前缀）；
-// 小程序/RN 直连后端地址（可用 VITE_API_BASE 覆盖）。
-export const HARNESS_BASE_URL =
-  process.env.TARO_ENV === 'h5'
-    ? ''
-    : process.env.VITE_API_BASE || 'http://127.0.0.1:8011'
+/**
+ * 读取构建期环境变量。
+ *
+ * **浏览器里没有 `process`**。模块顶层直接写 `process.env.X` 会抛
+ * ReferenceError，整个模块加载失败 → 页面白屏，只剩一个导航栏。
+ * H5 端曾因此完全不可用，而编译能过、单测也全绿——
+ * 只有真机打开页面才会暴露。webpack 会把 `process.env.TARO_ENV`
+ * 做字面替换，未被替换时则落到这里的 `typeof` 兜底。
+ */
+function envVar(key: string): string | undefined {
+  if (typeof process === 'undefined' || !process.env) return undefined
+  return (process.env as Record<string, string | undefined>)[key]
+}
+
+/**
+ * 是否为 H5 端。
+ *
+ * 优先用 Taro 的构建期常量（webpack 会把 `process.env.TARO_ENV` 替换成字面量）；
+ * 未被替换时（浏览器里没有 `process`）退化为「有 `window` 就是 H5」。
+ * 三种环境因此都能区分开：
+ * - H5 浏览器：无 `process`、有 `window` → true
+ * - 小程序：两者都没有 → false
+ * - Node（单测）：有 `process` → 短路为 false，与既有测试预期一致
+ *
+ * 不用 `Taro.getEnv()`：它在单测环境里并不存在（会抛 `getEnv is not a function`）。
+ */
+const IS_H5 =
+  envVar('TARO_ENV') === 'h5' ||
+  (typeof process === 'undefined' && typeof window !== 'undefined')
+
+export const HARNESS_BASE_URL = IS_H5
+  ? ''
+  : envVar('VITE_API_BASE') || 'http://127.0.0.1:8011'
 
 // 经 nginx / devServer 代理时端点带 /api 前缀（由网关剥离后转发到 harness）；
 // 直连 harness 时无前缀（小程序直连场景）。
-export const HARNESS_API_PREFIX =
-  process.env.VITE_API_PREFIX ?? (process.env.TARO_ENV === 'h5' ? '/api' : '')
+export const HARNESS_API_PREFIX = envVar('VITE_API_PREFIX') ?? (IS_H5 ? '/api' : '')
+
+/**
+ * `/chat` 的请求超时（毫秒）。
+ *
+ * 一次 `/chat` 是「跑完全部步骤再一次性返回」，标准档 10 步实测 200–530 秒。
+ * 超时必须大于这个量级，否则前端会在后端还算着的时候放弃。
+ */
+export const REQUEST_TIMEOUT_MS = 600_000
 
 /** 对话消息 */
 export interface HarnessMessage {
@@ -101,14 +135,30 @@ export interface SyndromeAssessment {
   /** 矛盾证据：语料中出现了与命中表现相反的表现 */
   conflicting: string[]
   pathogenesis?: string | null
+  /**
+   * 是否满足「主症必备」（H3）：至少命中一条主症。
+   * 只有合格的候选才能成为主证或兼证。
+   */
+  qualified?: boolean
+  /** 未命中的主症：说明「差在哪」，未匹配时可据此提示患者补充（H3） */
+  missing_key_symptoms?: string[]
 }
 
 /** 结构化辨证结论：主证 + 兼证（T4.2）+ 传变提示 */
 export interface DifferentiationStructured {
-  /** 证据不足时为 null */
+  /** 证据不足（未满足主症必备或孤证不立）时为 null */
   primary: SyndromeAssessment | null
   concurrent: SyndromeAssessment[]
   transformations: string[]
+  /** `primary !== null` 的镜像，便于直读 */
+  matched?: boolean
+  /** 全部有命中的候选（按证据量降序，含未合格的） */
+  ranked?: SyndromeAssessment[]
+  /**
+   * 未匹配时「最接近但未达标」的候选（H3）。
+   * 展示它比只写「未匹配」更有用：用户知道还差哪一项才能定证。
+   */
+  near?: SyndromeAssessment[]
 }
 
 /** POST /chat 的响应 */
@@ -144,6 +194,54 @@ export interface DiagnosisResult {
    * 前端**必须**展示，且不得由用户关闭——AI 健康建议被误当诊断是最需防的风险。
    */
   disclaimer?: string
+  /**
+   * `awaiting_input` = 信息不足，流程停在辨证等补充（**此时没有治疗建议**）；
+   * `completed` = 已跑完。
+   *
+   * 前端不判断这个字段的话，用户会看到一个「缺了治疗建议」的半截报告，
+   * 却不知道该继续补充什么。
+   */
+  status?: 'awaiting_input' | 'completed'
+  /**
+   * 反馈式辨证状态（T3.x）：调用方未在 `payload.syndrome` 给定证候时有值。
+   * 前端据此提示「还缺什么」，并在补充后带上递增的 `round` 重新请求。
+   */
+  loop?: DiagnosisLoop
+  /**
+   * 结论可信度不足（H4/H5）：未匹配到证候 / 置信度未达锁定门槛 /
+   * 达到最大追问轮次被强制放行，三者任一成立即为 `true`。
+   *
+   * 此前这三种情形在响应里毫无痕迹，读报告的人无从分辨。
+   * 与 `disclaimer` 同属**必须展示**的内容——区别在于 disclaimer 是固定
+   * 免责声明，这条是本次结论特有的质量信号。
+   */
+  low_confidence?: boolean
+  /** 可直接展示给用户的中文说明（low_confidence 为 true 时非空） */
+  confidence_note?: string | null
+}
+
+/** 待补充的问诊条目（由 `questions.yaml` 等规则确定性产出，不是模型编的） */
+export interface PendingQuestion {
+  slug: string
+  text: string
+  reason?: string
+  source?: string
+  agent?: string
+  priority?: number
+}
+
+/** 反馈式辨证的当前轮状态 */
+export interface DiagnosisLoop {
+  round: number
+  converged: boolean
+  /** 达到最大轮次被强制放行（保证最终一定有结论，不把用户卡在无限追问里） */
+  forced: boolean
+  confidence: number
+  margin: number
+  /** 必采信息覆盖率 0~1 */
+  coverage: number
+  primary?: string | null
+  pending_questions?: PendingQuestion[]
 }
 
 /** 归档报告的列表项（`GET /reports`） */
@@ -207,7 +305,15 @@ async function harnessRequest<T>(
       method,
       data,
       header: { 'Content-Type': 'application/json' },
-      timeout: 120000,
+      // 一次 `/chat` 会把 routing 里**全部步骤串行跑完**，每步一次 LLM 调用：
+      // 标准档 10 步实测 200–530 秒（模型与语料不同波动很大）。
+      // 此前这里是 120 秒，多数问诊还没跑完就被前端掐断，
+      // 用户看到的是「网络异常」——而后端其实还在正常算。
+      //
+      // ⚠️ 小程序端受平台限制（wx.request 超时上限约 60 秒），
+      // 设得再大也不生效：**小程序端用不了完整串行流程**，
+      // 需要改成分步请求或轮询任务结果，那是架构改造，另立条目。
+      timeout: REQUEST_TIMEOUT_MS,
     })
   } catch {
     throw new Error('网络异常')
@@ -224,9 +330,23 @@ async function harnessRequest<T>(
   return body as T
 }
 
-/** 健康检查：返回 'ok' */
-export function health(): Promise<string> {
-  return harnessRequest<string>('GET', '/health')
+/** `/health` 响应（T7.5 起为 JSON，此前是纯文本 'ok'） */
+export interface HealthStatus {
+  /** 进程是否存活。RAG 不可用**不影响**这里：那是「没查到典籍」，不是服务挂了 */
+  status: string
+  rag?: {
+    configured: boolean
+    /** 最近一次探测是否成功；null = 还没探测过或未配置 */
+    reachable?: boolean | null
+    endpoint?: string
+    last_error?: string
+    since_last_ok_secs?: number
+  }
+}
+
+/** 健康检查 */
+export function health(): Promise<HealthStatus> {
+  return harnessRequest<HealthStatus>('GET', '/health')
 }
 
 /** 列出已注册的 Sub-Agent 能力 */

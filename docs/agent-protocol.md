@@ -1,6 +1,6 @@
 # Sub-Agent 协议规范（harness）
 
-定义 harness 中 7 个 Sub-Agent 的**标识、接口契约、注册方式与编排规则**。
+定义 harness 中 13 个 Sub-Agent 的**标识、接口契约、注册方式与编排规则**。
 实现见 `server/harness/src/agents/`、`src/orchestrator.rs`、`src/model.rs`。
 
 ---
@@ -102,10 +102,11 @@ impl Registry {
 }
 ```
 
-- **编译期硬编码注册**：7 个 Agent 与 capability 一一对应，**没有 `@register` 装饰器，
+- **编译期硬编码注册**：13 个 Agent 与 capability 一一对应，**没有 `@register` 装饰器，
   没有 `impl` 切换，没有 `routing.yaml` 的实现路由**。`routing.yaml` 只决定「激活哪些步骤及顺序」。
 - **编排**：`orchestrator::run_diagnosis` 按 `routing.yaml` 的 `active` 顺序**串行**执行，
-  未配置时回退为经典顺序（望→闻→问→切→辨证→安全门→治疗）。
+  未配置时回退为经典顺序（望→闻→问→切→辨证→治疗）；
+  安全门不参与排序，固定排在采集期之后、辨证期之前（T7.7）。
   每一步的输出收集为 `steps`，最终拼成 Markdown `summary`。
 - **无并发、无灰度、无 AB 分流**。
 

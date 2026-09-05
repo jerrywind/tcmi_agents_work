@@ -53,8 +53,25 @@ Base URL（开发）：`http://localhost:8011`
 
 ### 2.1 健康检查
 ```bash
-curl http://localhost:8011/health          # -> ok
+curl http://localhost:8011/health
+# -> {"status":"ok","rag":{"configured":false}}
+#    {"status":"ok","rag":{"reachable":true,"endpoint":"...","since_last_ok_secs":0}}
+#    {"status":"ok","rag":{"reachable":false,"endpoint":"...","last_error":"连接失败：..."}}
 ```
+
+`status` 只表达**进程存活**；典籍检索是否接上单独看 `rag`（T7.5）：
+
+| 字段 | 含义 |
+|---|---|
+| `configured` | 是否配了 `HARNESS_RAG_ENDPOINT` / `rag_endpoint` |
+| `reachable` | 最近一次探测是否成功；`null` = 还没探测过或未配置 |
+| `last_error` | 失败原因（成功时省略） |
+| `since_last_ok_secs` | 距上次成功探测的秒数；从未成功过则省略 |
+
+> 探测每 60 秒一次，**不挂在 `/health` 上**——健康检查不该被一次网络调用拖慢。
+> RAG 不可达时 `/health` 仍是 `ok`：那是「没查到典籍」，不是「服务挂了」，
+> 混在一起会让编排误判需要重启。但此时 `tcm-rag` 会返回明确的 error，
+> 模型据此不得杜撰出处。
 
 ### 2.2 列出能力（Sub-Agent）
 ```bash
@@ -92,14 +109,21 @@ curl -X POST http://localhost:8011/chat \
 #               "prompt_tokens":..., "completion_tokens":..., "total_tokens":...,
 #               "tool_calls":["tcm-vision"], "error":null}, ...]}
 ```
-按 `resources/routing.yaml` 的 `active` 顺序依次调用各 Sub-Agent（望→闻→问→切→辨证→安全门→治疗），
+按 `resources/routing.yaml` 的 `active` 顺序依次调用各 Sub-Agent（望→闻→问→切→辨证→治疗）。
+**唯一的位置例外是安全门**：它固定插在采集期之后、辨证期之前，不受本文件
+书写顺序影响（T7.7）——安全优先于信息完整，位置不能交给配置决定。
 返回每一步的输出 `steps` 与汇总文本 `summary`，并附逐步埋点 `trace`。
 
-> **`/chat` 是一次性串行全跑，不是多轮对话**：一次请求把 `active` 列表里的
-> 每个 Sub-Agent 各跑一遍（默认 7 步），直接返回全部结果。
-> harness **没有**「问→等用户答→再问」的服务端循环，也**不会中途收敛**
-> （唯一例外是安全门命中高危红旗时提前终止，见下）。
+> **`/chat` 一次性串行全跑，没有「问→等用户答→再问」的服务端循环**：
+> 一次请求把当前档位（默认 `standard`，10 步）里的 Sub-Agent 各跑一遍后返回。
 > 多轮交互必须由调用方实现：把历史问答累积进 `messages` 后再次 `POST /chat`。
+>
+> **但流程可能在半途停下，共两种情形**：
+> 1. **信息不足（反馈式辨证）**：辨证后若判定不收敛，就**不再往下走**，
+>    返回 `status: "awaiting_input"` 与 `loop.pending_questions`。
+>    此时**没有治疗建议**——调用方应引导用户补充信息后再请求（字段见 2.3.1）。
+>    `payload.round` 递增到上限会强制放行，不会把用户卡在无限追问里。
+> 2. **安全门拦截**：命中 `high`/`critical` 红旗立即终止（见下）。
 >
 > **部分失败降级**：某一步失败不再让整次 `/chat` 失败——已完成的步骤照常返回，
 > 失败步骤记入 `failures` 并置 `partial: true`；只有**全部步骤都失败**
@@ -121,10 +145,46 @@ curl -X POST http://localhost:8011/chat \
 
 | 字段 | 类型 | 作用 |
 |---|---|---|
-| `syndrome` | string | 指定证候 slug/中文名，供治疗 Agent 检索方剂与调护 |
+| `syndrome` | string | 指定证候 slug/中文名。**给定后跳过收敛判定**直接走完流程（「已知证候求方剂」场景），治疗期各步也以它为准（T7.1 证候锁定） |
+| `round` | number | 第几轮（从 1 起）。反馈式辨证据此判断是否已达轮次上限并强制放行——**不传会一直是第 1 轮，兜底永不触发** |
+| `gender` | string | `男`/`女`/`male`/`female` 等。问诊 Agent 据此过滤人群专属问题（如男患者不追问月经）；未采集时**不排除**妇科问题（T7.3） |
 | `herbs` | string[] | 待校验的处方药味，供安全门与治疗 Agent 做配伍禁忌校验 |
 | `pregnant` | bool | 妊娠禁忌校验开关，配合 `herbs` 使用 |
-| 其它（如 `gender`/`age`/`region`） | any | 透传给各 Agent，当前版本 Agent 未读取 |
+| 其它（如 `age`/`region`） | any | 透传给各 Agent，当前版本未读取 |
+
+#### 2.3.1 多轮与反馈式辨证
+
+`/chat` 响应的 `status` 与 `loop` 字段承载多轮交互：
+
+```jsonc
+{
+  "status": "awaiting_input",     // 或 "completed"
+  "loop": {
+    "round": 1,
+    "converged": false,
+    "forced": false,              // 达到轮次上限被强制放行
+    "confidence": 1.0,            // 主证置信度
+    "margin": 6.5,                // 主证与次证的证据量差
+    "coverage": 0.33,             // 必采信息覆盖率（舌象/脉象/寒热…）
+    "primary": "spleen_stomach_damp_heat",
+    "pending_questions": [
+      {"slug": "fever", "text": "您有没有发烧？…", "reason": "尚缺「寒热」方面的信息",
+       "source": "uncovered", "agent": "inquiry", "priority": 3}
+    ]
+  },
+  "steps": [ /* 到辨证为止，无治疗步 */ ]
+}
+```
+
+调用方约定：
+
+1. `status == "awaiting_input"` 时**不要展示治疗方案**（本来就没有），
+   应把 `pending_questions` 呈现给用户。这些条目由规则确定性产出，不是模型编的。
+2. 把用户的补充**追加进 `messages`**、`payload.round` **+1**，再次 `POST /chat`。
+3. 覆盖率达标即 `converged: true`，此时才会跑到治疗期并给出方剂。
+4. `forced: true` 表示已达轮次上限、被强制放行——结论可能不够扎实，建议提示用户。
+
+> 前端已按此实现（`src/services/session.ts` 维护 `round`，consult 页展示待补条目）。
 
 ### 2.4 单步调用某个 Sub-Agent
 ```bash
@@ -138,8 +198,12 @@ curl -X POST http://localhost:8011/agents \
 # -> {"capability":"differentiation","content":"...","trace":{...},
 #     "structured":{"primary":{...},"concurrent":[...],"transformations":[]}}
 ```
-`capability` 取值：`inspection` | `listening` | `inquiry` | `palpation` |
-`differentiation` | `safety` | `treatment`。
+`capability` 取值（13 个）：`inspection`（望诊）| `listening`（闻诊）| `inquiry`（问诊）|
+`palpation`（切诊）| `case_reference`（医案参考）| `differentiation`（辨证）|
+`safety`（安全门）| `strategy`（立法）| `herbology`（用药）| `prescription`（开方）|
+`care`（调护）| `acupuncture`（针灸）| `treatment`（综合治疗，旧流程）。
+
+> 单步调用**不走**反馈式辨证与证候锁定，请自行在 `payload.syndrome` 里给定证候。
 
 `structured` 仅辨证步有内容，其余步骤为 `null`（字段恒定存在，便于调用方无分支取值）。
 
@@ -171,7 +235,7 @@ curl -X POST http://localhost:8011/skills \
 
 > - 内置技能为**编译期注册**，不支持运行时装载/卸载；外部 MCP 工具改 `config.yaml` 的
 >   `mcp_clients` 即可挂载。
-> - 7 个 Sub-Agent 在推理时**会自动调用**自己可见的技能（每步最多 `max_tool_rounds` 轮），
+> - 13 个 Sub-Agent 在推理时**会自动调用**自己可见的技能（每步最多 `max_tool_rounds` 轮），
 >   调用轨迹见 `/chat` 响应 `trace[].tool_calls`；也可按上表显式 `POST /skills` 触发。
 > - `POST /skills` 带 `owner` 时按该 capability 的可见范围过滤，越界调用返回
 >   `{"error":"未知技能: xxx"}`。
@@ -300,7 +364,9 @@ active: [inspection, listening, inquiry, palpation, differentiation, safety, tre
   调用方必须检查 `error` 字段。最常见原因是 LLM 不可达（LM Studio 未启动或
   `HARNESS_LLM_BASE_URL` 配错）——此时**所有**步骤都失败。
   若只是个别步骤失败，响应会是 `partial: true` 且带 `failures[]`，已完成的步骤仍可用。
-- **为什么一次 `/chat` 要等很久？** 默认会把 7 个 Sub-Agent 各调一次 LLM（串行）。
+- **为什么一次 `/chat` 要等很久？** 默认档位 `standard` 会把 10 个 Sub-Agent
+  各调一次 LLM（四诊并行，其余串行），实测约 200–330 秒；信息不足时会更早返回
+  （停在辨证），安全门预检命中则约 10 秒内返回。
   减少步骤请改 `routing.yaml` 的 `active`（如只留 `differentiation`、`treatment`）。
 - **为什么没有「问诊追问 → 用户回答 → 再追问」的循环？** harness 没有服务端会话与收敛逻辑。
   需要多轮时由调用方累积 `messages` 后重复 `POST /chat`。

@@ -53,7 +53,7 @@
 「3 全局」= `tcm-kb`、`tcm-diet`、`tcm-rag`；若 `config.yaml` 配了 `mcp_clients`，
 每个 Agent 还会额外看到全部 `mcp__*` 工具。见 [`skills.md`](./skills.md) 第 2.1 节。
 
-> **工具调用已在链路中生效**：7 个 Agent 全部走 `chat_with_tools`，上表「可见技能」
+> **工具调用已在链路中生效**：13 个 Agent 全部走 `chat_with_tools`，上表「可见技能」
 > 即推理中模型真正能调用的工具，调用轨迹见 `/chat` 响应的 `trace[].tool_calls`。
 > 另：`safety` 命中 `high`/`critical` 红旗时，编排器会**跳过其后的步骤**（默认即
 > `treatment`），见下文安全门一节与 [`usage.md`](./usage.md) 2.3。
@@ -76,8 +76,13 @@ Phase B 辨证（医案参考 → 辨证）
         │                              payload.round +1，再请求一次
         │ 收敛（或已达轮次上限）
         ↓
-Phase C 安全门 → 立法 → 用药 → 开方
+Phase C 立法 → 用药 → 开方
 ```
+
+> **安全门不在这张图里**（T7.7）：它固定排在 **Phase A 之后、Phase B 之前**，
+> 位置不受 `routing.yaml` 书写顺序影响，也不受收敛判定影响。
+> 曾经它排在 Phase C 开头，于是「信息不足以辨证 → 停下来追问」时
+> **安全门整个被跳过**——典型心梗表现因此漏检。安全优先于信息完整。
 
 ### 收敛三条件（同时满足才算收敛）
 
@@ -122,7 +127,9 @@ Phase C 安全门 → 立法 → 用药 → 开方
 }
 ```
 
-`status=awaiting_input` 时**不会**执行安全门与治疗期步骤（也不会开方）。
+`status=awaiting_input` 时**不会**执行辨证期与治疗期步骤（也不会开方）。
+但**安全门已经执行过了**——它在采集期之后、辨证之前就跑完了（T7.7）；
+这正是修复「信息不足时安全门被跳过、红旗漏检」的结果。
 
 ### 两种跳过判定的情况
 
@@ -231,12 +238,21 @@ Phase C 安全门 → 立法 → 用药 → 开方
 ### 治疗 `treatment`（兼容旧流程）
 - **职责**：产出方剂 / 调护 / 外治 / 生活调摄建议。
 - **实现**：
-  1. 证候定位：`payload.syndrome`，缺省时用 `infer_syndrome_slug()` 取首位；
+  1. 证候定位：经 `resolve_syndrome()` —— 优先用编排器锁定的辨证主证，
+     缺省时才从文本推断（T7.1，与立法/用药/开方**同源**）；
   2. 规则检索：`find_formula()` 拼 `【推荐方剂】`、`find_care()` 拼 `【调护建议】`；
-  3. 用药安全：若 `payload.herbs` 存在，同上校验并拼 `【用药安全】`；
-  4. LLM 综合：`chat_with_tools(system=prompts.treatment, cap=treatment)`；
-  5. 输出 = LLM 部分 + 规则部分。
+  3. 用药安全：若 `payload.herbs` 存在，校验并拼 `【用药安全】`；
+  4. LLM 综合：规则部分**注入 system**（T7.12），再 `chat_with_tools(cap=treatment)`；
+  5. 输出 = LLM 部分 + 规则部分（规则部分也供读者核对）。
 - **payload 字段**：`syndrome: string`、`herbs: string[]`、`pregnant: bool`（均可选）。
+
+> 本步默认档位不启用，只在 `routing.yaml` 的 `compatible` / `full` 档位出现。
+> 它与「立法 → 用药 → 开方」三步共用同一套规则数据与证候锁定，
+> 但只有三步拆分版能分别产出可切换的立法、用药、开方步骤。
+>
+> ⚠️ 维护提醒：给新三步加的行为（如 T7.6 的「规则进 system」、T7.1 的证候锁定）
+> **必须同时加到这里**，否则兼容档用户拿到的会是不一致的行为——
+> T7.6 当年就是漏了本步，导致走兼容档时模型看不到库载方剂。
 
 ---
 
@@ -261,4 +277,6 @@ Phase C 安全门 → 立法 → 用药 → 开方
 | Agent 逻辑 | `src/agents/*.rs` | 需重新 `docker build`（后端走 Docker） |
 
 改完数据建议在 Docker 内跑 `--test cases` 回归
-（93 条真实病例基准，会校验证候是否缺失、方剂/调护是否存在）。
+（`cases.jsonl` 基准：校验证候是否缺失、方剂/调护是否存在。
+注意它是**合成数据**——93 条仅 5 种主诉、3 种证候组合，守护的是数据完整性
+而非辨证准确性，详见 [`testing.md`](./testing.md)）。

@@ -1,7 +1,8 @@
 # 问诊问题库（可改）
 # 每条：slug(英文索引) / prompt(向患者提问的中文文案) / category(分组) /
 #       evidence_keys(命中后关联的证据关键词) / priority(优先级，越小越先问) /
-#       agent(该信息该由哪个采集 agent 负责)
+#       agent(该信息该由哪个采集 agent 负责) /
+#       applies_to(适用人群：any 缺省 / male / female)
 # 问诊 agent 会跳过证据已收集的问题，按优先级追问。
 #
 # `agent` 的用途：反馈式辨证 loop 在**第二轮及以后**只跑必要的采集 agent。
@@ -19,13 +20,6 @@
   evidence_keys: ["舌苔", "苔薄白", "苔薄黄", "苔白腻", "黄腻苔", "少苔", "舌淡", "舌红"]
   priority: 1
   agent: inspection
-
-- slug: pulse
-  prompt: 脉象如何？是浮、沉、迟、数、弦、滑、细还是弱？大概每分钟几次？
-  category: 脉象
-  evidence_keys: ["脉浮", "脉沉", "脉迟", "脉数", "脉弦", "脉滑", "脉细", "脉弱", "脉象"]
-  priority: 2
-  agent: palpation
 
 - slug: fever
   prompt: 您有没有发烧？体温大概多少？怕冷还是怕热？
@@ -77,11 +71,14 @@
   agent: inquiry
 
 - slug: menstruation
-  prompt: 若是女性，月经是否规律？有无痛经、色量异常？
+  prompt: 月经是否规律？有无痛经、色量异常？
   category: 经带
   evidence_keys: ["月经不调", "痛经", "经量少", "经量多"]
   priority: 10
   agent: inquiry
+  # 只问女性：此前靠 prompt 里写「若是女性」让模型自己判断，
+  # 模型照抄文案后男患者也会被追问月经（人工验收点名）。
+  applies_to: female
 
 - slug: voice
   prompt: 说话声音是洪亮还是低微？咳嗽声重浊还是清脆？有没有异常气味？

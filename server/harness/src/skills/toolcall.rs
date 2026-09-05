@@ -23,8 +23,14 @@ pub struct Skill {
     pub description: String,
     /// JSON Schema 形式的参数定义
     pub parameters: Value,
-    /// 专属 owner（仅该 capability 的 agent 可调用）；None 表示全局可用
-    pub owner: Option<Capability>,
+    /// 可用该技能的 capability 集合（**空集合 = 全局可用**）。
+    ///
+    /// 之所以是集合而非单个 owner：默认 `standard` 档把旧的一步到位
+    /// `treatment` 拆成了「立法 → 用药 → 开方」，一个工具往往要同时服务
+    /// 其中好几步（方剂检索对用药、开方都有用）。一对一 owner 会让
+    /// 拆分后的步骤一件专属工具都拿不到，只能靠模型记忆——
+    /// 这正是「技能调用偏少 / 方剂药味记错」的配置层根因。
+    pub owners: Vec<Capability>,
     pub executor: SkillFn,
 }
 
@@ -34,15 +40,32 @@ impl Skill {
             name: name.to_string(),
             description: description.to_string(),
             parameters,
-            owner: None,
+            owners: Vec::new(),
             executor,
         }
     }
 
-    /// 设置专属 owner
+    /// 设置单个专属 owner
     pub fn with_owner(mut self, cap: Capability) -> Self {
-        self.owner = Some(cap);
+        if !self.owners.contains(&cap) {
+            self.owners.push(cap);
+        }
         self
+    }
+
+    /// 设置多个专属 owner（方剂检索这类要横跨治疗期多步的工具）
+    pub fn with_owners<I: IntoIterator<Item = Capability>>(mut self, caps: I) -> Self {
+        for c in caps {
+            if !self.owners.contains(&c) {
+                self.owners.push(c);
+            }
+        }
+        self
+    }
+
+    /// 该 capability 是否可用此技能（无 owner 约束即全局可见）
+    pub fn visible_to(&self, cap: Capability) -> bool {
+        self.owners.is_empty() || self.owners.contains(&cap)
     }
 }
 

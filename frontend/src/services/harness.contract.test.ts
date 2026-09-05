@@ -22,9 +22,17 @@ const BASE = process.env.VITE_API_BASE || 'http://127.0.0.1:8011'
 
 async function ping(): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE}/health`)
+    // 加超时：连不上时不要卡住整个测试跑——此前没有超时，
+    // 端口不通的情形下会一直挂到 vitest 整体超时，报错信息还指向别处。
+    const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) })
     return r.ok
-  } catch {
+  } catch (e) {
+    // 会 skip 的测试等于没有测试，至少要让人**看见**它跳过了。
+    // 本文件在 CI 里长期「1 skipped」而无人察觉，就是因为这里静默。
+    console.warn(
+      `[harness.contract] 连不上 ${BASE}（${(e as Error)?.message}）：` +
+        `以下真实契约将跳过。请启动 harness，或用 VITE_API_BASE 指向它。`,
+    )
     return false
   }
 }
@@ -41,7 +49,7 @@ function installRealTransport() {
     try {
       data = text ? JSON.parse(text) : null
     } catch {
-      /* 保持原始文本（如 /health 返回 ok） */
+      /* 保持原始文本（非 JSON 响应） */
     }
     return { statusCode: res.status, data }
   }
@@ -52,22 +60,33 @@ const up = await ping()
 describe.skipIf(!up)('harness 契约（需本地 harness :8011）', () => {
   installRealTransport()
 
-  it('GET /health 返回 ok', async () => {
-    await expect(h.health()).resolves.toBe('ok')
+  it('GET /health 返回 ok 与 RAG 可达性', async () => {
+    // T7.5 起 /health 是 JSON：status 只表示进程存活，
+    // 典籍检索是否接通单独看 rag 字段。
+    const r = await h.health()
+    expect(r.status).toBe('ok')
+    expect(typeof r.rag?.configured).toBe('boolean')
   })
 
-  it('GET /agents 返回 7 个 capability 与中文名', async () => {
+  it('GET /agents 返回全部 capability 与中文名', async () => {
     const r = await h.listAgents()
+    // 望→闻→问→切→医案→辨证→安全门→立法→用药→开方→调护→针灸→治疗
     expect(r.capabilities).toEqual([
       'inspection',
       'listening',
       'inquiry',
       'palpation',
+      'case_reference',
       'differentiation',
       'safety',
+      'strategy',
+      'herbology',
+      'prescription',
+      'care',
+      'acupuncture',
       'treatment',
     ])
-    expect(r.names).toHaveLength(7)
+    expect(r.names).toHaveLength(r.capabilities.length)
     expect(r.names[0]).toBe('望诊')
   })
 

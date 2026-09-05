@@ -33,8 +33,25 @@ pub struct Syndrome {
     pub name: String, // 中文名，如 风寒袭肺证
     #[serde(default)]
     pub meridian: Option<String>, // 涉及经络/脏腑
+
+    // ---- 症状分两级（H2）：主症是定证的必要条件，次症只是旁证 ----
+    //
+    // 中医辨证讲「主症必备」：次症凑得再多，缺了主症也不该定证。
+    // 不分级的后果是「乏力」「纳呆」「失眠」这类跨证候的非特异表现
+    // 与「恶寒重发热轻」「脉浮紧」这类强特异表现同权计数，
+    // 于是**症状表越长的证候越容易赢**——库外的证候（如肾阳虚）会被判成
+    // 库内最像的那一个，而且看起来有置信度。见 H3。
+    /// 主症：辨证的主依据，命中任一条即满足「主症必备」
     #[serde(default)]
-    pub symptoms: Vec<String>, // 典型症状
+    key_symptoms: Vec<String>,
+    /// 次症：佐证，权重低于主症
+    #[serde(default)]
+    minor_symptoms: Vec<String>,
+    /// 旧格式遗留：未分级的症状表（`symptoms:`）。
+    /// 加载时并入次症，之后不再参与打分——保住老 YAML 不报错。
+    #[serde(default, rename = "symptoms")]
+    legacy_symptoms: Vec<String>,
+
     #[serde(default)]
     pub tongue: Option<String>, // 舌象
     #[serde(default)]
@@ -53,7 +70,106 @@ pub struct Syndrome {
     pub departments: Vec<String>,
 }
 
+impl Syndrome {
+    /// 加载后归一化：把旧格式的 `symptoms` 并入次症。
+    ///
+    /// 在 `load()` 里统一做一次，之后所有消费方只读 `key_symptoms()` /
+    /// `minor_symptoms()`，不必各自处理两种格式。
+    pub(crate) fn normalize(&mut self) {
+        if self.legacy_symptoms.is_empty() {
+            return;
+        }
+        for s in self.legacy_symptoms.drain(..) {
+            if !self.minor_symptoms.contains(&s) && !self.key_symptoms.contains(&s) {
+                self.minor_symptoms.push(s);
+            }
+        }
+    }
+
+    /// 主症（定证的必要条件）
+    pub fn key_symptoms(&self) -> &[String] {
+        &self.key_symptoms
+    }
+
+    /// 次症（含旧格式 `symptoms` 归并进来的部分）
+    pub fn minor_symptoms(&self) -> &[String] {
+        &self.minor_symptoms
+    }
+
+    /// 全部症状：主症在前、次症在后，去重保序。
+    ///
+    /// 供**追问生成**使用（鉴别追问取主证与次证的症状差集）——
+    /// 那里问的是「还有没有这个表现」，不区分主次。
+    pub fn all_symptoms(&self) -> Vec<&String> {
+        let mut out: Vec<&String> = self.key_symptoms.iter().collect();
+        for s in &self.minor_symptoms {
+            if !out.contains(&s) {
+                out.push(s);
+            }
+        }
+        out
+    }
+}
+
 // ------------------------- 问诊问题库 -------------------------
+
+/// 患者性别（由 `payload.gender` 传入，前端患者档案里已采集）
+///
+/// 用于过滤人群专属的问诊条目：`payload.gender=男` 时仍追问月经，
+/// 是人工验收点名的问题——规则层的【建议追问】会把月经列进去，
+/// 模型照着列自然也就照着问。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Gender {
+    Male,
+    Female,
+    /// 未采集或无法识别。此时**不过滤**任何问题：宁可多问一句，
+    /// 也不要因为性别未知就漏掉妇科相关的重要鉴别线索。
+    Unknown,
+}
+
+impl Gender {
+    /// 从 `payload.gender` 解析（兼容中文与英文写法）
+    pub fn from_payload(payload: &serde_json::Value) -> Self {
+        let raw = payload
+            .get("gender")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        match raw {
+            "男" | "男性" | "male" | "m" => Gender::Male,
+            "女" | "女性" | "female" | "f" => Gender::Female,
+            _ => Gender::Unknown,
+        }
+    }
+
+    /// 中文名（用于给模型的患者画像提示）
+    pub fn label(&self) -> &'static str {
+        match self {
+            Gender::Male => "男",
+            Gender::Female => "女",
+            Gender::Unknown => "未采集",
+        }
+    }
+
+    /// 该人群限定取值是否适用于本患者
+    ///
+    /// `applies_to` 取 `any`（缺省）/ `male` / `female`。
+    /// 取到不认识的值时不过滤——配错了只该是「没生效」，
+    /// 不该变成「把问题全砍光」。
+    ///
+    /// **性别未知时按「不排除」处理**：患者档案里的性别是可选项，
+    /// 把「未采集」当成「非女性」是有偏的，会系统性漏掉妇科鉴别线索。
+    /// 宁可多问一句，也不要替患者先做排除。
+    pub fn matches(&self, applies_to: Option<&str>) -> bool {
+        match applies_to.map(|s| s.trim().to_lowercase()).as_deref() {
+            None | Some("") | Some("any") | Some("all") => true,
+            Some("female") => *self != Gender::Male,
+            Some("male") => *self != Gender::Female,
+            _ => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct QuestionItem {
     pub slug: String,   // 英文 slug，如 fever
@@ -70,6 +186,19 @@ pub struct QuestionItem {
     /// 首轮四诊全跑，后续轮若只剩「舌苔什么颜色」，就只跑望诊。
     #[serde(default)]
     pub agent: Option<String>,
+    /// 适用人群：`any`（缺省，所有人）/ `male` / `female`。
+    ///
+    /// 经带、胎产这类问题只该问女性；此前靠 prompt 里写「若是女性」
+    /// 让模型自己判断，模型照抄文案后男患者也会被追问月经。
+    #[serde(default)]
+    pub applies_to: Option<String>,
+}
+
+impl QuestionItem {
+    /// 该问题是否适用于本患者（人群维度，T7.3）
+    pub fn applies_to_gender(&self, gender: Gender) -> bool {
+        gender.matches(self.applies_to.as_deref())
+    }
 }
 
 // ------------------------- 关键词证据映射 -------------------------
@@ -148,6 +277,9 @@ pub struct Formula {
     pub usage: Option<String>, // 用法
     #[serde(default)]
     pub caution: Option<String>, // 禁忌/注意
+    /// 出处（书名）。开方步被要求「注明出处」，有据可查比让模型现编可靠。
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 // ------------------------- 调护方案 -------------------------

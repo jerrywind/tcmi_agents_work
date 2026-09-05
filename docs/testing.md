@@ -3,7 +3,7 @@
 覆盖单元、集成、案例回归与**全链路 E2E**。测试目标与质量门禁：
 
 - **后端（harness + rrserver，Rust）测试全绿**：在 Docker 内编译并执行（见下）。
-- 关键路径 0 回归：诊断编排流程、7 个 Sub-Agent、skills 注册与 owner 过滤、
+- 关键路径 0 回归：诊断编排流程、**13 个 Sub-Agent**、skills 注册与 owner 过滤（**含多归属**）、
   PPG 解析、十八反十九畏与妊娠禁忌校验、YAML 资源完整性、rrserver 隧道转发。
 - 临时文件/日志命名与清理见 [`cleanup.md`](./cleanup.md)。
 
@@ -17,12 +17,12 @@
 | 层级 | 位置 | 说明 |
 |---|---|---|
 | 单元 | `server/harness/src/**` 的 `#[cfg(test)]` | PPG 解析、配伍禁忌校验、证候/方剂检索、关键词证据匹配、技能注册与 owner 过滤 |
-| 集成 | `server/harness/tests/cases.rs` | **案例回归**：以 `cases.jsonl` 真实病例校验资源与纯函数链路（不依赖 LLM） |
-| 集成 | `server/harness/tests/behavior.rs` | **行为回归**：红旗中断判定、技能归属（含 treatment 专属工具）、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**（均不依赖 LLM） |
+| 集成 | `server/harness/tests/cases.rs` | **资源完整性护栏**：以 `cases.jsonl`（**合成基准**，真实覆盖面见 1.1）校验资源与纯函数链路（不依赖 LLM） |
+| 集成 | `server/harness/tests/behavior.rs` | **行为回归**：红旗中断判定、技能归属与多归属、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**；阶段 G 新增：**证候锁定与中文名归一化**、**方剂覆盖与药味比对**、**性别过滤**、**安全门先于收敛判定（阶段划分）**、**安全门语料只取患者陈述**、**RAG 状态注入**、**`/health` 的 `rag` 字段**（均不依赖 LLM） |
 | 评测 | `server/harness/tests/llm_eval.rs` | **LLM 质量评分**（T4.4）：以 `cases.jsonl` 跑真实辨证并自动评分；默认跳过，`HARNESS_EVAL=1` 才启用 |
 | 隧道 | `server/rrserver/tests/integration.rs` | rrserver 端到端：注册鉴权、**hash code 注册/心跳/探活/回收**、隧道转发、流式、CORS、断线重连、模型部署包装 |
 
-当前 **后端 182 个用例全绿**（harness 35：lib 6 + behavior 26 + cases 2 + llm_eval 1；
+当前 **后端 200 个用例全绿**（harness 53：lib 9 + behavior 41 + cases 2 + llm_eval 1；
 rrserver 147：lib 107 + main 4 + 集成 36）。
 
 ```powershell
@@ -39,7 +39,7 @@ docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
 
 ### 1.1 案例回归（`--test cases`）
 
-基准数据 `server/harness/cases.jsonl`（93 条真实会诊记录），校验：
+基准数据 `server/harness/cases.jsonl`，校验：
 
 1. **关键词证据匹配**：案例主诉 + 证据能命中 `keywords.yaml` 的证据标签。
 2. **证候推断**：`infer_syndrome_slug` 返回的候选集覆盖案例期望证候（**支持兼证**，
@@ -50,6 +50,27 @@ docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
 
 该测试**不依赖 LLM**（纯函数 + 资源数据），可在 CI 中稳定运行。
 新增/调整 YAML 资源后跑它，即可确认未破坏既有病例。
+
+> ⚠️ **基准数据的真实覆盖面（2026-09-01 实测）**
+>
+> `cases.jsonl` 是**合成数据**，不是真实会诊记录——此前文档称其为「93 条真实病例」，
+> 与事实不符，已更正。实测：
+>
+> | 指标 | 实测值 |
+> |---|---|
+> | 病例条数 | 93 |
+> | **不同主诉** | **5**（其中 37 条主诉就是字面量 `x`） |
+> | **不同证候组合** | **3**（肝郁气滞 / 风寒感冒 / 脾胃湿热，均在库内，缺口 0%） |
+> | 不同证据集合 | 3 |
+> | 不同治疗条目 | 15 |
+>
+> 而且断言 2 是**「候选集覆盖」而非「首位命中」**——只要期望证候出现在
+> `infer_syndrome_slug` 返回的全部候选里就算通过，非常宽松。
+>
+> **结论**：它是一条有效的**资源完整性护栏**（数据写漏会立刻失败），
+> 但**不能用来衡量辨证准确性**。要判断「辨证准不准」，只有
+> `tests/llm_eval.rs`（需真实 LLM）与人工验收两条路，而前者同样以这份
+> 合成基准为输入，分数高不代表真实场景可信——别被数字安慰到。
 
 > 需真实 LLM 的问诊链路（`/chat`）不在自动化测试内：harness 未提供 MockProvider，
 > 请连 LM Studio 后手工验证，或用下面的 LLM 评测集半自动打分。
@@ -89,10 +110,17 @@ npx vitest run            # 单测（jsdom）
   不计入单测覆盖率；可独立验证的纯逻辑（如证候摘要格式化）抽到 `src/utils/`。
 - 组件/逻辑单测用 `vitest + jsdom`，`@tarojs/taro` 由 `vitest.setup.ts` 全局 mock。
 - 测试文件：`src/services/harness.test.ts`（契约客户端）、
-  `src/services/harness.contract.test.ts`（连真实 harness，不可达自动 skip）、
+  `src/services/harness.contract.test.ts`（**连真实 harness**，不可达自动 skip）、
+  `src/services/session.test.ts`（多轮状态：轮次递增、历史回灌、档案不丢）、
   `src/utils/format.test.ts`。
-- 当前 **32 个用例全绿**（含 6 条契约：`/health`、`/agents`、`/skills`、
+- 当前 **36 个用例全绿**（含 6 条契约：`/health`、`/agents`、`/skills`、
   `POST /skills` 错误分支 + MCP 的 `tools/list`、`list_agent_capabilities`）。
+
+> ⚠️ **契约测试在 CI 里是 skip 的**：后端不可达时 `describe.skipIf(!up)` 会跳过整组，
+> 于是后端契约漂移**不会**在 CI 报警——改 `/health` 返回格式、capability 从 7 个增到
+> 13 个，都是悄悄发生的。
+> **改了后端端点后，务必在本地起 harness 再跑一次 `npx vitest run`**（T7.11 即如此发现）。
+> 同理，改 `/chat` 相关行为后请连真实 LLM 跑一遍人工验收，见第 4 节。
 
 > 两个易踩的坑（已修，改测试时别踩回去）：
 > `vitest.setup.ts` 的 Taro mock 必须是 `vi.fn()`（普通 async 函数会让

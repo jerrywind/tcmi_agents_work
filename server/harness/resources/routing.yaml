@@ -4,11 +4,20 @@
 #   1. `active_profile` —— 引用下面 `profiles` 里的命名档位（推荐）；
 #   2. `active` —— 直接列出 slug 顺序（`active_profile` 为空时用它）。
 # 删除某行即跳过该步骤；`safety` 不可移除（缺失会被强制补齐，见代码）。
+#
+# ⚠️ `safety` 的**位置不由本文件决定**：无论写在哪里，它都固定排在
+#    「采集期（望闻问切）之后、辨证期之前」执行（T7.7）。
+#
+# 为什么：安全门曾按本文件的书写位置排在辨证之后、收敛判定之前，
+# 于是信息不足以辨证时流程会停下来追问（awaiting_input），
+# **安全门整个被跳过**——真实验证里「突然胸痛剧烈、出冷汗、呼吸困难、
+# 左臂发麻」这条典型心梗表现因此漏检，患者反而被追问「舌苔什么颜色」。
+# 安全优先于信息完整，位置不能交给配置决定。
 
 # slug 含义：
 #   采集期  inspection 望诊 / listening 闻诊 / inquiry 问诊 / palpation 切诊
 #   辨证期  case_reference 医案参考 / differentiation 辨证
-#   安全    safety 安全门
+#   安全    safety 安全门（固定排在采集期之后，见上方说明）
 #   治疗期  strategy 立法 / herbology 用药 / prescription 开方
 #           care 调护 / acupuncture 针灸 / treatment 综合治疗（旧流程）
 profiles:

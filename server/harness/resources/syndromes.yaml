@@ -1,19 +1,44 @@
 # 证候库（可改）
 # 每条证候：slug(英文索引) / name(中文名) / meridian(脏腑经络) /
-#           symptoms(典型症状) / tongue(舌象) / pulse(脉象) / pathogenesis(病机) /
+#           key_symptoms(主症) / minor_symptoms(次症) /
+#           tongue(舌象) / pulse(脉象) / pathogenesis(病机) /
 #           principles(治则，立法 agent 的依据)
-# slug 被 keywords.yaml / formulas.yaml / care.yaml 引用，请勿随意改动已引用的 slug。
+#
+# ## H2：症状为什么分两级
+#
+# 中医辨证讲「主症必备」——次症凑得再多，缺了主症也不该定证。
+# 不分级的后果是「乏力」「纳呆」「失眠」这类跨证候的非特异表现
+# 与「恶寒重发热轻」「脉浮紧」这类强特异表现同权计数，于是
+# **症状表越长的证候越容易赢**，凑次症就能压过命中主症；
+# 库外的证候（如肾阳虚）会被判成库内最像的那一个，而且看起来有置信度。
+#
+# 打分权重见 `src/agents/differentiation.rs`：主症 1.0 / 次症 0.4 /
+# 舌象 1.0 / 脉象 1.0 / 关键词证据 0.5（且只计症状表之外的线索）。
+#
+# ## 编写约束
+#
+# 1. **主症/次症里不要写舌象与脉象**——舌脉由 `tongue` / `pulse` 字段负责，
+#    写进症状会与舌脉字段重复计分（同一表现算两遍）；
+# 2. `key_symptoms` 取 3~5 条最能定证的表现，且尽量是**本证特有**的：
+#    与相近证候共有的泛化表现（乏力、纳差、失眠）放进次症；
+# 3. 主症之间应能互相印证、同向，不要把「或然」表现写进主症；
+# 4. slug 被 keywords.yaml / formulas.yaml / care.yaml 引用，请勿随意改动已引用的 slug。
+#
+# ⚠️ 症状、舌脉、病机、治则须由执业中医师复核：本库用于**约束模型输出**，
+#    写错等于把错误固化下来。
 
+# ---------------- 肺系 ----------------
 - slug: wind_cold_attack_lung
   name: 风寒感冒
   meridian: 肺
-  symptoms:
+  key_symptoms:
     - 恶寒重发热轻
     - 无汗
+    - 流清涕
     - 头痛
+  minor_symptoms:
     - 身痛
     - 鼻塞
-    - 流清涕
     - 咳嗽
     - 痰白稀
     - 咽痒
@@ -26,13 +51,14 @@
 - slug: wind_heat_attack_lung
   name: 风热犯肺证
   meridian: 肺
-  symptoms:
+  key_symptoms:
     - 发热
-    - 微恶风
-    - 有汗
     - 咽痛
-    - 鼻塞
+    - 微恶风
     - 流黄涕
+  minor_symptoms:
+    - 有汗
+    - 鼻塞
     - 咳嗽
     - 痰黄稠
     - 口渴
@@ -42,14 +68,73 @@
   principles: ["辛凉解表", "清肺透热"]
   departments: ["内科", "温病疫病"]
 
+- slug: wind_dryness_attacking_lung
+  name: 风燥伤肺
+  meridian: 肺
+  key_symptoms:
+    - 干咳少痰
+    - 咽干
+    - 鼻燥
+    - 痰黏难咯
+  minor_symptoms:
+    - 咽痛
+    - 声音嘶哑
+    - 胸痛
+    - 微恶风
+  tongue: 舌红少津，苔薄
+  pulse: 脉浮细
+  pathogenesis: 风燥伤肺，肺津受损，宣降失司
+  principles: ["疏风清肺", "润燥止咳"]
+  departments: ["内科"]
+
+- slug: phlegm_damp_obstructing_lung
+  name: 痰湿阻肺
+  meridian: 肺脾
+  key_symptoms:
+    - 咳嗽痰多
+    - 痰白黏
+    - 胸闷
+    - 气喘
+  minor_symptoms:
+    - 脘痞
+    - 纳呆
+    - 乏力
+    - 恶心
+  tongue: 舌淡胖，苔白腻
+  pulse: 脉滑
+  pathogenesis: 痰湿阻肺，肺失宣降
+  principles: ["燥湿化痰", "理气止咳"]
+  departments: ["内科"]
+
+- slug: lung_qi_deficiency
+  name: 肺气虚
+  meridian: 肺
+  key_symptoms:
+    - 咳喘无力
+    - 自汗
+    - 畏风
+    - 易感冒
+  minor_symptoms:
+    - 气短
+    - 声低懒言
+    - 痰清稀
+    - 面色㿠白
+  tongue: 舌淡，苔薄白
+  pulse: 脉弱
+  pathogenesis: 肺气不足，卫外不固
+  principles: ["补肺益气", "固表止汗"]
+  departments: ["内科"]
+
+# ---------------- 脾胃系 ----------------
 - slug: dampness_encumbering_spleen
   name: 脾虚湿困证
   meridian: 脾
-  symptoms:
+  key_symptoms:
     - 脘腹胀满
     - 纳呆
     - 便溏
     - 肢体困重
+  minor_symptoms:
     - 乏力
     - 面色萎黄
   tongue: 舌淡胖，边有齿痕，苔白腻
@@ -58,13 +143,92 @@
   principles: ["健脾益气", "燥湿运脾"]
   departments: ["内科"]
 
+- slug: spleen_qi_deficiency
+  name: 脾气虚
+  meridian: 脾
+  key_symptoms:
+    - 食少纳呆
+    - 神疲乏力
+    - 便溏
+    - 腹胀
+  minor_symptoms:
+    - 面色萎黄
+    - 肢体倦怠
+    - 消瘦
+    - 浮肿
+  tongue: 舌淡胖，边有齿痕，苔薄白
+  pulse: 脉缓弱
+  pathogenesis: 脾气不足，运化失健，气血生化乏源
+  principles: ["健脾益气", "升阳举陷"]
+  departments: ["内科"]
+
+- slug: spleen_stomach_damp_heat
+  name: 脾胃湿热
+  meridian: 脾胃
+  key_symptoms:
+    - 口苦
+    - 脘腹胀满
+    - 大便溏黏
+    - 粘滞不爽
+  minor_symptoms:
+    - 口臭
+    - 食欲不振
+    - 肢体困重
+    - 恶心呕吐
+    - 小便黄
+  tongue: 舌红，苔黄腻
+  pulse: 脉滑数
+  pathogenesis: 湿热蕴结中焦，脾胃升降失常
+  principles: ["清热利湿", "理气和中"]
+  departments: ["内科"]
+
+- slug: stomach_fire
+  name: 胃火炽盛
+  meridian: 胃
+  key_symptoms:
+    - 胃脘灼痛
+    - 口臭
+    - 牙龈肿痛
+    - 口渴喜冷饮
+  minor_symptoms:
+    - 消谷善饥
+    - 便秘
+    - 小便短黄
+    - 牙龈出血
+  tongue: 舌红，苔黄
+  pulse: 脉滑数
+  pathogenesis: 胃火炽盛，灼伤胃络，腐熟太过
+  principles: ["清胃泻火", "凉血止痛"]
+  departments: ["内科"]
+
+- slug: food_retention
+  name: 食积胃脘
+  meridian: 胃
+  key_symptoms:
+    - 脘腹胀痛
+    - 嗳腐吞酸
+    - 厌食
+    - 大便酸臭
+  minor_symptoms:
+    - 恶心呕吐
+    - 矢气臭秽
+    - 腹痛拒按
+    - 夜卧不安
+  tongue: 舌红，苔厚腻
+  pulse: 脉滑
+  pathogenesis: 饮食停滞胃脘，胃失和降，气机壅滞
+  principles: ["消食导滞", "和胃降逆"]
+  departments: ["内科"]
+
+# ---------------- 肝胆系 ----------------
 - slug: liver_qi_stagnation
   name: 肝郁气滞
   meridian: 肝
-  symptoms:
+  key_symptoms:
     - 情志抑郁
     - 胸胁胀闷
     - 善太息
+  minor_symptoms:
     - 烦躁易怒
     - 月经不调
     - 纳差
@@ -75,15 +239,55 @@
   principles: ["疏肝理气", "解郁散结"]
   departments: ["内科", "妇科"]
 
+- slug: liver_fire_flaring
+  name: 肝火上炎
+  meridian: 肝
+  key_symptoms:
+    - 头痛眩晕
+    - 面红目赤
+    - 口苦
+    - 急躁易怒
+  minor_symptoms:
+    - 耳鸣
+    - 失眠多梦
+    - 便秘
+    - 小便黄
+    - 胁肋灼痛
+  tongue: 舌红，苔黄
+  pulse: 脉弦数
+  pathogenesis: 肝郁化火，火性上炎，上扰清窍
+  principles: ["清肝泻火", "凉血安神"]
+  departments: ["内科"]
+
+- slug: qi_stagnation_blood_stasis
+  name: 气滞血瘀
+  meridian: 肝心
+  key_symptoms:
+    - 刺痛固定不移
+    - 肿块
+    - 面色晦暗
+  minor_symptoms:
+    - 肌肤甲错
+    - 胁肋胀痛
+    - 经行腹痛
+    - 唇色紫暗
+  tongue: 舌紫暗，有瘀点
+  pulse: 脉涩
+  pathogenesis: 气机郁滞，血行不畅，瘀阻络脉
+  principles: ["活血化瘀", "行气止痛"]
+  departments: ["内科", "妇科"]
+
+# ---------------- 虚损与脏腑亏虚 ----------------
 - slug: qi_and_yin_deficiency
   name: 气阴两虚证
   meridian: 心肺脾
-  symptoms:
+  key_symptoms:
     - 神疲乏力
     - 气短
     - 口干
-    - 自汗
     - 盗汗
+  minor_symptoms:
+    - 自汗
     - 心悸
     - 失眠
   tongue: 舌红少苔
@@ -92,21 +296,40 @@
   principles: ["益气养阴", "生津润燥"]
   departments: ["内科"]
 
-- slug: spleen_stomach_damp_heat
-  name: 脾胃湿热
-  meridian: 脾胃
-  symptoms:
-    - 口苦
-    - 口臭
-    - 脘腹胀满
-    - 食欲不振
-    - 肢体困重
-    - 大便溏黏
-    - 粘滞不爽
-    - 恶心呕吐
-    - 小便黄
-  tongue: 舌红，苔黄腻
-  pulse: 脉滑数
-  pathogenesis: 湿热蕴结中焦，脾胃升降失常
-  principles: ["清热利湿", "理气和中"]
+- slug: kidney_yang_deficiency
+  name: 肾阳虚
+  meridian: 肾
+  key_symptoms:
+    - 腰膝酸软冷痛
+    - 畏寒肢冷
+    - 夜尿多
+  minor_symptoms:
+    - 面色㿠白
+    - 精神萎靡
+    - 水肿
+    - 久泻
+    - 性欲减退
+  tongue: 舌淡胖，苔白滑
+  pulse: 脉沉迟
+  pathogenesis: 肾阳不足，温煦失职，气化无权
+  principles: ["温补肾阳", "化气行水"]
   departments: ["内科"]
+
+- slug: heart_spleen_deficiency
+  name: 心脾两虚
+  meridian: 心脾
+  key_symptoms:
+    - 心悸
+    - 失眠多梦
+    - 食少乏力
+    - 健忘
+  minor_symptoms:
+    - 面色萎黄
+    - 腹胀便溏
+    - 月经量少
+    - 头晕
+  tongue: 舌淡，苔薄白
+  pulse: 脉细弱
+  pathogenesis: 心脾两虚，气血生化不足，心神失养
+  principles: ["健脾养心", "益气补血"]
+  departments: ["内科", "妇科"]

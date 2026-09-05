@@ -23,16 +23,8 @@ impl SubAgent for TreatmentAgent {
         messages: &[Message],
         payload: &serde_json::Value,
     ) -> Result<String> {
-        // 1) 规则检索：证候 slug 来自 payload，或从消息文本推断
-        let syndrome_slug = payload
-            .get("syndrome")
-            .and_then(|s| s.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                crate::agents::infer_syndrome_slug(&ctx.resources, messages)
-                    .into_iter()
-                    .next()
-            });
+        // 1) 规则检索：证候以辨证步的主证为准（见 `resolve_syndrome`）
+        let syndrome_slug = crate::agents::resolve_syndrome(&ctx.resources, messages, payload);
 
         let mut rule_part = String::new();
         if let Some(slug) = &syndrome_slug {
@@ -87,10 +79,36 @@ impl SubAgent for TreatmentAgent {
         }
 
         // 3) LLM 综合（可用专属 tcm-formula / tcm-care，以及全局 tcm-kb / tcm-diet / tcm-rag）
-        let system = &ctx.resources.prompts.treatment;
+        //
+        // 规则结果必须进 system（同 T7.6）。本步是**兼容档**的一步到位版本，
+        // T7.6 当年只改了拆分后的立法/用药/开方三步，漏了这里——
+        // 于是走兼容档时模型照样看不到库载方剂：真实验证里它把「脾胃湿热」
+        // 讲成了「腹胀腹痛腹泻」并开了参苓白术散（那是脾虚湿困的方），
+        // 而规则层给出的连朴饮/三仁汤就摆在输出末尾，白放着。
+        // H6：兼容档同样要感知证候置信度（T7.12 的教训——漏了旧流程步，
+        // 走兼容档的用户拿到的仍是旧行为，而兼容档是配置支持的档位）。
+        let uncertainty = crate::agents::syndrome_uncertainty_note(payload);
+
+        let rule_block = if rule_part.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "\n\n【本地方剂库与调护库的确定性结果】\n{rule_part}\n\
+                 要求：方剂优先从中选择，采用时组成须与上面记载一致；\
+                 确需加减须逐味说明理由。"
+            )
+        };
+        let system = if rule_block.is_empty() && uncertainty.is_empty() {
+            ctx.resources.prompts.treatment.clone()
+        } else {
+            format!(
+                "{}{}{}",
+                ctx.resources.prompts.treatment, rule_block, uncertainty
+            )
+        };
         let llm = ctx
             .caller()
-            .chat_with_tools(system, messages, Capability::Treatment)
+            .chat_with_tools(&system, messages, Capability::Treatment)
             .await?;
 
         Ok(format!("{llm}\n{rule_part}"))

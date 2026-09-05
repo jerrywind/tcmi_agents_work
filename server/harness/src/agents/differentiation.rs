@@ -23,10 +23,32 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// 置信度满分所需的证据量。
+/// 主症命中一条的证据量（H2）
 ///
-/// 一条症状/舌象/脉象计 1.0，一条关键词证据计 0.5；
-/// 攒够 5 条证据即视为证据充分（置信度 1.0）。
+/// 主症是定证的必要条件，权重最高。
+const W_KEY: f64 = 1.0;
+
+/// 次症命中一条的证据量（H2）
+///
+/// 次症是旁证：多个证候共有的非特异表现（乏力、纳呆、失眠…）不该与
+/// 「恶寒重发热轻」「脉浮紧」这类强特异表现同权，否则**症状表越长的
+/// 证候越容易赢**，凑次症就能压过命中主症。
+const W_MINOR: f64 = 0.4;
+
+/// 舌象 / 脉象命中的证据量
+///
+/// 舌脉往往是寒热虚实鉴别的关键，权重与症状同级。
+const W_SIGN: f64 = 1.0;
+
+/// 关键词证据的证据量（H1）
+///
+/// **只计症状/舌脉没算过的线索**。此前症状与 `keywords.yaml` 对同一批词
+/// 各计一次（症状 1.0 + 关键词 0.5），而多数证候的 keywords 与其 symptoms
+/// 高度重叠，于是证据量被系统性放大约 1.5 倍，置信度虚高——
+/// 「命中一句口苦」就攒出 1.5 分，收敛判定（min_confidence 0.6）被轻易突破。
+const W_KEYWORD: f64 = 0.5;
+
+/// 置信度满分所需的证据量
 const FULL_EVIDENCE: f64 = 5.0;
 
 /// 单条矛盾证据扣减的证据量
@@ -35,8 +57,20 @@ const CONFLICT_PENALTY: f64 = 0.5;
 /// 进入候选集的最低置信度（低于此值视为偶然命中，不予呈现）
 const MIN_CONFIDENCE: f64 = 0.2;
 
+/// 成为主证的最低证据量（H3「孤证不立」）
+///
+/// 满足主症必备只说明「方向对」，一条孤证不足以定证：
+/// 「头痛」是风寒感冒的主症，但头痛可见于十几个证候；
+/// 「发热」是风热犯肺的主症，而膀胱湿热的患者也发热。
+/// 1.5 对应「1 条主症 + 至少 1 条佐证（次症 0.4 / 舌脉 1.0）」——
+/// 单条主症（1.0）或「主症 + 无佐证」都停在候选与 `near` 里，不作结论。
+const PRIMARY_MIN_SCORE: f64 = 1.5;
+
 /// 兼证门槛：置信度达到主证该比例的候选，视为与主证并存的兼证
 const CONCURRENT_RATIO: f64 = 0.6;
+
+/// 未匹配时最多呈现几条「最接近但未达主症必备」的候选
+const MAX_NEAR_MISS: usize = 2;
 
 /// 舌象/脉象文案的分隔符（证候库里写作「舌淡红，苔薄白」）
 const TERM_SEPARATORS: [char; 2] = ['，', ','];
@@ -56,24 +90,49 @@ pub struct SyndromeAssessment {
     pub pathogenesis: Option<String>,
     /// 证据量（诊断用：排序、兼证判定；不用于前端展示）
     pub score: f64,
+    /// 是否满足「主症必备」（H3）：至少命中一条主症。
+    ///
+    /// 只有 `qualified` 的候选才能成为主证或兼证。未定义主症的旧式证候
+    /// 恒为 `true`——资源没填不该让整个库失效。
+    pub qualified: bool,
+    /// 未命中的主症（H3）。
+    ///
+    /// 用于把「差在哪」说清楚：不只是「没匹配上」，而是「最像 X，但缺
+    /// 便溏、脘腹胀满这些主症」。模型拿到这个才说得出「证据不足」，
+    /// 前端也能据此提示患者补充。
+    pub missing_key_symptoms: Vec<String>,
 }
 
 /// 结构化辨证结论（T4.1 主证 / T4.2 兼证）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DifferentiationResult {
-    /// 主证（证据量最高者；证据不足时为 `None`）
+    /// 主证（满足主症必备、且证据量最高者；无合格候选时为 `None`）
     pub primary: Option<SyndromeAssessment>,
     /// 兼证：与主证并存、且证据量达标的其他证候（按证据量降序）
     pub concurrent: Vec<SyndromeAssessment>,
     /// 基于主证的传变提示
     pub transformations: Vec<String>,
+    /// 是否匹配到明确证候（`primary.is_some()` 的镜像，便于调用方直读）
+    pub matched: bool,
+    /// 全部有命中的候选（按证据量降序，含未合格的）。
+    ///
+    /// 收敛判定要拿**真实第二名**算鉴别度（H5）——此前用的是
+    /// `concurrent.first()`，而兼证已被「score ≥ 主证×0.6」过滤过，
+    /// 第二名一旦被滤掉，`margin` 就退化成主证自身分数，鉴别度判定形同虚设。
+    pub ranked: Vec<SyndromeAssessment>,
+    /// 未匹配时「最接近但未达主症必备」的候选（H3）
+    ///
+    /// 与 `matched=false` 一起给模型看：知道「最像 X，但缺主症 Y」，
+    /// 比只看到「未匹配」更接近真实中医的判断过程，
+    /// 也让它有依据说出「证据不足」，而不是硬编一个证名。
+    pub near: Vec<SyndromeAssessment>,
 }
 
 impl DifferentiationResult {
     /// 供 LLM 参考的一行提示（把规则初筛结论喂给模型，避免它凭空起证名）
     pub fn brief(&self) -> String {
         let Some(p) = &self.primary else {
-            return "规则初筛：证据不足，未匹配到明确证候，请依据四诊信息自行辨证。".to_string();
+            return self.unmatched_brief();
         };
         if self.concurrent.is_empty() {
             format!(
@@ -98,10 +157,71 @@ impl DifferentiationResult {
         }
     }
 
+    /// 未匹配到明确证候时的提示（H3）
+    ///
+    /// 措辞是刻意的：**明确授权模型说「不知道」**。
+    /// 原来只说「证据不足，请自行辨证」，模型在只有 6 个证候可挑的语境下
+    /// 仍会挑一个最像的交差——因为报告里必须有一个证名。
+    /// 补上「最接近的是谁、缺哪条主症」后，它才有依据说「不足以定证」。
+    fn unmatched_brief(&self) -> String {
+        let tail = "请依据四诊信息自行辨证；\
+                    若证据确实不足，请**直接说明无法定证**，\
+                    不要勉强归入某一证候，更不要按猜测的证候开方。";
+        if self.near.is_empty() {
+            return format!(
+                "规则初筛：未匹配到任何证候（四诊信息未命中库内证候的典型表现）。{tail}"
+            );
+        }
+        let cands: Vec<String> = self
+            .near
+            .iter()
+            .map(|n| {
+                if n.missing_key_symptoms.is_empty() {
+                    format!("{}（证据量 {:.2}）", n.name, n.score)
+                } else {
+                    format!(
+                        "{}（证据量 {:.2}，但缺主症：{}）",
+                        n.name,
+                        n.score,
+                        n.missing_key_symptoms.join("、")
+                    )
+                }
+            })
+            .collect();
+        format!(
+            "规则初筛：未匹配到明确证候（库内候选均未满足主症必备条件）。\
+             最接近的是：{}。{tail}",
+            cands.join("；")
+        )
+    }
+
     /// 渲染成 Markdown（作为该步骤正文的「结构化辨证」小节）
     pub fn render(&self) -> String {
         let Some(p) = &self.primary else {
-            return "【结构化辨证】四诊信息不足，未匹配到明确证候。".to_string();
+            return format!(
+                "【结构化辨证】{}\n\n【接近但未达主症必备】{}\n",
+                self.unmatched_brief(),
+                if self.near.is_empty() {
+                    "（无）".to_string()
+                } else {
+                    self.near
+                        .iter()
+                        .map(|n| {
+                            format!(
+                                "{}（证据量 {:.2}，缺主症：{}）",
+                                n.name,
+                                n.score,
+                                if n.missing_key_symptoms.is_empty() {
+                                    "（未定义主症）".to_string()
+                                } else {
+                                    n.missing_key_symptoms.join("、")
+                                }
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("；")
+                }
+            );
         };
         let mut out = String::from("【结构化辨证】\n");
         out.push_str(&render_one("主证", p));
@@ -208,19 +328,26 @@ pub fn assess(res: &ResourceBundle, messages: &[Message]) -> DifferentiationResu
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let primary = scored
-        .first()
-        .filter(|s| s.confidence >= MIN_CONFIDENCE)
-        .cloned();
+    // H3 主症必备 + 孤证不立：只有 `qualified` 且证据量达标的候选才配当主证。
+    //
+    // 此前取 `scored.first()`——在 6 个证候里必选其一，**必然**产出主证，
+    // 而 MIN_CONFIDENCE 只有 0.2，命中一条非特异次症（如「乏力」）就够了。
+    // 于是库外的证候（肾阳虚、食积…）会被判成库内最像的那个，
+    // 置信度 0.3 也照样被 `lock_syndrome` 钉给治疗期，开方步按错证开方，
+    // 而报告里看不出任何异常。现在没有合格候选就是没有，如实说不知道。
+    let primary_idx = scored.iter().position(|s| {
+        s.qualified && s.score >= PRIMARY_MIN_SCORE && s.confidence >= MIN_CONFIDENCE
+    });
+    let primary = primary_idx.map(|i| scored[i].clone());
 
-    let (skip, threshold) = match &primary {
-        Some(p) => (1usize, p.score * CONCURRENT_RATIO),
+    let (skip, threshold) = match primary_idx {
+        Some(i) => (i + 1, scored[i].score * CONCURRENT_RATIO),
         None => (0usize, f64::MAX),
     };
     let concurrent: Vec<SyndromeAssessment> = scored
         .iter()
         .skip(skip)
-        .filter(|s| s.confidence >= MIN_CONFIDENCE && s.score >= threshold)
+        .filter(|s| s.qualified && s.confidence >= MIN_CONFIDENCE && s.score >= threshold)
         .cloned()
         .collect();
 
@@ -234,10 +361,28 @@ pub fn assess(res: &ResourceBundle, messages: &[Message]) -> DifferentiationResu
         None => Vec::new(),
     };
 
+    // H3：未匹配时把「最接近谁、差在哪」一并交出去。
+    // 包含两种未达标：缺主症，或只有孤证（有主症但证据量不足）。
+    let near: Vec<SyndromeAssessment> = if primary.is_none() {
+        scored
+            .iter()
+            .filter(|s| !s.qualified || s.score < PRIMARY_MIN_SCORE)
+            .take(MAX_NEAR_MISS)
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let matched = primary.is_some();
+
     DifferentiationResult {
         primary,
         concurrent,
         transformations,
+        matched,
+        ranked: scored,
+        near,
     }
 }
 
@@ -247,31 +392,59 @@ fn score_syndrome(res: &ResourceBundle, s: &Syndrome, text: &str) -> Option<Synd
     // 参与矛盾判定的**原词**（症状 / 舌象 / 脉象片段，不含关键词标签）
     let mut terms: Vec<String> = Vec::new();
     let mut raw = 0.0f64;
+    let mut key_hits = 0usize;
+    let mut missing_key_symptoms: Vec<String> = Vec::new();
 
-    for sym in &s.symptoms {
+    // H2：主症（权重 1.0）——命中任一条即满足「主症必备」
+    for sym in s.key_symptoms() {
         if text.contains(sym.as_str()) {
             supporting.push(sym.clone());
             terms.push(sym.clone());
-            raw += 1.0;
+            raw += W_KEY;
+            key_hits += 1;
+        } else {
+            missing_key_symptoms.push(sym.clone());
+        }
+    }
+    // H2：次症（权重 0.4）——只作旁证，凑数凑不出主证
+    for sym in s.minor_symptoms() {
+        if text.contains(sym.as_str()) {
+            supporting.push(sym.clone());
+            terms.push(sym.clone());
+            raw += W_MINOR;
         }
     }
     if let Some(seg) = match_segment(s.tongue.as_deref(), text) {
         supporting.push(format!("舌象：{seg}"));
         terms.push(seg);
-        raw += 1.0;
+        raw += W_SIGN;
     }
     if let Some(seg) = match_segment(s.pulse.as_deref(), text) {
         supporting.push(format!("脉象：{seg}"));
         terms.push(seg);
-        raw += 1.0;
+        raw += W_SIGN;
     }
+    // H1：关键词证据**只补症状表之外的线索**。
+    //
+    // `keywords.yaml` 的多数条目与证候自身的 symptoms 高度重叠
+    // （脾胃湿热 10 个关键词里有 9 个就是它的症状），于是同一句
+    // 「口苦」先计 1.0 再计 0.5。去重方式：关键词与任一已命中的
+    // 症状/舌脉原词互为子串即视为同一表现，不再重复计分。
     for ke in &res.keyword_evidence {
-        if ke.syndromes.iter().any(|x| x == &s.slug)
-            && ke.keywords.iter().any(|k| text.contains(k.as_str()))
-        {
-            supporting.push(ke.label.clone());
-            raw += 0.5;
+        if !ke.syndromes.iter().any(|x| x == &s.slug) {
+            continue;
         }
+        let Some(kw) = ke.keywords.iter().find(|k| text.contains(k.as_str())) else {
+            continue;
+        };
+        if terms
+            .iter()
+            .any(|t| t.contains(kw.as_str()) || kw.contains(t.as_str()))
+        {
+            continue;
+        }
+        supporting.push(ke.label.clone());
+        raw += W_KEYWORD;
     }
 
     if raw == 0.0 {
@@ -293,6 +466,10 @@ fn score_syndrome(res: &ResourceBundle, s: &Syndrome, text: &str) -> Option<Synd
     let score = (raw - CONFLICT_PENALTY * conflicting.len() as f64).max(0.0);
     let confidence = ((score / FULL_EVIDENCE).min(1.0) * 100.0).round() / 100.0;
 
+    // H3 主症必备。证候未定义主症（旧格式）时恒为 true：
+    // 资源没填是资源的问题，不该让整个库一起失效。
+    let qualified = s.key_symptoms().is_empty() || key_hits > 0;
+
     Some(SyndromeAssessment {
         slug: s.slug.clone(),
         name: s.name.clone(),
@@ -301,6 +478,8 @@ fn score_syndrome(res: &ResourceBundle, s: &Syndrome, text: &str) -> Option<Synd
         conflicting,
         pathogenesis: s.pathogenesis.clone(),
         score,
+        qualified,
+        missing_key_symptoms,
     })
 }
 

@@ -17,16 +17,20 @@ pub struct Skill {
     pub name: String,             // 工具名（LLM 看到的 function name）
     pub description: String,      // 工具描述（决定是否被调用，写清楚"何时调用"）
     pub parameters: Value,        // JSON Schema 形式的入参定义
-    pub owner: Option<Capability>,// Some(cap) = 仅该 Sub-Agent 可见；None = 全局可见
+    pub owners: Vec<Capability>,  // 空 = 全局可见；否则仅列出的 Sub-Agent 可见
     pub executor: SkillFn,        // 异步执行体
 }
 pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Send + Sync>;
 ```
 
 注册表 `SkillRegistry::for_capability(cap)` 的可见性规则：
-**`owner.is_none()`（全局）或 `owner == Some(cap)`（专属）**。
-因此每个 Sub-Agent 实际可见的是「专属技能（treatment 为 2 个，其余各 1 个）+ 3 个全局技能
-+ 全部 `mcp__*` 外部工具」。
+**`owners` 为空（全局）或 `owners` 含 `cap`（专属）**。结果按工具名排序返回。
+
+> **为什么是集合而不是单个 owner**（T7.2，2026-09-01）：默认 `standard` 档早已把
+> 旧的一步到位 `treatment` 拆成「立法 → 用药 → 开方」。一对一 owner 意味着
+> 一个工具只能归属一个步骤，于是拆分后的治疗三步**一件专属工具都拿不到**
+> （`tcm-formula` / `tcm-care` 当时只挂在 `treatment` 上，而 `treatment` 已不在
+> 默认流程里）。这是「技能调用偏少」与「开方凭记忆写药味」共同的配置层根因。
 
 ---
 
@@ -43,8 +47,8 @@ pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Sen
 | `tcm-kb` | 全局 | `{"query": string}` | 在 `syndromes.yaml` 中按 slug/中文名子串匹配，返回 `{name, pathogenesis}`（未命中为 `null`） |
 | `tcm-diet` | 全局 | `{"syndrome": string}` | 按证候 slug 或中文名解析出 slug，返回 `care.yaml` 的调护条目 |
 | `tcm-rag` | 全局 | `{"query": string, "top_k"?: number}` | `POST` `{"query": ..., "top_k"?: N}` 到 `HARNESS_RAG_ENDPOINT`；未配置时返回提示串而非报错 |
-| `tcm-formula` | `treatment` | `{"syndrome": string}` | 按证候 slug 或中文名查 `formulas.yaml`，返回方剂的名称/组成/用法/禁忌 |
-| `tcm-care` | `treatment` | `{"syndrome": string}` | 按证候查 `care.yaml` 的调护条目（饮食/起居/情志） |
+| `tcm-formula` | `herbology`、`prescription`、`treatment` | `{"syndrome": string}` | 按证候 slug 或中文名查 `formulas.yaml`，返回方剂的名称/组成/用法/禁忌/出处 |
+| `tcm-care` | `care`、`treatment` | `{"syndrome": string}` | 按证候查 `care.yaml` 的调护条目（饮食/起居/情志） |
 
 > **专属技能的实现细节**：6 个专属技能由 `agent_skill_executor` 统一构造，内部用**空的
 > `SkillRegistry`** 重跑对应 Agent（`builtin.rs` 第 52 行），因此技能调用 Agent、Agent 再调技能
@@ -60,15 +64,23 @@ pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Sen
 | `palpation` | `tcm-palpation` + 3 个全局 |
 | `differentiation` | `tcm-reference` + 3 个全局 |
 | `safety` | `tcm-safety` + 3 个全局 |
-| `treatment` | `tcm-formula`、`tcm-care` + 3 个全局 |
+| `strategy`（立法） | 3 个全局（治则取自 `syndromes.yaml` 的 `principles`，无需专属工具） |
+| `herbology`（用药） | `tcm-formula` + 3 个全局 |
+| `prescription`（开方） | `tcm-formula` + 3 个全局 |
+| `care`（调护） | `tcm-care` + 3 个全局 |
+| `acupuncture`（针灸） | 3 个全局 |
+| `treatment`（旧流程，兼容档） | `tcm-formula`、`tcm-care` + 3 个全局 |
 
 > 若 `config.yaml` 配了 `mcp_clients`，上表每个 capability 还会额外看到全部 `mcp__*` 工具。
+>
+> 注意「立法」与「针灸」没有专属工具是**有意为之**：治则由证候库确定性给出、
+> 取穴高度依赖个案，硬塞工具反而会诱导模型走捷径。
 
 ---
 
 ## 3. LLM 如何调用技能
 
-7 个 Sub-Agent **全部**通过 `LlmCaller::chat_with_tools` 调用模型
+13 个 Sub-Agent **全部**通过 `LlmCaller::chat_with_tools` 调用模型
 （`ctx.caller()` 取得，2026-08-29 已接线；此前它们都调用无工具版本的 `chat_completion`，
 导致技能在推理中完全不起作用）。
 
@@ -92,11 +104,12 @@ pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Sen
 ## 4. REST 端点
 
 ```bash
-# 列出（返回技能的 name / description / owner；owner 为空时展示为"全局"）
+# 列出（返回技能的 name / description / owner；无归属约束时展示为"全局"）
 curl http://localhost:8011/skills
 
 # 只看某个 capability 用得到的工具（专属 + 全局 + mcp__*）
-curl 'http://localhost:8011/skills?owner=treatment'     # 也可用中文名 owner=治疗
+curl 'http://localhost:8011/skills?owner=prescription'  # 也可用中文名 owner=开方
+# 多归属的工具会把全部归属步骤列出来，如 tcm-formula 的 owner 为「用药、开方、治疗」
 
 # 执行（arguments 见上表）
 curl -X POST http://localhost:8011/skills \
@@ -146,6 +159,13 @@ reg.register(
 );
 ```
 
+一个工具要同时服务多个步骤时用 `with_owners`（T7.2 起支持）：
+
+```rust
+    // 方剂检索：用药步要查组成讲配伍，开方步要查候选方，旧的综合治疗步也要用
+    .with_owners([Capability::Herbology, Capability::Prescription, Capability::Treatment])
+```
+
 然后在 Docker 内重新构建镜像并重启（后端一律走 Docker），`GET /skills` 可见。
 
 ### 5.3 挂载外部 MCP 工具（已接线）
@@ -161,7 +181,7 @@ mcp_clients:
 ```
 
 启动时对每个 server 发一次 `tools/list`，把工具逐个注册为**全局**技能
-（`owner` 为空，所有 capability 可见）；server 不可达只告警、不阻断启动。
+（`owners` 为空，所有 capability 可见）；server 不可达只告警、不阻断启动。
 
 | 构造器 | 作用 | 状态 |
 |---|---|---|
@@ -180,15 +200,19 @@ mcp_clients:
    （`POST /reload` 只重载 YAML 资源，不重建技能注册表）。
 2. **`GET /skills`、`GET /agents` 的顺序是刻意稳定的**：两者内部都用 `HashMap` 存储，
    直接遍历会得到**每次进程启动都可能不同**的顺序（Rust 的 HashMap 用随机化哈希）。
-   `SkillRegistry::all()` 已按名称排序、`Registry::capabilities()` 已按
-   望→闻→问→切→辨证→安全门→治疗 的规范顺序输出，新增遍历时请勿绕过。
+   `SkillRegistry::all()` 与 `for_capability()` 均已按名称排序、
+   `Registry::capabilities()` 已按
+   望→闻→问→切→辨证→安全门→立法→用药→开方→调护→针灸→治疗 的规范顺序输出，
+   新增遍历时请勿绕过。
 
 ---
 
 ## 7. 测试
 
-- `tests/behavior.rs`：技能归属（`treatment` 专属方剂/调护工具、专属技能不泄漏到其他
-  capability）、`Capability::from_name` 中英文解析、`mcp_clients` 配置解析、埋点累加。
+- `tests/behavior.rs`：技能归属（**多归属**：`tcm-formula` 对用药/开方/治疗可见、
+  `tcm-care` 对调护/治疗可见；专属技能不泄漏到其他 capability）、
+  `GET /skills?owner=` 的 HTTP 层呈现、`Capability::from_name` 中英文解析、
+  `mcp_clients` 配置解析、埋点累加。
 - Docker 内 `cargo test -p harness`（命令见 [`testing.md`](./testing.md)）：技能注册、
   `for_capability` 的 owner 过滤、同步执行与错误分支。
 - 案例回归 `--test cases` 会校验 `tcm-kb` / `tcm-diet` 所依赖的
