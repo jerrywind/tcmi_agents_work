@@ -6,8 +6,9 @@ import { getResult } from '../../services/session'
 import { nearHints } from '../../utils/differentiation'
 import { confidencePercent } from '../../utils/format'
 import { Markdown } from '../../utils/markdown'
+import { SyndromeCard } from '../../components/SyndromeCard'
 import type {
-  DiagnosisResult, HarnessCapability, SyndromeAssessment,
+  DiagnosisResult, HarnessCapability,
 } from '../../types'
 import './index.scss'
 
@@ -48,37 +49,6 @@ function buildEvidence(result: DiagnosisResult): string {
   }
   lines.push('', '【免责声明】', result.disclaimer || DISCLAIMER_FALLBACK)
   return lines.filter(l => l !== '').join('\n')
-}
-
-/**
- * 单个证候卡片：证名 + 置信度 + 支持/矛盾证据（T4.1）。
- * 兼证与主证用同一组件渲染，只是标签不同（T4.2）——并存关系要在视觉上等权。
- */
-function SyndromeCard({ kind, s }: { kind: string; s: SyndromeAssessment }) {
-  return (
-    <View className='chain-block'>
-      <View className='syndrome-row'>
-        <View>
-          <Text className='chain-name'>{s.name}</Text>
-          <Text className='sub-title'>{kind}</Text>
-        </View>
-        <Text className='syndrome-conf'>{confidencePercent(s.confidence)}</Text>
-      </View>
-      <View className='chain-group'>
-        <Text className='chain-label sup'>支持</Text>
-        {s.supporting.length
-          ? s.supporting.map((e, i) => <Text key={`sup_${i}`} className='ev-tag'>{e}</Text>)
-          : <Text className='rv-empty'>（无）</Text>}
-      </View>
-      <View className='chain-group'>
-        <Text className='chain-label con'>矛盾</Text>
-        {s.conflicting.length
-          ? s.conflicting.map((e, i) => <Text key={`con_${i}`} className='ev-tag con'>{e}</Text>)
-          : <Text className='rv-empty'>（无）</Text>}
-      </View>
-      {s.pathogenesis ? <Text className='plan-reason'>病机：{s.pathogenesis}</Text> : null}
-    </View>
-  )
 }
 
 /**
@@ -127,7 +97,7 @@ export default function ReportPage() {
         {result.low_confidence && result.confidence_note ? (
           <View className='card card-alert'>
             <View className='card-title'>结论可信度提示</View>
-            <View className='plan-reason'><Markdown text={result.confidence_note} /></View>
+            <View className='note-text'><Markdown text={result.confidence_note} /></View>
           </View>
         ) : null}
 
@@ -144,7 +114,7 @@ export default function ReportPage() {
             {transformations.length ? (
               <View className='chain-block'>
                 <Text className='chain-name'>传变提示</Text>
-                <Text className='plan-reason'>{transformations.join('；')}</Text>
+                <Text className='note-text'>{transformations.join('；')}</Text>
               </View>
             ) : null}
           </View>
@@ -166,7 +136,7 @@ export default function ReportPage() {
                 <Text className='chain-name'>补充这些表现可能就能定证</Text>
                 {hints.map(n => (
                   <View key={n.slug} className='syndrome-row'>
-                    <Text className='plan-reason'>
+                    <Text className='note-text'>
                       {n.name}：还缺 {n.missing.join('、')}
                     </Text>
                   </View>

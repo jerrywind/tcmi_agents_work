@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   confidencePercent, categoryClass, truncate, TREATMENT_CATEGORY_ORDER,
-  syndromeSummary, stripMarkdown,
+  syndromeSummary, stripMarkdown, formatDateTime,
 } from './format'
 
 describe('confidencePercent', () => {
@@ -90,5 +90,32 @@ describe('stripMarkdown', () => {
 
   it('handles empty input', () => {
     expect(stripMarkdown('')).toBe('')
+  })
+})
+
+// 归档报告的 created_at 是原始 ISO 串，列表里直接摆出来要读者自己换算时区
+describe('formatDateTime', () => {
+  it('renders back the exact local time it was built from', () => {
+    // 用「本地时间 -> ISO -> 格式化」的往返来断言，
+    // 这样断言与测试机时区无关，换台机器跑结果一样
+    const d = new Date(2026, 8, 5, 14, 30)
+    expect(formatDateTime(d.toISOString())).toBe('2026-09-05 14:30')
+  })
+
+  it('produces YYYY-MM-DD HH:mm for the ISO form the archive returns', () => {
+    // 只校验形态，不锁死时区——测试机时区会变，结果不该跟着变
+    expect(formatDateTime('2026-09-05T04:12:33Z'))
+      .toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+  })
+
+  it('returns empty string for a missing value', () => {
+    expect(formatDateTime('')).toBe('')
+    expect(formatDateTime(null)).toBe('')
+    expect(formatDateTime(undefined)).toBe('')
+  })
+
+  it('falls back to the raw string when unparsable', () => {
+    // 宁可显示一串看不懂的原文，也不能让用户以为这条记录没有时间
+    expect(formatDateTime('不是时间')).toBe('不是时间')
   })
 })

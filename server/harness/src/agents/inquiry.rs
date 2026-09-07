@@ -28,12 +28,9 @@ impl SubAgent for InquiryAgent {
         let gender = Gender::from_payload(payload);
 
         // 1) 规则层：从问题库挑选尚未覆盖、且适用于本患者的提问
-        let collected: String = messages
-            .iter()
-            .filter(|m| m.role == "user" || m.role == "assistant")
-            .map(|m| m.content.clone())
-            .collect::<Vec<_>>()
-            .join("\n");
+        // 只算患者说过的话：助手上一轮的总结若被计入「已采集」，
+        // 未被问到的问题会被当成已回答，追问因此提前结束。
+        let collected: String = crate::model::user_corpus(messages);
 
         let mut pending: Vec<&crate::resources::QuestionItem> = ctx
             .resources

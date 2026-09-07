@@ -37,7 +37,7 @@ impl SubAgent for CaseReferenceAgent {
         // 而复述出来的东西在报告里跟真医案长得一模一样：真实验证中出现过
         // 「白术附子汤」「黄连阿胶탕」（后者还混入了非中文字符）这类
         // 看似有出处、实则编造的内容，读者无从分辨。
-        let rag_down = payload.get("rag_available").and_then(|v| v.as_bool()) == Some(false);
+        let rag_down = crate::rag_health::rag_down(payload);
         let rag_note = if rag_down {
             "\n\n【重要：本次典籍检索不可用】未连接医案库，你没有检索到任何真实医案。\n\
              请**明确说明**这一点，不要用「某医案云」「《xx》载」的口吻复述——\

@@ -16,25 +16,44 @@
  */
 import { describe, it, expect } from 'vitest'
 import Taro from '@tarojs/taro'
-import * as h from './harness'
 
-const BASE = process.env.VITE_API_BASE || 'http://127.0.0.1:8011'
+/**
+ * 候选地址：**依次探测，取第一个通的**。
+ *
+ * 此前只认 8011：本机该端口被占（或容器端口映射没起来）时，
+ * 这 6 条契约会全部静默 skip——「会跳过的检查等于没有检查」。
+ * 故允许 `VITE_API_BASE` 指定，并给常见高位端口兜底；全都连不上才 skip 且告警。
+ */
+const CANDIDATES = [
+  process.env.VITE_API_BASE,
+  'http://127.0.0.1:8011',
+  'http://127.0.0.1:18011',
+].filter(Boolean) as string[]
 
-async function ping(): Promise<boolean> {
+/** 加超时：连不上时不要卡住整个测试跑（此前会一直挂到 vitest 整体超时） */
+async function ping(base: string): Promise<boolean> {
   try {
-    // 加超时：连不上时不要卡住整个测试跑——此前没有超时，
-    // 端口不通的情形下会一直挂到 vitest 整体超时，报错信息还指向别处。
-    const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) })
+    const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) })
     return r.ok
-  } catch (e) {
-    // 会 skip 的测试等于没有测试，至少要让人**看见**它跳过了。
-    // 本文件在 CI 里长期「1 skipped」而无人察觉，就是因为这里静默。
-    console.warn(
-      `[harness.contract] 连不上 ${BASE}（${(e as Error)?.message}）：` +
-        `以下真实契约将跳过。请启动 harness，或用 VITE_API_BASE 指向它。`,
-    )
+  } catch {
     return false
   }
+}
+
+let BASE = ''
+for (const c of CANDIDATES) {
+  if (await ping(c)) {
+    BASE = c
+    break
+  }
+}
+if (!BASE) {
+  // 会 skip 的测试等于没有测试，至少要让人**看见**它跳过了。
+  // 本文件在 CI 里长期「1 skipped」而无人察觉，就是因为这里静默。
+  console.warn(
+    `[harness.contract] 连不上任何候选地址（${CANDIDATES.join('、')}）：` +
+      `以下真实契约将跳过。请启动 harness，或用 VITE_API_BASE 指向它。`,
+  )
 }
 
 function installRealTransport() {
@@ -55,9 +74,13 @@ function installRealTransport() {
   }
 }
 
-const up = await ping()
+const up = BASE !== ''
+// `harness.ts` 的 `HARNESS_BASE_URL` 是模块级常量（读的是 import 那一刻的
+// `VITE_API_BASE`），故定址后必须重新动态 import，否则探测出的地址用不上。
+if (up) process.env.VITE_API_BASE = BASE
+const h = await import('./harness')
 
-describe.skipIf(!up)('harness 契约（需本地 harness :8011）', () => {
+describe.skipIf(!up)('harness 契约（需本地 harness）', () => {
   installRealTransport()
 
   it('GET /health 返回 ok 与 RAG 可达性', async () => {

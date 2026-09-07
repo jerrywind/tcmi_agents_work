@@ -56,6 +56,12 @@ class RAGConfig:
         def env(name: str, default: str) -> str:
             return os.environ.get(name, default)
 
+        # 先取出来再判空：不能写成 `Path(env("RAG_CORPUS_DIR")) if env(...) else None`——
+        # env() 少传 default 会在该分支为真时抛 TypeError（曾导致配置了
+        # RAG_CORPUS_DIR 后整个 RAG 挂载失败、静默降级）。
+        # 空串一律回退默认：`Path("")` 会变成 `.`，打开库时可能误伤当前目录。
+        _corpus_dir = env("RAG_CORPUS_DIR", "").strip()
+        _corpus_db = env("RAG_CORPUS_DB", "").strip() or str(cls.corpus_db)
         return cls(
             embed_base_url=env("RAG_EMBED_BASE_URL", cls.embed_base_url),
             embed_api_key=env("RAG_EMBED_API_KEY", cls.embed_api_key),
@@ -68,8 +74,8 @@ class RAGConfig:
             dim=int(env("RAG_DIM", str(cls.dim))),
             data_dir=Path(env("RAG_DATA_DIR", str(cls.data_dir))),
             index_name=env("RAG_INDEX_NAME", cls.index_name),
-            corpus_dir=Path(env("RAG_CORPUS_DIR")) if env("RAG_CORPUS_DIR", "") else None,
-            corpus_db=Path(env("RAG_CORPUS_DB", str(cls.corpus_db))),
+            corpus_dir=Path(_corpus_dir) if _corpus_dir else None,
+            corpus_db=Path(_corpus_db),
             corpus_max_chars=int(env("RAG_CORPUS_MAX_CHARS", str(cls.corpus_max_chars))),
             corpus_overlap=int(env("RAG_CORPUS_OVERLAP", str(cls.corpus_overlap))),
             corpus_top_docs=int(env("RAG_CORPUS_TOP_DOCS", str(cls.corpus_top_docs))),

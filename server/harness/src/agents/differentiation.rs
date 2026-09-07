@@ -310,11 +310,9 @@ impl SubAgent for DifferentiationAgent {
 /// - 主证 = 证据量最高者（同分保持证候库顺序，便于预测）；
 /// - 兼证 = 其余候选中置信度达标、且证据量 ≥ 主证 × `CONCURRENT_RATIO` 者。
 pub fn assess(res: &ResourceBundle, messages: &[Message]) -> DifferentiationResult {
-    let text: String = messages
-        .iter()
-        .map(|m| m.content.clone())
-        .collect::<Vec<_>>()
-        .join("\n");
+    // 只取患者陈述：助手的上一轮总结若被当成证据，会造出「自我确认」
+    // （详见 `crate::model::user_corpus` 的注释与 `tests/echo.rs`）
+    let text: String = crate::model::user_corpus(messages);
 
     let mut scored: Vec<SyndromeAssessment> = res
         .syndromes
@@ -387,6 +385,46 @@ pub fn assess(res: &ResourceBundle, messages: &[Message]) -> DifferentiationResu
 }
 
 /// 对单个证候打分；一条证据都没命中时返回 `None`（不进入候选集）
+/// 是否被患者**否定**的表现（只看紧邻的前一个字）
+///
+/// 真正的否定词在中文里就是紧贴着那个词的：没有汗 / 不发热 / 无汗 / 未见。
+///
+/// 刻意**只看 1 个字、且不含「非」**：
+/// 「非常怕冷」里「怕冷」前面是「常」，再前面才是「非」——
+/// 若把「非」也算进去，「非常怕冷」会被误判成「不怕冷」，
+/// 那是把一个加重描述翻成了否定，方向正好反了。
+///
+/// 范围：目前只作用于症状（主症/次症）。舌象/脉象的否定说法
+/// （「舌不红」）少见，暂未处理，留待有真实语料再补。
+fn negated_at(text: &str, byte_pos: usize) -> bool {
+    text[..byte_pos]
+        .chars()
+        .next_back()
+        .is_some_and(|c| matches!(c, '不' | '没' | '无' | '未'))
+}
+
+/// `sym` 是否**未被否定地**出现在 text 里
+///
+/// 不能用 `text.contains(sym)`：「没有汗」含「有汗」、「不发热」含「发热」。
+/// 患者明明否认了一个表现，系统却把它算成证据——
+/// 实测第二轮补一句「没有汗」，证据里反而多出一条「有汗」，
+/// 置信度从 0.76 升到 0.84，越问越「确定」，方向完全错了。
+fn mentions(text: &str, sym: &str) -> bool {
+    if sym.is_empty() {
+        return false;
+    }
+    let mut from = 0usize;
+    while let Some(rel) = text[from..].find(sym) {
+        let abs = from + rel;
+        if !negated_at(text, abs) {
+            return true;
+        }
+        // 这处被否定了，继续往后找（可能别处有未否定的说法）
+        from = abs + sym.len();
+    }
+    false
+}
+
 fn score_syndrome(res: &ResourceBundle, s: &Syndrome, text: &str) -> Option<SyndromeAssessment> {
     let mut supporting: Vec<String> = Vec::new();
     // 参与矛盾判定的**原词**（症状 / 舌象 / 脉象片段，不含关键词标签）
@@ -397,7 +435,7 @@ fn score_syndrome(res: &ResourceBundle, s: &Syndrome, text: &str) -> Option<Synd
 
     // H2：主症（权重 1.0）——命中任一条即满足「主症必备」
     for sym in s.key_symptoms() {
-        if text.contains(sym.as_str()) {
+        if mentions(text, sym) {
             supporting.push(sym.clone());
             terms.push(sym.clone());
             raw += W_KEY;
@@ -408,7 +446,7 @@ fn score_syndrome(res: &ResourceBundle, s: &Syndrome, text: &str) -> Option<Synd
     }
     // H2：次症（权重 0.4）——只作旁证，凑数凑不出主证
     for sym in s.minor_symptoms() {
-        if text.contains(sym.as_str()) {
+        if mentions(text, sym) {
             supporting.push(sym.clone());
             terms.push(sym.clone());
             raw += W_MINOR;

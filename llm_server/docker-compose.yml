@@ -37,6 +37,17 @@ services:
       RR_SERVICE_ENDPOINT: "${RR_SERVICE_ENDPOINT:-}"
       RR_TIMEOUT_SECS: "${RR_TIMEOUT_SECS:-10}"
       RR_RETRY_INTERVAL_SECS: "${RR_RETRY_INTERVAL_SECS:-30}"
+      # ---- 典籍 RAG 语料（rag_data）----
+      # 语料根 = 仓库 rag_data/（694 部 txt 原文）；预建倒排索引在 _index/corpus.sqlite3
+      # （宿主上 `python -m rag corpus-build --dir ../rag_data --db ../rag_data/_index/corpus.sqlite3`
+      #   生成，分类标签随 `corpus-classify` 一并写入）。
+      # 容器内统一挂到 /data/rag。检索回读原文时若索引记录的是宿主绝对路径，
+      # 会按「语料根 + 文件名」自动回退（CorpusIndex._resolve_text_path），故可跨机使用。
+      RAG_DATA_DIR: "/data/rag"
+      RAG_CORPUS_DIR: "/data/rag"
+      RAG_CORPUS_DB: "/data/rag/_index/corpus.sqlite3"
+    volumes:
+      - ../rag_data:/data/rag
     extra_hosts:
       - "host.docker.internal:host-gateway"   # 让容器能访问宿主机上的 LM Studio
     restart: unless-stopped

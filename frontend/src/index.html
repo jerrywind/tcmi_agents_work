@@ -2,7 +2,9 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta content="width=device-width,initial-scale=1,user-scalable=no" name="viewport" />
+  <!-- 必须带 viewport-fit=cover：不开它时 iOS 上 env(safe-area-inset-*) 恒为 0，
+       底部弹层（出生日期选择器）与固定输入栏会被 Home Indicator 压住 -->
+  <meta content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" name="viewport" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>中医智能问诊</title>
 </head>

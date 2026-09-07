@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import Taro from '@tarojs/taro'
 import { View, Text, ScrollView } from '@tarojs/components'
 import { getReport, listReports } from '../../services/harness'
-import { confidencePercent } from '../../utils/format'
+import { confidencePercent, formatDateTime } from '../../utils/format'
+import { Markdown } from '../../utils/markdown'
 import type { DiagnosisResult, ReportMeta, StoredReport } from '../../types'
 import './index.scss'
 
@@ -23,6 +24,7 @@ export default function ReportsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState<StoredReport | null>(null)
+  const [opening, setOpening] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -40,12 +42,19 @@ export default function ReportsPage() {
 
   useEffect(() => { load() }, [])
 
+  // 回查是异步的：不加守卫，网络慢时连点会连发多个请求
   const open = async (id: string) => {
+    if (opening) return
+    setOpening(true)
+    Taro.showLoading({ title: '加载中…' })
     try {
       const d = await getReport(id)
       setDetail(d)
     } catch (e: any) {
       Taro.showToast({ title: e?.message || '回查失败', icon: 'none' })
+    } finally {
+      Taro.hideLoading()
+      setOpening(false)
     }
   }
 
@@ -80,7 +89,7 @@ export default function ReportsPage() {
             reports.map(r => (
               <View key={r.id} className='rep-row' onClick={() => open(r.id)}>
                 <View className='rep-main'>
-                  <Text className='rep-time'>{r.created_at || r.id}</Text>
+                  <Text className='rep-time'>{formatDateTime(r.created_at) || r.id}</Text>
                   <Text className='rep-sum'>{summarize(r)}</Text>
                   <Text className='rep-id'>{r.id}</Text>
                 </View>
@@ -111,7 +120,7 @@ function ReportDetail({ report, onBack }: { report: StoredReport; onBack: () => 
         <View className='card'>
           <View className='card-title'>
             回查详情
-            <Text className='sub-title'>　{report.created_at}</Text>
+            <Text className='sub-title'>　{formatDateTime(report.created_at)}</Text>
           </View>
           <View className='ev-row'>
             <Text className='ev-key'>报告编号</Text>
@@ -133,7 +142,9 @@ function ReportDetail({ report, onBack }: { report: StoredReport; onBack: () => 
               ))}
             </View>
           ) : null}
-          <Text className='report-summary'>{r.summary}</Text>
+          {/* 与报告页用同一套渲染：回查看到的是同一份结论，观感必须一致。
+              此前这里是纯 Text，Markdown 的标题与列表符号会原样露出来。 */}
+          <View className='report-summary'><Markdown text={r.summary} /></View>
         </View>
 
         <View className='disclaimer-card'>

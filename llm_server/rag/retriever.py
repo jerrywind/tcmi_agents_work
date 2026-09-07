@@ -24,6 +24,13 @@ except ImportError:  # 作为脚本直接运行时退化为绝对导入
     from store import Hit, Record, VectorStore
 
 
+# 预热用的查询，必须与 harness 探活 `rag_health.rs::probe` 的 query 一致。
+# 跨服务约定一个字符串听起来脆，但探活就是要「把真实检索跑一遍」，
+# 预热同一个查询才能保证探活走的是热路径；改任一侧都会让另一侧失效，
+# 故两侧都写了注释互相指认。
+WARMUP_QUERY = "健康检查"
+
+
 class RAGService:
     def __init__(self, cfg: RAGConfig) -> None:
         self.cfg = cfg
@@ -33,9 +40,24 @@ class RAGService:
         self._corpus: CorpusIndex | None = None
         if cfg.corpus_db and Path(cfg.corpus_db).exists():
             try:
-                self._corpus = CorpusIndex(cfg.corpus_db)
+                # corpus_dir 是原文回读的候选根：索引内 docs.path 是建库机（宿主）
+                # 的绝对路径，容器里路径不同，须按「语料根 + 文件名」回退才能读原文
+                # （详见 CorpusIndex.__init__ / _resolve_text_path）。
+                self._corpus = CorpusIndex(cfg.corpus_db, corpus_dir=cfg.corpus_dir)
             except Exception as e:  # noqa: BLE001 - 索引损坏不应让服务起不来
                 print(f"[warn] 典籍索引不可用，已跳过：{e}")
+
+    # ---- 预热 ----
+    async def warmup(self, query: str = WARMUP_QUERY) -> None:
+        """把典籍索引读进页缓存，让**首次**真实查询不至于慢到顶超时。
+
+        实测（71MB 倒排库，容器内计时）：新查询首次检索 3.5s（postings 冷读盘），
+        同一查询再查 0.05s；若再叠加一次无谓的 embedding 调用（端点不可达 8s），
+        一次检索能到 ~12s，足以把调用方的探活超时顶穿——慢会被误判成挂。
+        """
+        if self._corpus is None:
+            return
+        await self._corpus_search_async(query, 1)
 
     # ---- 索引构建 / 增量 ----
     async def build_from_corpus(self) -> int:
@@ -132,7 +154,10 @@ class RAGService:
                             tag_groups: Sequence[Sequence[str]] | None = None
                             ) -> list[dict]:
         k = top_k or self.cfg.top_k
-        vec = await self.text_embedder.embed_one(query)
+        # 向量库为空时不去打 embedding 端点：库里没有可比对象，嵌入结果毫无用处；
+        # 而离线部署的常态就是端点不可达，此时每请求要白付数秒（实测 8s），
+        # 叠加首次读盘后整次检索近 30s，足以把调用方的超时顶穿。
+        vec = await self.text_embedder.embed_one(query) if self.store.records else None
         hits = self.store.search(vec, modality="text",
                                  top_k=k,
                                  threshold=self.cfg.score_threshold,
@@ -176,6 +201,8 @@ class RAGService:
 
     async def retrieve_image(self, image_path: str, top_k: int | None = None) -> list[dict]:
         """以图搜图：用查询图 caption 向量检索库内图像向量域。"""
+        if not self.store.records:
+            return []
         _, vec = await self.image_embedder.embed_image(image_path)
         hits = self.store.search(vec, modality="image",
                                  top_k=top_k or self.cfg.top_k,
@@ -186,6 +213,8 @@ class RAGService:
                               image_path: str | None = None,
                               top_k: int | None = None) -> list[dict]:
         """图文联合检索：可传入 query（文）或 image_path（图），跨两域召回。"""
+        if not self.store.records:
+            return []
         vec = None
         if query:
             vec = await self.text_embedder.embed_one(query)

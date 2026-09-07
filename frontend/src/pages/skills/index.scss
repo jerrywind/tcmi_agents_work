@@ -1,71 +1,33 @@
+// .card / .card-title / .empty-tip 已收编到 app.scss：
+// 此前本页把 .card 又定义了一遍（参数与全局的不一致），
+// 加载顺序一变，卡片外观就跟着变。
 .skills-page {
   padding: 24px 20px 40px;
   min-height: 100vh;
+  // 移动端浏览器地址栏收缩时 100vh 会跳动；支持的浏览器用 dvh（小程序忽略此行，回落 vh）
+  min-height: 100dvh;
   background: #f5f7f6;
-  box-sizing: border-box;
 }
 
-.card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-
-.card-title {
-  font-size: 30px;
-  font-weight: 600;
-  color: #1f2d28;
-  margin-bottom: 16px;
-}
-
-.skill-load-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.skill-input {
-  flex: 1;
-  height: 72px;
-  border: 1px solid #e3e8e6;
-  border-radius: 12px;
-  padding: 0 20px;
-  font-size: 28px;
-}
-
-.skill-dir {
+.skill-tip {
   display: block;
-  margin-top: 14px;
-  font-size: 22px;
-  color: #8a948f;
-  word-break: break-all;
-}
-
-.btn-small {
-  flex: none;
-  padding: 0 28px;
-  height: 72px;
-  line-height: 72px;
-  border-radius: 12px;
-  background: #2a6f4e;
-  color: #fff;
-  font-size: 28px;
-  text-align: center;
-}
-
-.btn-small.danger {
-  background: #c0392b;
-  height: 56px;
-  line-height: 56px;
-  padding: 0 20px;
   font-size: 24px;
+  color: #7a8c83;
+  line-height: 1.6;
+}
+
+// 点选后进入下方调试区，选中态要有可见反馈
+.skill-card {
+  &.selected {
+    border: 2px solid #2a6f4e;
+    background: #f6faf8;
+  }
 }
 
 .skill-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -76,53 +38,54 @@
   color: #1f2d28;
 }
 
-.skill-ver {
+.skill-owner {
   font-size: 22px;
   color: #8a948f;
+  background: #eef2f0;
+  border-radius: 10px;
+  padding: 2px 12px;
 }
 
 .skill-desc {
   display: block;
   font-size: 24px;
   color: #4a554f;
-  margin-bottom: 14px;
 }
 
-.skill-tools {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.skill-tool {
-  background: #f3f7f5;
+// 多行输入：占位参数是 JSON.stringify(..., 2) 的格式化文本，
+// 单行框里只看得到第一行，改都没法改
+.skill-input {
+  width: 100%;
+  min-height: 200px;
+  padding: 16px 20px;
+  border: 1px solid #e3e8e6;
   border-radius: 12px;
-  padding: 16px;
-}
-
-.tool-name {
   font-size: 26px;
-  font-weight: 600;
-  color: #2a6f4e;
+  line-height: 1.5;
+  background: #fff;
 }
 
-.tool-cap {
-  margin-left: 12px;
-  font-size: 20px;
-  color: #8a948f;
-}
-
-.tool-desc {
-  display: block;
-  margin-top: 6px;
-  font-size: 22px;
-  color: #4a554f;
-}
-
-.empty-tip {
-  display: block;
+.btn-small {
+  margin-top: 16px;
+  padding: 16px 28px;
+  border-radius: 12px;
+  background: #2a6f4e;
+  color: #fff;
+  font-size: 28px;
   text-align: center;
-  color: #8a948f;
-  font-size: 26px;
-  margin-top: 40px;
+
+  &.disabled { opacity: 0.5; }
+}
+
+.skill-output {
+  display: block;
+  margin-top: 16px;
+  padding: 16px;
+  background: #f6f8f6;
+  border-radius: 12px;
+  font-size: 24px;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-all;
 }

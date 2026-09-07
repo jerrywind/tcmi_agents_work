@@ -46,6 +46,10 @@ COPY harness/cases.jsonl ./harness/cases.jsonl
 COPY harness/golden_cases.jsonl ./harness/golden_cases.jsonl
 COPY harness/tests ./harness/tests
 COPY rrserver/src ./rrserver/src
+# rrserver 的集成测试也要进上下文：rrserver/Cargo.toml 里 [[test]] 指向
+# tests/integration.rs，缺了它 `cargo test -p rrserver` 在镜像内会直接报
+# "can't find integration-test"（此前只拷了 harness/tests，147 条 rrserver
+# 测试在镜像内根本跑不起来）。
 
 # 5) 重新构建：依赖已缓存，这里只重编 harness / rrserver 自身
 #    touch 是为了让 mtime 一定新于上一步产物，确保触发重编

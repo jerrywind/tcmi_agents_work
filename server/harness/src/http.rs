@@ -28,6 +28,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/agents", get(list_agents))
         .route("/chat", post(chat))
+        // 流式版 `/chat`（SSE）：逐步推送，前端不必等全部步骤跑完。
+        // 与 `/chat` **并存**：老端点是契约测试、MCP 与 llm_eval 的唯一依赖，
+        // 语义必须原样保留，流式一律走新端点。
+        .route("/chat/stream", post(chat_stream))
         .route("/agents", post(run_agent))
         .route("/skills", get(list_skills))
         .route("/skills", post(call_skill))
@@ -85,6 +89,7 @@ async fn chat(State(st): State<AppState>, Json(req): Json<Value>) -> Json<Value>
         &messages,
         &payload,
         &st.rag,
+        &crate::stream::StreamSink::disabled(),
     )
     .await
     {
@@ -118,6 +123,88 @@ async fn chat(State(st): State<AppState>, Json(req): Json<Value>) -> Json<Value>
         }
         Err(e) => Json(json!({"error": e.to_string()})),
     }
+}
+
+/// 流式版 `/chat`：`text/event-stream`，逐步推送诊断过程。
+///
+/// ## 为什么不直接改造 `chat`
+///
+/// `POST /chat` 是契约测试、MCP server 与 `llm_eval` 的唯一依赖，
+/// 改它的返回语义等于同时动三条链路的基线。流式是**新增并行链路**：
+/// 同一份 `run_diagnosis`，只是多传一个推送句柄。
+///
+/// ## 生命周期
+///
+/// 请求解析后立即返回 SSE 响应体，真正的诊断在后台任务里跑：
+/// 否则 axum 要等到 handler 返回才开始发响应头，第一帧会被拖到流程结束。
+///
+/// 后台任务与响应体之间只靠一根 channel 通信。客户端断开时
+/// `StreamSink::emit` 会失败并置空通道，编排器在步骤之间检测到
+/// `is_closed()` 后停止后续 LLM 调用，不再白烧算力。
+async fn chat_stream(State(st): State<AppState>, Json(req): Json<Value>) -> Response {
+    let messages: Vec<Message> = req
+        .get("messages")
+        .and_then(|m| serde_json::from_value(m.clone()).ok())
+        .unwrap_or_default();
+    let payload = req.get("payload").cloned().unwrap_or(json!({}));
+
+    // 两个 sink 共享同一根 channel：一个给编排器逐步推，
+    // 一个留给收尾帧（`done` / `error`）。`StreamSink` 内部是
+    // `Mutex<Option<Sender>>`，克隆发送端的代价可忽略。
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let sink = crate::stream::StreamSink::new(tx.clone());
+    let emit_after = crate::stream::StreamSink::new(tx);
+
+    tokio::spawn(async move {
+        let res = st.resources.read().await;
+        match crate::orchestrator::run_diagnosis(
+            &st.registry,
+            &st.config,
+            &res,
+            &st.llm,
+            &st.skills,
+            &st.departments,
+            &messages,
+            &payload,
+            &st.rag,
+            &sink,
+        )
+        .await
+        {
+            Ok(d) => {
+                let mut result = crate::orchestrator::diagnosis_payload(&d);
+                let stored = st.store.save(&result, &json!(messages), &payload);
+                let report_id = match stored {
+                    Ok(Some(id)) => Some(id),
+                    Ok(None) => None,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "报告落盘失败，本次响应不受影响");
+                        None
+                    }
+                };
+                result["report_id"] = json!(report_id);
+                // 收尾帧：带上归档 id、免责声明与整体状态。
+                // `trace` 不再重复下发——每步已在 `step_done` 里带过了。
+                emit_after.emit(
+                    crate::stream::EV_DONE,
+                    json!({
+                        "status": result.get("status"),
+                        "report_id": report_id,
+                        "disclaimer": result.get("disclaimer"),
+                        "low_confidence": result.get("low_confidence"),
+                        "confidence_note": result.get("confidence_note"),
+                        "partial": result.get("partial"),
+                    }),
+                );
+            }
+            Err(e) => {
+                emit_after.emit(crate::stream::EV_ERROR, json!({ "message": e.to_string() }));
+            }
+        }
+        // sink 在此 drop → channel 关闭 → 响应体流自然结束
+    });
+
+    crate::stream::sse_response(rx)
 }
 
 async fn run_agent(State(st): State<AppState>, Json(req): Json<AgentRequest>) -> Json<Value> {

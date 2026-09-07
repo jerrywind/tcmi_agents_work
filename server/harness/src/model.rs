@@ -14,6 +14,30 @@ pub struct Message {
     pub content: String,
 }
 
+/// 只把**患者陈述**拼成语料
+///
+/// 任何做「证据判定」的地方都必须用它，而不是把全部消息拼起来：
+/// 上一轮助手的总结里会复述证名与一长串症状，还会带上
+/// 「若出现胸痛、呼吸困难…请立即就医」这类警示语。把它们当证据再算一遍，
+/// 系统会**自我确认**——第一轮猜了个证，第二轮证据「变多」、置信度上升、
+/// 覆盖率上升、收敛判定提前通过、证候被锁定、开方按它开。
+/// 全程不报错，报告看起来更确定，实际是越问越错。
+///
+/// 实测（见 `tests/echo.rs`）：患者只说「咳嗽，痰黄稠」时本应判「不知道」，
+/// 加一段助手总结后就变成「风热犯肺证」，且证据里的「发热、咽痛、脉浮数」
+/// 全是助手自己写的、患者从未提过。
+///
+/// 代价：由助手追问、患者只答「有」的症状不计入。与安全门同一取舍——
+/// 漏判一侧还有 LLM 复核兜底，误判一侧是「把编造的当事实」。
+pub fn user_corpus(messages: &[Message]) -> String {
+    messages
+        .iter()
+        .filter(|m| m.role == "user")
+        .map(|m| m.content.clone())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// 可调用能力（即 sub-agent 名）。对应 backend 的 `Capability` 枚举。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import Taro from '@tarojs/taro'
-import { View, Text, Input, Textarea, Picker } from '@tarojs/components'
+import { View, Text, Input, Textarea, Picker, ScrollView } from '@tarojs/components'
 import { listMembers, newMemberId, removeMember, upsertMember } from '../../services/members'
 import {
-  EMPTY_PROFILE_FORM, GENDER_OPTIONS, buildProfile, defaultBirthDate, describeProfile,
+  EMPTY_PROFILE_FORM, GENDER_OPTIONS, buildProfile, describeProfile,
   toProfileForm, todayISO, validateProfileForm,
 } from '../../utils/profile'
+import BirthDatePicker from '../../components/BirthDatePicker'
 import type { ProfileForm } from '../../utils/profile'
 import type { Member } from '../../types'
 import './index.scss'
@@ -28,8 +29,6 @@ export default function FamilyPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
   const [form, setForm] = useState<MemberForm>({ ...EMPTY_FORM })
-  // 选择器只定位到这里，不是默认值：只有用户真的点过「确定」才会写进档案
-  const [shownDate] = useState(defaultBirthDate())
   const [maxDate] = useState(todayISO())
 
   useEffect(() => {
@@ -72,9 +71,23 @@ export default function FamilyPage() {
     Taro.showToast({ title: '已保存', icon: 'success' })
   }
 
+  /**
+   * 删除成员：本地存储没有回收站，删掉就找不回来了，
+   * 而卡片上「发起问诊 / 编辑 / 删除」三个按钮紧挨着，删除最不该被误触。
+   */
   const del = (m: Member) => {
-    removeMember(m.id)
-    setMembers(listMembers())
+    Taro.showModal({
+      title: '删除成员',
+      content: `确定删除「${m.name}」的档案吗？其信息将从本机移除，且无法恢复。`,
+      confirmText: '删除',
+      confirmColor: '#c0392b',
+      success: r => {
+        if (!r.confirm) return
+        removeMember(m.id)
+        setMembers(listMembers())
+        Taro.showToast({ title: '已删除', icon: 'success' })
+      },
+    })
   }
 
   const startFor = (m: Member) => {
@@ -117,7 +130,9 @@ export default function FamilyPage() {
 
       {showAdd && (
         <View className='sheet-mask' onClick={() => setShowAdd(false)}>
-          <View className='sheet' onClick={e => e.stopPropagation()}>
+          {/* 用 ScrollView 而非 View：弹层里是五项表单，矮屏上必然超出一屏，
+              而 .sheet-mask 是 fixed 定位，内容溢出不会带动页面滚动 */}
+          <ScrollView className='sheet' scrollY onClick={e => e.stopPropagation()}>
             <Text className='sheet-title'>{editing ? '编辑成员' : '添加成员'}</Text>
             <View className='form-row'>
               <Text className='form-label'>称呼</Text>
@@ -132,16 +147,13 @@ export default function FamilyPage() {
                 <Text className='form-input'>{RELATIONS[form.relationIdx]}</Text>
               </View>
             </Picker>
-            <Picker mode='date' start={BIRTH_DATE_START} end={maxDate}
-              value={form.birthDate || shownDate}
-              onChange={e => patch({ birthDate: e.detail.value as string })}>
-              <View className='form-row'>
-                <Text className='form-label'>出生日期</Text>
-                <Text className={`form-input ${form.birthDate ? '' : 'placeholder'}`}>
-                  {form.birthDate || '请选择'}
-                </Text>
-              </View>
-            </Picker>
+            {/* 与档案页同一个组件：两端各走各的实现，避免同一张表两处行为不一致 */}
+            <BirthDatePicker
+              value={form.birthDate}
+              start={BIRTH_DATE_START}
+              end={maxDate}
+              onChange={v => patch({ birthDate: v })}
+            />
             <View className='form-row'>
               <Text className='form-label'>性别</Text>
               <View className='gender-group'>
@@ -169,7 +181,7 @@ export default function FamilyPage() {
             <View className='btn-primary' onClick={save}>
               {editing ? '保存修改' : '添加'}
             </View>
-          </View>
+          </ScrollView>
         </View>
       )}
     </View>

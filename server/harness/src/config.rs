@@ -57,6 +57,20 @@ pub struct HarnessConfig {
     #[serde(default = "default_retry_backoff_ms")]
     pub llm_retry_backoff_ms: u64,
 
+    /// 是否对上游 LLM 开启 **token 级流式**（`stream: true`）
+    ///
+    /// 开启后单步的正文会随生成逐片推给 `/chat/stream` 的调用方，
+    /// 用户能在模型还在写的时候就开始读，而不是等整步完成。
+    ///
+    /// 已真机验证：流式下工具调用照常触发（实测 `Listening=tcm-auscultation`、
+    /// `Palpation=tcm-palpation`，`llm_calls=2`），分片重组无损。
+    /// 上游不支持 SSE 时会自动退回整包解析（见 `LlmCaller::try_once`），
+    /// 不会静默产出空正文。
+    ///
+    /// 想关掉（排查问题或上游有兼容问题）设 `HARNESS_LLM_STREAM=false`。
+    #[serde(default = "default_llm_stream")]
+    pub llm_stream: bool,
+
     /// 可选 RAG 检索端点（留空则 tcm-rag 返回提示）
     #[serde(default)]
     pub rag_endpoint: Option<String>,
@@ -141,6 +155,10 @@ fn default_timeout() -> u64 {
 fn default_max_tool_rounds() -> usize {
     3
 }
+fn default_llm_stream() -> bool {
+    true
+}
+
 fn default_llm_max_retries() -> u32 {
     2
 }
@@ -166,6 +184,7 @@ impl Default for HarnessConfig {
             max_tool_rounds: default_max_tool_rounds(),
             llm_max_retries: default_llm_max_retries(),
             llm_retry_backoff_ms: default_retry_backoff_ms(),
+            llm_stream: default_llm_stream(),
             rag_endpoint: None,
             mcp_clients: Vec::new(),
             hot_reload: false,
@@ -267,6 +286,9 @@ impl HarnessConfig {
         }
         if let Ok(v) = std::env::var("HARNESS_RAG_ENDPOINT") {
             cfg.rag_endpoint = Some(v);
+        }
+        if let Ok(v) = std::env::var("HARNESS_LLM_STREAM") {
+            cfg.llm_stream = matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "on");
         }
         if let Ok(v) = std::env::var("HARNESS_LLM_TIMEOUT_SECS") {
             if let Ok(n) = v.parse() {

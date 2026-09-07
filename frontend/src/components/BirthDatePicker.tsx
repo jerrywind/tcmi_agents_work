@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Taro from '@tarojs/taro'
-import { View, Text, ScrollView } from '@tarojs/components'
+import { View, Text, ScrollView, Picker } from '@tarojs/components'
 import {
   clampDay, daysInMonth, defaultBirthDate, formatBirthDate, parseBirthDate, parseYearOf,
 } from '../utils/birthdate'
+import { IS_WEAPP } from '../utils/platform'
 
 /** 单个选项高度（px）。轮盘可见 5 项，选中项居中。 */
 const ITEM_H = 44
@@ -20,26 +21,89 @@ interface Props {
   onChange: (v: string) => void
 }
 
+/** 两端子组件拿到的都是已算好的起止日期。 */
+interface InnerProps {
+  value: string
+  start: string
+  end: string
+  onChange: (v: string) => void
+}
+
 /**
- * 出生日期选择器：底部弹层 + 年/月/日三列滚动。
+ * 出生日期选择器。
  *
- * 不用 Taro 的 `<Picker mode='date'>`（H5 是 transform 轮盘，背景会跟着滚、月日会留空白），
- * 这里三列都是原生滚动容器：
- *   - `overscroll-behavior: contain` 把滚动锁在列内，背景整页不再上移下拉（修 bug 1）；
- *   - 我们自己渲染每一项，不会留下空白格（修 bug 2）。
- *
- * 滚动定位用**受控 `scrollTop`**（= 选中索引 × 单项高），配合 `.bdp-indicator` 指示线居中；
- * 不用 `scrollIntoView`——浏览器会把它顶到列顶，与居中指示线错位。
+ * 不用 Taro 的 `<Picker mode='date'>`（H5 上是 transform 轮盘，背景会跟着滚、
+ * 月日会留空白），H5 端自建三列原生滚动容器。小程序端反过来用原生 Picker，
+ * 原因是那套滚轮依赖 `document` 与受控 `scrollTop` 的精确时序，只在 H5 验证过。
  *
  * 关键陷阱（与档案页日期选择器同源）：**绝不能静默写入默认值**。
- * 点开轮盘就算用户一格没滑、直接点「确定」，也会触发选择——所以初始轮盘位置只用于展示，
- * `value` 为空时显示「请选择」，只有用户点「确定」才把选择回写 `onChange`。
+ * 点开轮盘就算用户一格没滑、直接点「确定」，也会触发选择——所以初始轮盘位置
+ * 只用于展示，`value` 为空时显示「请选择」，只有用户点「确定」才回写 `onChange`。
  */
 export default function BirthDatePicker({ value, start = '1900-01-01', end, onChange }: Props) {
   const today = new Date()
-  const endStr = end || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const endStr = end
+    || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  // 端能力分派：滚轮只在 H5 上验证过，小程序端走原生控件。
+  // 不做「同一份代码两端跑」，那一端必然是没验证过的那一端。
+  if (IS_WEAPP) {
+    return <NativeDatePicker value={value} start={start} end={endStr} onChange={onChange} />
+  }
+  return <WheelDatePicker value={value} start={start} end={endStr} onChange={onChange} />
+}
+
+/**
+ * 小程序端：原生 `<Picker mode='date'>`。
+ *
+ * 原生 picker 有个已验证的坑：点开后一格不滑、直接点「确定」**也会**触发
+ * onChange 写入定位值。因此定位值必须是「误触也无害」的值——今天往前 30 年
+ * （而不是今天：曾用今天，静默写出 `age=0`，把人当成婴儿）。
+ *
+ * 即便误触写入的是无害值，那也等于替用户做了决定，所以再补两道：
+ *   - 选中后 toast 告知选了什么，让人有机会发现「这不是我选的」；
+ *   - 给「清除」入口，能退回「未选择」重新来过。
+ */
+function NativeDatePicker({ value, start, end, onChange }: InnerProps) {
+  // 只用于把轮盘定位到合理位置，不是默认值：用户不操作就不会写进档案
+  const [locator] = useState(() => defaultBirthDate())
+
+  const pick = (v: string) => {
+    // 与现值相同说明用户没真的改动，不必打扰
+    if (!v || v === value) return
+    onChange(v)
+    Taro.showToast({ title: `已选 ${v}`, icon: 'none' })
+  }
+
+  return (
+    <View className='form-row'>
+      <Text className='form-label'>出生日期</Text>
+      <Picker className='form-input' mode='date' start={start} end={end}
+        value={value || locator}
+        onChange={e => pick(e.detail.value as string)}>
+        <Text className={value ? '' : 'placeholder'}>{value || '请选择'}</Text>
+      </Picker>
+      {value
+        ? <Text className='form-clear' onClick={() => onChange('')}>清除</Text>
+        : null}
+    </View>
+  )
+}
+
+/**
+ * H5 端：底部弹层 + 年/月/日三列滚动。
+ *
+ * 三列都是原生滚动容器：
+ *   - `overscroll-behavior: contain` 把滚动锁在列内，背景整页不再上移下拉；
+ *   - 我们自己渲染每一项，不会留下空白格。
+ *
+ * 滚动定位用**受控 `scrollTop`**（= 选中索引 × 单项高），配合 `.bdp-indicator`
+ * 指示线居中；不用 `scrollIntoView`——浏览器会把它顶到列顶，与居中指示线错位。
+ */
+function WheelDatePicker({ value, start, end, onChange }: InnerProps) {
+  const today = new Date()
   const yearStart = parseYearOf(start, 1900)
-  const yearEnd = parseYearOf(endStr, today.getFullYear())
+  const yearEnd = parseYearOf(end, today.getFullYear())
   const yearRange: number[] = []
   for (let y = yearStart; y <= yearEnd; y++) yearRange.push(y)
 
@@ -124,7 +188,9 @@ export default function BirthDatePicker({ value, start = '1900-01-01', end, onCh
 
   // 打开时把 body 滚动锁住（兜底：各列 ScrollView 已 overscroll-behavior: contain）
   useEffect(() => {
-    if (!open) return
+    // 小程序端没有 `document`，裸访问会直接 ReferenceError。
+    // 本组件在该端走 NativeDatePicker 分支，这里是双保险。
+    if (!open || typeof document === 'undefined') return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }

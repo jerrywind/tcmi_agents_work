@@ -1,57 +1,7 @@
+// 档案表单的字段样式（.form-row / .form-label / .form-input / .history-input）
+// 已收编到 app.scss：家庭档案页用的是同一张表，两页各写一份必然改一处漏一处。
 .profile-page {
   padding-bottom: 60px;
-}
-
-.form-row {
-  display: flex;
-  align-items: center;
-  padding: 18px 0;
-  border-bottom: 1px solid #f0f2f0;
-
-  &:last-child { border-bottom: none; }
-
-  // 既往病史是多行输入，标签需要单独占一行
-  &.col {
-    flex-direction: column;
-    align-items: stretch;
-
-    .form-label {
-      width: auto;
-      margin-bottom: 14px;
-    }
-  }
-}
-
-.form-label {
-  width: 170px;
-  color: #55655c;
-  flex-shrink: 0;
-}
-
-.form-input {
-  flex: 1;
-  font-size: 28px;
-
-  &.placeholder { color: #b3c0ba; }
-}
-
-.history-input {
-  width: 100%;
-  min-height: 140px;
-  font-size: 28px;
-  line-height: 1.6;
-}
-
-.submit-wrap {
-  margin: 40px 24px;
-}
-
-.disclaimer {
-  display: block;
-  text-align: center;
-  margin-top: 20px;
-  font-size: 22px;
-  color: #97a8a0;
 }
 
 .skills-entry {

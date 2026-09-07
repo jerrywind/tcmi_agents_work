@@ -123,6 +123,13 @@ fn agent_skill_executor(
     })
 }
 
+/// RAG 检索技能名。
+///
+/// 提为常量是因为它有**两处**使用者：注册处，以及「RAG 不可用时从下发给模型的
+/// 工具清单里撤掉它」（`agents::base::tools_for_llm`）。散成字面量的话，
+/// 改名时必漏一处，而漏掉的表现是「RAG 明明挂着却被悄悄撤掉」——不报错。
+pub const RAG_SKILL: &str = "tcm-rag";
+
 /// 构建默认技能注册表
 ///
 /// `departments` 是编排器与技能之间的共享「当前科室」：辨证后写入，
@@ -282,7 +289,7 @@ pub fn build_default_registry(
     ));
 
     reg.register(Skill::new(
-        "tcm-rag",
+        RAG_SKILL,
         "RAG 检索：从中医文献向量库取相关段落",
         json!({
             "type": "object",

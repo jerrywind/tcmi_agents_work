@@ -6,7 +6,7 @@
 pub mod builtin;
 pub mod toolcall;
 
-pub use builtin::{build_default_registry, mount_mcp, mount_mcp_clients};
+pub use builtin::{build_default_registry, mount_mcp, mount_mcp_clients, RAG_SKILL};
 pub use toolcall::{
     dispatch, http_skill, mcp_skill, mcp_skill_named, Skill, SkillFn, CALLER_FIELD,
 };

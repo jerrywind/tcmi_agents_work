@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Taro from '@tarojs/taro'
-import { View, Text, Input } from '@tarojs/components'
+import { View, Text, Textarea } from '@tarojs/components'
 import { callSkill, listSkills } from '../../services/harness'
 import type { HarnessSkill } from '../../types'
 import './index.scss'
@@ -95,7 +95,9 @@ export default function SkillsPage() {
       {selected && (
         <View className='card'>
           <View className='card-title'>调用 {selected.name}</View>
-          <Input className='skill-input' placeholder='JSON 参数'
+          {/* 多行输入框：占位参数是 JSON.stringify(..., 2) 的格式化文本，
+              单行框里只看得到第一行，改都没法改 */}
+          <Textarea className='skill-input' maxlength={2000} placeholder='JSON 参数'
             value={args} onInput={e => setArgs(e.detail.value)} />
           <View className={`btn-small ${busy ? 'disabled' : ''}`} onClick={run}>
             {busy ? '调用中…' : '执行'}

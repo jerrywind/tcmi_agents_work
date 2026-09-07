@@ -127,6 +127,14 @@ docker compose up --build                # 容器 :8000
 核心配置：`LMSTUDIO_BASE_URL`（Docker 内用 `host.docker.internal:11223/v1`）、
 `LMSTUDIO_API_KEY`、`DEFAULT_MODEL`、`LLM_HOST/LLM_PORT`、`ENABLE_MCP`、`AGENT_MAX_ROUNDS`。
 
+> **顶层 compose 里的角色**：`deploy/docker-compose.yml` 已把 llm_server 作为
+> **典籍 RAG 数据面**纳入 `tcm-net`（harness 的 `rag_endpoint` 指向
+> `http://llm_server:8000/rag/retrieve/text`），并把宿主机 `rag_data/`
+> （694 部典籍原文 + `_index/corpus.sqlite3` 预建索引）挂到容器 `/data/rag`。
+> 即使宿主机 LM Studio 未加载 embedding 模型，RAG 也会降级为零向量、
+> 以离线典籍索引继续工作，不会拖垮 harness。详见 [`rag.md`](./rag.md) 的
+> 「启用前提」一节。
+
 > ⚠️ **不要把真实 Key 写进 `.env.example`**——该文件不被 `.gitignore` 忽略，会被提交。
 > 真实 Key 放 `.env`（已被忽略，compose 直接读取）。
 

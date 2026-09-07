@@ -14,12 +14,16 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("llm_server")
+
+# 最近一次成功挂载的 RAGService（见 `build_rag_router`），供启动后预热索引
+_RAG_SERVICE = None
 
 # `rag` 是 llm_server 下的同级包，但 llm_server 未必以包的形式被导入
 # （uvicorn app.main:app 时工作目录是 llm_server，rag 不在包路径下）。
@@ -54,6 +58,7 @@ def _disabled_router(reason: str) -> APIRouter:
 
 def build_rag_router() -> APIRouter:
     """构造 RAG 路由；不可用时返回降级占位。"""
+    global _RAG_SERVICE
     try:
         from rag.api import create_app
         from rag.config import RAGConfig
@@ -72,5 +77,22 @@ def build_rag_router() -> APIRouter:
         "RAG 已挂载：corpus_db=%s top_k=%s",
         cfg.corpus_db or "(未配置)", cfg.top_k,
     )
+    _RAG_SERVICE = getattr(rag_app.state, "rag_service", None)
     # FastAPI 实例内部就是一个 APIRouter，直接并过来即可保留 /rag/* 路径
     return rag_app.router
+
+
+async def warmup_rag() -> None:
+    """启动后预热典籍索引（见 `RAGService.warmup`）。
+
+    预热失败不影响服务：冷着也能查，只是首次查询会慢到可能顶穿调用方超时。
+    """
+    svc = _RAG_SERVICE
+    if svc is None:
+        return
+    try:
+        t = time.time()
+        await svc.warmup()
+        logger.info("典籍索引预热完成：%.2fs", time.time() - t)
+    except Exception as exc:  # noqa: BLE001 - 预热只是优化，不能让启动失败
+        logger.warning("典籍索引预热失败（不影响检索，仅首次查询偏慢）：%s", exc)

@@ -69,6 +69,38 @@ services:
     networks:
       - tcm-net
 
+  # ── 典籍 RAG 数据面：llm_server（Python 网关），仅内部网络 ──
+  # harness 的 rag_endpoint（resources/config.yaml：http://llm_server:8000/rag/retrieve/text）
+  # 指向本服务；此前顶层 compose 没有它，tcm-rag 技能永远连不上，
+  # 694 部典籍的检索整条链路空转（health 探活会一直报不可用）。
+  # 容器内把宿主工作区的 rag_data（694 部 txt 原文 + _index/corpus.sqlite3 预建索引）
+  # 挂到 /data/rag。docs.path 是宿主编译机的绝对路径，检索时会按文件名回退
+  # （见 CorpusIndex._resolve_text_path），故无需在容器里重建索引。
+  llm_server:
+    build:
+      context: ../llm_server
+      dockerfile: Dockerfile
+    image: tcm-llm-server:local
+    restart: unless-stopped
+    environment:
+      LLM_HOST: "0.0.0.0"
+      LLM_PORT: "8000"
+      LMSTUDIO_BASE_URL: "http://host.docker.internal:11223/v1"
+      LMSTUDIO_API_KEY: "${LMSTUDIO_API_KEY:-sk-noauth}"
+      DEFAULT_MODEL: "${HARNESS_MODEL:-google/gemma-4-12b-qat}"
+      # 上游 embedding 由 llm_server 网关转发到宿主机 LM Studio（已加载则走向量，
+      # 未加载则降级为零向量）；典籍语料检索是离线 bigram 索引，不依赖 embedding。
+      # 典籍 RAG 语料（原文 + 预建索引）：
+      RAG_DATA_DIR: "/data/rag"
+      RAG_CORPUS_DIR: "/data/rag"
+      RAG_CORPUS_DB: "/data/rag/_index/corpus.sqlite3"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../rag_data:/data/rag
+    networks:
+      - tcm-net
+
   # ── rrserver 云端中继，仅内部网络，由 nginx 经 /rr 暴露 ──
   rrserver:
     build:

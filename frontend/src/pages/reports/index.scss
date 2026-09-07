@@ -1,10 +1,15 @@
 .reports-page {
-  padding: 10px 0 60px;
+  height: 100vh;
+  // 移动端浏览器地址栏收缩时 100vh 会跳动；支持的浏览器用 dvh（小程序忽略此行，回落 vh）
+  height: 100dvh;
 }
 
+// 只在这一层滚动，避免与外层 body 形成双重滚动。
+// 刻意不加左右 padding：.card 自带 24px 外边距，再加就成了 48px，
+// 与报告页的卡片缩进对不齐。
 .reports-scroll {
-  padding: 0 24px;
-  box-sizing: border-box;
+  height: 100%;
+  padding-bottom: 60px;
 }
 
 .rep-row {
@@ -37,6 +42,7 @@
   font-size: 20px;
   color: #97a8a0;
   margin-top: 6px;
+  word-break: break-all;
 }
 
 .rep-open {

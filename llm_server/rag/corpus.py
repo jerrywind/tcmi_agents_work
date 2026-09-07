@@ -23,6 +23,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 import sqlite3
@@ -31,6 +32,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
+
+logger = logging.getLogger("rag.corpus")
 
 # 只保留汉字：标点、空白、拉丁字母与数字对中医典籍检索贡献极小，
 # 且会显著放大词表与 posting 数量。
@@ -245,9 +248,25 @@ class CorpusIndex:
     #: 书级排序时，df 超过「部数 × 该比例」的查询词视为泛词并忽略
     max_query_df_ratio: float = 0.25
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, corpus_dir: str | Path | None = None) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # 原文回读的候选根目录。
+        # docs.path 存的是**建库机器**的绝对路径：同一台机器上原样可用；但把索引
+        # （rag_data/_index/corpus.sqlite3）挂进 Docker 容器后路径前缀完全不同，
+        # 直接回读会 FileNotFoundError。文件名形如 `013-本草纲目.txt`，在语料目录里
+        # 唯一，故按「<候选根>/<文件名>」回退即可。候选根 = 显式传入的语料目录
+        # （RAG_CORPUS_DIR）+ 索引库所在的上级/上上级（`/data/rag/_index` 的父目录
+        # 就是语料根 `/data/rag`）。
+        self.corpus_roots: list[Path] = []
+        if corpus_dir:
+            self.corpus_roots.append(Path(corpus_dir))
+        db_parent = self.db_path.parent
+        for cand in (db_parent, db_parent.parent):
+            if cand not in self.corpus_roots:
+                self.corpus_roots.append(cand)
+        # 已解析过的路径缓存：检索是热路径，别让每次查询都对同一批书重复 stat
+        self._path_cache: dict[str, Path | None] = {}
         # check_same_thread=False：HTTP 服务里查询由线程池执行，
         # 与建索引的线程不同；并发访问由下面的锁串行化。
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
@@ -260,6 +279,36 @@ class CorpusIndex:
         """串行化 DB 访问：sqlite3 连接不是线程安全的。"""
         with self._lock:
             return self._conn.execute(sql, tuple(params)).fetchall()
+
+    def _resolve_text_path(self, stored: str) -> Path | None:
+        """把索引里记录的原文路径解析为实际可读路径。
+
+        建库机与检索机（如 Docker 容器）的目录布局不同时，`docs.path` 记录的
+        绝对路径会失效：这里先按记录路径查，找不到再退到
+        「候选语料根目录 + 文件名」。彻底找不到返回 `None`（调用方跳过该书，
+        而不是让整个检索抛 FileNotFoundError）。
+        """
+        if stored in self._path_cache:
+            return self._path_cache[stored]
+        p = Path(stored)
+        if p.exists():
+            self._path_cache[stored] = p
+            return p
+        # 候选根按「文件名」匹配。注意真实场景：索引在 Windows 宿主上构建、
+        # 拿到 Linux 容器里检索，`docs.path` 形如 `D:\\...\\rag_data\\013-本草纲目.txt`；
+        # POSIX 语义的 `Path` 不认反斜杠分隔符，直接取 `p.name` 会得到一整串
+        # `D:\\...\\rag_data\\013-本草纲目.txt`。这里统一按两种分隔符拆出文件名。
+        file_name = re.split(r"[\\/]+", stored)[-1]
+        if not file_name:
+            self._path_cache[stored] = None
+            return None
+        for root in self.corpus_roots:
+            cand = root / file_name
+            if cand.exists():
+                self._path_cache[stored] = cand
+                return cand
+        self._path_cache[stored] = None
+        return None
 
     # ---------------- 构建 ----------------
     def _ensure_schema(self) -> None:
@@ -489,7 +538,16 @@ class CorpusIndex:
 
         hits: list[ChunkHit] = []
         for ord_, doc_id, title, path in books:
-            text = read_text(Path(path))
+            text_path = self._resolve_text_path(path)
+            if text_path is None:
+                # 原文回读失败只跳过这一本：索引可能是别处构建后拷贝/挂载来的，
+                # 个别文件缺失不该让整个查询 500。
+                logger.warning(
+                    "典籍《%s》原文不可读（索引记录：%s），已跳过该书的片段检索",
+                    title, path,
+                )
+                continue
+            text = read_text(text_path)
             for i, (section, chunk) in enumerate(iter_chunks(text, max_chars, overlap)):
                 cjk = normalize(chunk)
                 if len(cjk) < 8:

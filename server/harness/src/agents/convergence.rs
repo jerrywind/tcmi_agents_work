@@ -122,11 +122,9 @@ pub fn evaluate(
     round: u8,
 ) -> Convergence {
     let diff = assess(res, messages);
-    let corpus: String = messages
-        .iter()
-        .map(|m| m.content.clone())
-        .collect::<Vec<_>>()
-        .join("\n");
+    // 同理只取患者陈述：助手总结里那句「二便调、饮食可、睡眠尚可」
+    // 会让覆盖率虚高，收敛判定提前通过，等于强制放行一份信息不足的结论。
+    let corpus: String = crate::model::user_corpus(messages);
 
     let (confidence, margin, primary_slug) = confidence_and_margin(&diff);
     let coverage = required_coverage(res, &corpus, cfg.required_priority);

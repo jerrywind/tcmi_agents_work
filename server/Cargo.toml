@@ -15,7 +15,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# `stream` 用于消费上游 LLM 的 SSE 分片（token 级流式）
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 futures = "0.3"
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"

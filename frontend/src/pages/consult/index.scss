@@ -2,6 +2,19 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  // 移动端浏览器地址栏收缩时 100vh 会跳动；支持的浏览器用 dvh（小程序忽略此行，回落 vh）
+  height: 100dvh;
+
+  // 首诊是一张长表单（病情自述 + 居住地 + 三张体征图 + 提交），
+  // 套进上面的固定视口布局会让它失去滚动能力、底部提交按钮够不到，
+  // 因此首诊改走普通文档流。
+  &.form-flow {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
 }
 
 /* ---------- 首诊：档案摘要 + 病情自述 ---------- */
@@ -48,28 +61,12 @@
   line-height: 1.6;
 }
 
-.card-note {
-  margin-top: 16px;
-  font-size: 24px;
-  line-height: 1.6;
-  color: #7a8c83;
-}
-
-.card-subnote {
-  display: block;
-  margin-top: 16px;
-  font-size: 22px;
-  line-height: 1.6;
-  color: #97a8a0;
-}
-
 /* ---------- 当前居住地采集 ---------- */
 .residence-input {
   width: 100%;
   margin-top: 16px;
   height: 80px;
   padding: 0 24px;
-  box-sizing: border-box;
   font-size: 28px;
   background: #f4f6f4;
   border-radius: 16px;
@@ -82,7 +79,13 @@
   margin-top: 14px;
 }
 
+// 触控目标：点选标签按 750 稿给足 64px 高（换算到 375 屏约 32px×1.6 行高），
+// 低于 44px 实际高度时误触率明显上升
 .duration-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
   padding: 12px 28px;
   border: 2px solid #bcd4c8;
   color: #2a6f4e;
@@ -98,18 +101,7 @@
   &:active { opacity: 0.85; }
 }
 
-.submit-wrap {
-  margin: 40px 24px;
-}
-
-.disclaimer {
-  display: block;
-  text-align: center;
-  margin-top: 20px;
-  font-size: 22px;
-  color: #97a8a0;
-}
-
+/* ---------- 步骤导航：望 → 闻 → 问 → 切 → 辨证 → 安全门 → 治疗 ---------- */
 .progress-bar {
   background: #fff;
   padding: 20px 24px;
@@ -121,208 +113,84 @@
   align-items: center;
 }
 
+// 刻意不用圆形头像：里面装的是「望诊 / 安全门 / 治疗」这类 2–3 字的能力名，
+// 固定 56px 圆装不下三个字，必然溢出。胶囊宽度随内容自适应。
 .phase {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  flex-shrink: 0;
+  padding: 12px 26px;
+  border-radius: 30px;
   background: #e3efe8;
   color: #2a6f4e;
   text-align: center;
-  line-height: 56px;
+  font-size: 26px;
+  line-height: 1.3;
   margin-right: 16px;
-  font-size: 28px;
+  white-space: nowrap;
+
+  &.active {
+    background: #2a6f4e;
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* ---------- 流式状态：让「进行到哪一步」一眼可见 ----------
+     四种状态只用颜色 + 边框区分，不改变尺寸：胶囊大小一变，
+     横向 ScrollView 里的整排就会跳一下，反而更晃眼。 */
+  &.running {
+    background: #2a6f4e;
+    color: #fff;
+    font-weight: 600;
+    // 呼吸动画：让「正在跑」与「已卡住」可区分。
+    // 没有它，四诊这几十秒里界面完全静止，用户会以为卡死了。
+    animation: phase-pulse 1.4s ease-in-out infinite;
+  }
+
+  &.done {
+    background: #dff0e6;
+    color: #1d5c3e;
+    font-weight: 600;
+  }
+
+  &.failed {
+    background: #fdecea;
+    color: #b4372a;
+    text-decoration: line-through;
+  }
+
+  &.skipped {
+    background: #f0f2f1;
+    color: #9aa8a1;
+    text-decoration: line-through;
+  }
 }
 
-.round-info {
-  margin-left: auto;
-  color: #97a8a0;
-  font-size: 24px;
+@keyframes phase-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
-.hyps { margin-top: 16px; }
-
-.hyp-chip {
-  display: flex;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.hyp-name {
-  width: 170px;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.hyp-track {
+/* ---------- 当前步骤正文 ---------- */
+.step-body {
   flex: 1;
-  height: 14px;
-  background: #edf2ee;
-  border-radius: 8px;
-  overflow: hidden;
+  // flex item 默认 min-height:auto，配合 ScrollView 的 overflow 会让长文本
+  // 撑破容器而不是在内部滚动；显式归零才能正确收缩。
+  min-height: 0;
+  padding: 24px 28px;
 }
 
-.hyp-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #62b48c, #2a6f4e);
-  border-radius: 8px;
-  transition: width .4s;
-}
-
-.hyp-pct {
-  width: 80px;
-  text-align: right;
-  font-size: 22px;
-  color: #55655c;
-}
-
-.chat {
-  flex: 1;
-  padding: 20px 24px;
-  box-sizing: border-box;
-}
-
-.bubble-row {
-  display: flex;
-  margin-bottom: 20px;
-
-  &.right { justify-content: flex-end; }
-  &.left { justify-content: flex-start; }
-}
-
-.bubble {
-  max-width: 78%;
-  padding: 20px 24px;
-  border-radius: 20px;
-  font-size: 28px;
-  line-height: 1.55;
-  word-break: break-all;
-
-  &.agent { background: #fff; border-top-left-radius: 6px; }
-  &.user { background: #2a6f4e; color: #fff; border-top-right-radius: 6px; }
-  &.alert { background: #fff3f0; color: #c0392b; }
-  &.report { background: #e8f5ee; color: #1d5c3e; font-weight: 600; }
-}
-
-.answer-panel {
-  background: #fff;
-  padding: 20px 24px calc(20px + env(safe-area-inset-bottom));
-  border-top: 1px solid #e8ede9;
-}
-
-.options {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.option {
-  padding: 14px 28px;
-  border: 2px solid #2a6f4e;
-  color: #2a6f4e;
-  border-radius: 32px;
-  margin: 0 16px 16px 0;
-  font-size: 26px;
-
-  &.disabled { opacity: 0.5; }
-  &:active { background: #e3efe8; }
-}
-
-.free-row {
-  display: flex;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.free-input {
-  flex: 1;
-  background: #f4f6f4;
-  border-radius: 32px;
-  padding: 16px 28px;
-  font-size: 26px;
-}
-
-.send-btn {
-  margin-left: 16px;
-  color: #2a6f4e;
-  font-size: 28px;
-  font-weight: 600;
-
-  &.disabled { opacity: 0.4; }
-}
-
-/* ---------- PPG 脉象卡片 ---------- */
-.ppg-card {
-  background: #fff;
-  margin: 16px 24px;
-  padding: 22px 24px;
-  border-radius: 16px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-}
-
-.ppg-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.ppg-title {
-  font-size: 30px;
-  font-weight: 600;
-  color: #2a6f4e;
-}
-
-.ppg-tip {
-  font-size: 22px;
-  color: #97a8a0;
-}
-
-.ppg-result {
-  margin-top: 14px;
-  background: #f6faf8;
-  border-radius: 12px;
-  padding: 16px 18px;
-}
-
-.ppg-main {
+.step-title {
   display: block;
   font-size: 32px;
   font-weight: 600;
-  color: #234;
+  color: #1d5c3e;
+  margin-bottom: 16px;
 }
 
-.ppg-sub {
+.step-text {
   display: block;
-  margin-top: 6px;
-  font-size: 24px;
-  color: #55655c;
-}
-
-.ppg-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.ppg-tag {
-  font-size: 22px;
-  color: #2a6f4e;
-  background: #eaf3ee;
-  padding: 4px 14px;
-  border-radius: 16px;
-}
-
-.ppg-empty {
-  display: block;
-  margin-top: 12px;
-  font-size: 26px;
-  color: #b3c0ba;
-}
-
-.ppg-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 18px;
+  font-size: 27px;
+  line-height: 1.75;
+  color: #2c3e34;
 }
 
 /* ---------- 结论可信度提示（H4/H5：未定证 / 低置信度 / 强制放行） ---------- */
@@ -375,6 +243,147 @@
   margin-top: 2px;
 }
 
+/* ---------- 流式进行中：进度与逐步披露 ---------- */
+.stream-meta {
+  background: #f6faf8;
+  padding: 14px 24px;
+  border-bottom: 1px solid #e8ede9;
+}
+
+.stream-meta-text {
+  display: block;
+  font-size: 24px;
+  color: #6b8479;
+  line-height: 1.5;
+}
+
+/* 每完成一步补一张卡片：内容按「块」到来，而不是最后一次性出现 */
+.stream-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(42, 111, 78, 0.06);
+}
+
+.stream-card-title {
+  display: block;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1d5c3e;
+  margin-bottom: 10px;
+}
+
+.stream-card-text {
+  display: block;
+  font-size: 26px;
+  line-height: 1.7;
+  color: #2c3e34;
+}
+
+/* 首步未到时的占位：此时界面上只有骨架，一句说明比空白更让人安心 */
+/* 上一轮内容占位：明确降权，避免被当成本轮新结论 */
+.stream-card-stale {
+  opacity: 0.55;
+  background: #f6f8f7;
+  box-shadow: none;
+}
+
+.stream-card-stale .stream-card-title {
+  color: #7b8b84;
+  font-weight: 500;
+}
+
+.stream-placeholder {
+  display: block;
+  font-size: 26px;
+  color: #97a8a0;
+  line-height: 1.7;
+  padding: 20px 0;
+}
+
+/* 「我读到的表现」：首帧就到，让用户在 LLM 开跑前核对 */
+.understood-bar {
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px 24px;
+  margin: 0 24px 16px;
+  box-shadow: 0 2px 8px rgba(42, 111, 78, 0.06);
+}
+
+.understood-label {
+  display: block;
+  font-size: 24px;
+  color: #7b8b84;
+  margin-bottom: 10px;
+}
+
+.understood-tags {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.understood-tag {
+  font-size: 24px;
+  color: #1d5c3e;
+  background: #eaf3ee;
+  border-radius: 999px;
+  padding: 4px 18px;
+  margin: 0 12px 12px 0;
+}
+
+.understood-fix {
+  display: block;
+  font-size: 24px;
+  color: #c0392b;
+  padding-top: 4px;
+}
+
+/* 流式中的辨证结构：一算出来就插入，不等流程跑完 */
+.stream-diff {
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px 24px;
+  margin: 0 24px 16px;
+  box-shadow: 0 2px 8px rgba(42, 111, 78, 0.06);
+}
+
+.stream-diff-title {
+  display: block;
+  font-size: 26px;
+  font-weight: 600;
+  color: #1d5c3e;
+  margin-bottom: 12px;
+}
+
+.chain-block-compact {
+  padding-bottom: 12px;
+}
+
+/* 安全门拦截：与可信度提示同级的「必须看见」，但用红色系与之区分——
+   一个是「结论不可信」，一个是「请立即就医」，语义严重程度不同。 */
+.blocked-banner {
+  background: #fdecea;
+  border-top: 1px solid #f5c6c0;
+  border-bottom: 1px solid #f5c6c0;
+  padding: 18px 24px;
+}
+
+.blocked-title {
+  display: block;
+  font-size: 28px;
+  font-weight: 600;
+  color: #b4372a;
+  margin-bottom: 8px;
+}
+
+.blocked-text {
+  display: block;
+  font-size: 24px;
+  color: #8c3a30;
+  line-height: 1.6;
+}
+
 /* ---------- 待补充条目（反馈式辨证：信息不足时后端停下追问） ---------- */
 .pending-panel {
   background: #fffaf0;
@@ -406,14 +415,46 @@
   line-height: 1.5;
 }
 
-.ppg-btn {
-  font-size: 24px;
-  color: #fff;
-  background: #2a6f4e;
-  padding: 10px 22px;
-  border-radius: 20px;
+/* ---------- 追问输入区 ---------- */
+.answer-panel {
+  background: #fff;
+  padding: 20px 24px calc(20px + env(safe-area-inset-bottom));
+  border-top: 1px solid #e8ede9;
+}
 
-  &.disabled { opacity: 0.5; }
+.free-row {
+  display: flex;
+  align-items: center;
+}
+
+.free-input {
+  flex: 1;
+  background: #f4f6f4;
+  border-radius: 32px;
+  padding: 16px 28px;
+  font-size: 26px;
+}
+
+.send-btn {
+  margin-left: 16px;
+  padding: 16px 8px;
+  color: #2a6f4e;
+  font-size: 28px;
+  font-weight: 600;
+  flex-shrink: 0;
+
+  &.disabled { opacity: 0.4; }
+}
+
+.report-entry {
+  margin-top: 16px;
+  padding: 18px;
+  text-align: center;
+  border: 1px solid #cfe0d8;
+  border-radius: 14px;
+  color: #2a6f4e;
+  font-size: 26px;
+  background: #f3f7f5;
 }
 
 /* ---------- 体征图片采集（舌苔 / 手相） ---------- */
@@ -430,11 +471,19 @@
   align-items: center;
 }
 
+// 标签最长的是「舌苔照片（伸舌平展）」，会换行；给它固定两行高度，
+// 否则同一行里长短标签的两个槽位高度不齐。
 .image-slot-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
   font-size: 24px;
   color: #2a6f4e;
   font-weight: 600;
   margin-bottom: 12px;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .image-pick {

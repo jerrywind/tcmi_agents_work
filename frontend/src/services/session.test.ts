@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   advanceRound, clearSession, getMessages, getPayload, getProfile, getResult,
-  getRound, pushMessage, resetMessages, setResult, startSession,
+  getRound, pushMessage, resetMessages, rollbackSession, setResult, snapshotSession,
+  startSession,
 } from './session'
 import type { DiagnosisResult } from './harness'
 
@@ -66,6 +67,34 @@ describe('session 会话容器', () => {
     expect(getMessages()).toHaveLength(0)
     expect(getProfile()!.gender).toBe('女')
     expect(getPayload().round).toBe(2)
+  })
+
+  it('rollbackSession 连消息带轮次一起撤回（追问失败重试不该重复发送）', () => {
+    // 追问链路是「先 push + advanceRound，再发请求」，失败时两个副作用都已落地。
+    // 只撤消息不撤轮次的话，每失败一次就白吃一轮追问预算，
+    // 后端的「达到上限强制放行」会在用户还没补充到信息时提前触发。
+    startSession({ gender: '男' })
+    pushMessage({ role: 'user', content: '主诉' })
+    advanceRound()
+    const snapshot = snapshotSession()
+
+    pushMessage({ role: 'user', content: '补充：怕冷' })
+    advanceRound()
+    expect(getMessages()).toHaveLength(2)
+    expect(getPayload().round).toBe(3)
+
+    rollbackSession(snapshot)
+    expect(getMessages()).toEqual([{ role: 'user', content: '主诉' }])
+    expect(getPayload().round).toBe(2)
+    // 档案不受回滚影响
+    expect(getProfile()!.gender).toBe('男')
+  })
+
+  it('rollbackSession 对越界快照取整，轮次不会掉到 1 以下', () => {
+    startSession({ gender: '男' })
+    rollbackSession({ messages: -1, round: -5 })
+    expect(getMessages()).toEqual([])
+    expect(getPayload().round).toBe(1)
   })
 
   it('setResult 把助手输出回灌进历史（供下一轮模型看到）', () => {

@@ -76,6 +76,35 @@ export function resetMessages(): void {
   messages = []
 }
 
+/** 会话快照：`pushMessage` / `advanceRound` 之前的消息数与轮次。 */
+export interface SessionSnapshot {
+  messages: number
+  round: number
+}
+
+/**
+ * 记录当前会话进度，供请求失败时回滚（配 `rollbackSession`）。
+ *
+ * 追问链路是「先 push 用户消息 + 推进轮次，再发 `/chat`」——
+ * 请求失败时这两个副作用都已经落地了。
+ */
+export function snapshotSession(): SessionSnapshot {
+  return { messages: messages.length, round }
+}
+
+/**
+ * 回滚到快照点：只回退消息与轮次，档案和已有结论保持不动。
+ *
+ * 与 `resetMessages`（清空全部历史、但保留轮次）的区别就在轮次：
+ * 追问失败必须把轮次也退回去——否则每失败一次就白吃一轮追问预算，
+ * 后端的「达到上限强制放行」会提前触发，在用户根本没补充到信息的情况下
+ * 强行给出结论。
+ */
+export function rollbackSession(s: SessionSnapshot): void {
+  messages = messages.slice(0, Math.max(0, s.messages))
+  round = Math.max(1, s.round)
+}
+
 /**
  * 记录一次 `/chat` 的结果，并把助手输出回灌进历史，
  * 这样下一轮追问时模型能看到之前说过什么。

@@ -7,6 +7,9 @@ use crate::agents::base::{AgentContext, SubAgent};
 use crate::model::{Capability, Message};
 use anyhow::Result;
 use async_trait::async_trait;
+// 望诊图片要拼成 OpenAI 视觉 content-part，用到 `json!`；
+// 缺这一行会报 "cannot find macro `json` in this scope"。
+use serde_json::json;
 
 pub struct InspectionAgent;
 

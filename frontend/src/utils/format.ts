@@ -58,3 +58,23 @@ export function stripMarkdown(text: string): string {
   if (!text) return ''
   return text.replace(/\*\*(.+?)\*\*/g, '$1')
 }
+
+/**
+ * ISO 时间戳 -> 本地可读时间（`YYYY-MM-DD HH:mm`）。
+ *
+ * 归档报告的 `created_at` 是 `2026-09-05T04:12:33Z` 这种原始串，
+ * 直接摆到列表上要读的人自己换算时区。
+ *
+ * 按**本地时区**渲染：这是用户自己那次问诊的时间，
+ * 显示成他手表上的时间才对得上记忆。
+ *
+ * 解析不出来时原样返回，绝不返回空串——宁可显示一串看不懂的原文，
+ * 也不能让用户以为「这条记录没有时间」。
+ */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}

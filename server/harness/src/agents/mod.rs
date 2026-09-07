@@ -28,7 +28,7 @@ pub mod safety;
 pub mod strategy;
 pub mod treatment;
 
-pub use base::{AgentContext, LlmCaller, SubAgent};
+pub use base::{tools_for_llm, AgentContext, LlmCaller, SubAgent};
 
 use crate::model::Capability;
 use crate::resources::model::RedFlag;

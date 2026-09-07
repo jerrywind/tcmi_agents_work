@@ -1,4 +1,5 @@
 import Taro from '@tarojs/taro'
+import { envVar, IS_H5, IS_WEAPP } from '../utils/platform'
 
 /**
  * harness（Rust 后端）契约客户端。
@@ -13,35 +14,31 @@ import Taro from '@tarojs/taro'
  * 本模块是唯一的后端访问层（多轮状态见 `services/session.ts`）。
  */
 
-/**
- * 读取构建期环境变量。
- *
- * **浏览器里没有 `process`**。模块顶层直接写 `process.env.X` 会抛
- * ReferenceError，整个模块加载失败 → 页面白屏，只剩一个导航栏。
- * H5 端曾因此完全不可用，而编译能过、单测也全绿——
- * 只有真机打开页面才会暴露。webpack 会把 `process.env.TARO_ENV`
- * 做字面替换，未被替换时则落到这里的 `typeof` 兜底。
- */
-function envVar(key: string): string | undefined {
-  if (typeof process === 'undefined' || !process.env) return undefined
-  return (process.env as Record<string, string | undefined>)[key]
-}
+// 端判断（IS_H5 / IS_WEAPP）与构建期环境变量读取统一放在 utils/platform。
+// 此前本模块与 utils/image 各写了一套，判定条件还不一样。
 
 /**
- * 是否为 H5 端。
+ * 当前端能否跑**完整**问诊流程（一次 `/chat` 串行跑完 routing 里全部步骤）。
  *
- * 优先用 Taro 的构建期常量（webpack 会把 `process.env.TARO_ENV` 替换成字面量）；
- * 未被替换时（浏览器里没有 `process`）退化为「有 `window` 就是 H5」。
- * 三种环境因此都能区分开：
- * - H5 浏览器：无 `process`、有 `window` → true
- * - 小程序：两者都没有 → false
- * - Node（单测）：有 `process` → 短路为 false，与既有测试预期一致
+ * 不能。一次 `/chat` 标准档 10 步实测 200–530 秒，而 wx.request 的超时
+ * 上限约 60 秒，请求里设再大也不生效。
  *
- * 不用 `Taro.getEnv()`：它在单测环境里并不存在（会抛 `getEnv is not a function`）。
+ * **为什么不能改成分步调 `/agents` 绕过**：那不是同一件事。
+ * `/agents` 只返回 capability / content / trace / structured 四个字段，
+ * 而下面这些都在 `/chat` 的 orchestrator 内部，单步调用拿不到也补不回来：
+ *   - **安全门拦截后停止后续治疗建议**（`if blocked.is_none()` 才执行治疗期，
+ *     且循环中 `if blocked.is_some() { break }`）。分步拼的流程会让被拦截的
+ *     病例继续出治疗建议——这是安全问题，不是功能缺失。
+ *   - 收敛判定与强制放行兜底（`payload.round` 只有 `/chat` 读，单步调用
+ *     会让后端永远以为在第 1 轮）。
+ *   - 证候锁定（辨证后把主证注入后续步骤，否则各治疗步各自重新猜证候，
+ *     即 T7.1 修掉的「辨证判脾胃湿热、开方按肝胆湿热」）。
+ *   - summary / disclaimer / low_confidence / confidence_note / report_id。
+ *
+ * 因此小程序端选择**如实告知**而不是给一个看起来能跑、实则缺了安全门的阉割流程。
+ * 正解是后端提供异步任务端点（提交任务 + 轮询结果），那是后端改造，另立条目。
  */
-const IS_H5 =
-  envVar('TARO_ENV') === 'h5' ||
-  (typeof process === 'undefined' && typeof window !== 'undefined')
+export const SUPPORTS_FULL_CHAT = !IS_WEAPP
 
 export const HARNESS_BASE_URL = IS_H5
   ? ''
@@ -58,6 +55,9 @@ export const HARNESS_API_PREFIX = envVar('VITE_API_PREFIX') ?? (IS_H5 ? '/api' :
  * 超时必须大于这个量级，否则前端会在后端还算着的时候放弃。
  */
 export const REQUEST_TIMEOUT_MS = 600_000
+
+/** 小程序端 wx.request 的超时上限：约 60 秒，设再大平台也不认。 */
+export const WEAPP_MAX_TIMEOUT_MS = 60_000
 
 /** 对话消息 */
 export interface HarnessMessage {
@@ -310,12 +310,16 @@ async function harnessRequest<T>(
       // 此前这里是 120 秒，多数问诊还没跑完就被前端掐断，
       // 用户看到的是「网络异常」——而后端其实还在正常算。
       //
-      // ⚠️ 小程序端受平台限制（wx.request 超时上限约 60 秒），
-      // 设得再大也不生效：**小程序端用不了完整串行流程**，
-      // 需要改成分步请求或轮询任务结果，那是架构改造，另立条目。
-      timeout: REQUEST_TIMEOUT_MS,
+      // 小程序端只能拿到 60 秒（平台上限，见 `WEAPP_MAX_TIMEOUT_MS`），
+      // 必然等不到结果；该端跑不了完整流程，原因见 `SUPPORTS_FULL_CHAT`。
+      timeout: IS_WEAPP ? WEAPP_MAX_TIMEOUT_MS : REQUEST_TIMEOUT_MS,
     })
   } catch {
+    // 小程序端这个超时是**必然**发生的：完整流程要 200 秒以上而平台上限 60 秒。
+    // 报「网络异常」会让人以为断网而反复重试，必须说清原因。
+    if (IS_WEAPP) {
+      throw new Error('请求超时：小程序端单次请求上限 60 秒，完整问诊无法在此端完成')
+    }
     throw new Error('网络异常')
   }
   // harness 的错误也以 200 + {"error": "..."} 返回，需额外识别

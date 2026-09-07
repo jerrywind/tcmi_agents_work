@@ -120,6 +120,8 @@ def create_app(cfg: RAGConfig | None = None) -> FastAPI:
     cfg = cfg or RAGConfig.from_env()
     svc = RAGService(cfg)
     app = FastAPI(title="TCM RAG Service", version="0.1.0")
+    # 挂到 state 上：主服务启动后要拿它做索引预热（见 app/rag_router.warmup_rag）
+    app.state.rag_service = svc
 
     @app.get("/health")
     async def health():

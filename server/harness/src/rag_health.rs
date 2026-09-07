@@ -23,8 +23,17 @@ use std::time::{Duration, Instant};
 /// 探测间隔：RAG 服务挂掉到被发现，最坏也就等这么久
 const PROBE_INTERVAL: Duration = Duration::from_secs(60);
 
-/// 单次探测超时（实测查询 41ms，5s 绰绰有余；超时即判不可用，不硬等）
-const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// 单次探测超时。
+///
+/// 别被「查询 41ms」误导：那是 **CLI 在已预热的小样例上** 的数字，真实容器里
+/// 差两个数量级。实测（71MB 倒排库，容器内计时）：
+///   - embedding 端点不可达/不可解析时，单次嵌入 **8s**（且空库时本可不必调用）；
+///   - 新查询首次检索 **3.5s**（postings 冷读盘），同一查询再查 0.05s；
+///   - 叠加后一次检索可达 ~12s。
+///
+/// 原先的 5s 会把「慢」判成「挂」——每次部署重启后都有一分钟报「典籍不可用」，
+/// 而服务其实是好的。探测是 60s 一轮的后台任务，放宽到 30s 不影响任何请求延迟。
+const PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// RAG 服务状态（`/health` 暴露）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -54,6 +63,18 @@ impl RagStatus {
 
 pub type SharedRagStatus = Arc<RwLock<RagStatus>>;
 
+/// 判定「典籍检索不可用」（T7.9）。
+///
+/// 编排器统一注入 `rag_available`（见 `orchestrator::with_rag_status`）。
+/// **单步调用不带该字段时按可用处理**——`/agents` 与 MCP 的调用方未必传它，
+/// 不能因为缺字段就把技能撤掉，那会改变既有行为。
+///
+/// 判定集中在这里，是因为散在各 agent 里（开方、医案参考各写一遍同样的表达式）
+/// 迟早会漂移：一处改了另一处没改，表现是「明明说了不可用，工具却还在」。
+pub fn rag_down(payload: &serde_json::Value) -> bool {
+    payload.get("rag_available").and_then(|v| v.as_bool()) == Some(false)
+}
+
 /// 启动后台探测任务
 ///
 /// 未配置端点时不启任务，只在启动时告警一次——
@@ -74,6 +95,22 @@ pub fn spawn_probe_task(cfg: Arc<HarnessConfig>, status: SharedRagStatus) {
         );
         return;
     };
+
+    // 先落一个「已配置、尚未探测」的初始状态。
+    // 首次探测是网络调用，冷启动最长要一个超时周期才回来；在此之前 `/health`
+    // 读到的是 `Default`，会把「配好了但还没探」显示成 `configured=false`——
+    // 与真的没配 rag_endpoint 完全一样。二者处置方式截然不同（等 vs 配），
+    // 不能在响应里长得一模一样。
+    write(
+        &status,
+        RagStatus {
+            configured: true,
+            reachable: None,
+            endpoint: Some(endpoint.clone()),
+            last_error: None,
+            since_last_ok_secs: None,
+        },
+    );
 
     tokio::spawn(async move {
         let mut last_ok_at: Option<Instant> = None;

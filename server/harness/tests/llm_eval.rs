@@ -30,6 +30,17 @@
 //! 默认 20 会把末尾的库外负例整段截掉——而「该说不知道时说了没有」
 //! 恰是本集的重点，被静默跳过的代价太大。
 //!
+//! ## ⚠️ 本评测只覆盖**单轮**，读分时必须记住这一点
+//!
+//! 每条病例只构造一条 user 消息，没有 assistant 消息。因此：
+//! - 它**测不到多轮链路**——上一轮助手总结被当证据的「自我确认」问题
+//!   （见 `tests/echo.rs`）在这里永不触发，分数不会因此下降；
+//! - 分数 1.0 **只代表单轮场景**，不代表追问场景可靠。
+//!
+//! 多轮的覆盖放在 `tests/echo.rs`（确定性、0.01 秒、进 CI）：
+//! 那里的断言是纯函数级的，比拿 LLM 跑一遍更精确也更快。
+//! 刻意**不**往本文件里加多轮用例：21 条已经要跑 8.5 分钟，翻倍不可接受。
+//!
 //! 可调环境变量：
 //! - `HARNESS_EVAL=1`                 启用评测（缺省跳过）
 //! - `HARNESS_EVAL_LIMIT=50`          最多评多少条（默认 50）
@@ -215,13 +226,27 @@ async fn differentiation_quality_eval() {
 
         scores.push(CaseScore {
             id,
-            kind,
+            kind: kind.clone(),
             expected,
             rule_primary,
             rule_hit,
             llm_hit,
-            error,
+            error: error.clone(),
         });
+
+        // 逐条进度：整轮要跑 8~9 分钟，此前**一条输出都没有**，
+        // 外面完全分不清是慢还是挂了（差点在 10 分钟上限被当成死锁杀掉）。
+        // 长任务必须能自证还在动。
+        eprintln!(
+            "[eval {}/{}] {} kind={} rule={} llm={}{}",
+            scores.len(),
+            cases.len().min(limit),
+            scores.last().map(|s| s.id.clone()).unwrap_or_default(),
+            kind,
+            if rule_hit { "✓" } else { "✗" },
+            if llm_hit { "✓" } else { "✗" },
+            error.map(|e| format!(" 错误：{e}")).unwrap_or_default(),
+        );
     }
 
     let total = scores.len();

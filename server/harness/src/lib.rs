@@ -24,6 +24,7 @@ pub mod rag_health;
 pub mod resources;
 pub mod skills;
 pub mod store;
+pub mod stream;
 pub mod trace;
 
 use anyhow::Context;

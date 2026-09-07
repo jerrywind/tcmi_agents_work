@@ -33,6 +33,7 @@ use crate::model::{Capability, Message};
 use crate::resources::ResourceBundle;
 use crate::skills::SharedDepartments;
 use crate::skills::SkillRegistry;
+use crate::stream::{self, StreamSink};
 use crate::trace::{snapshot, StepTrace};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -186,6 +187,13 @@ pub fn resolve_order(res: &ResourceBundle) -> Vec<Capability> {
 /// 返回每一步的输出，便于前端分步展示。
 ///
 /// 流程分三段（见模块文档）：采集（并行）→ 辨证 → 收敛判定 → 安全门与治疗。
+///
+/// `sink` 是流式推送句柄：`POST /chat/stream` 传 [`StreamSink::new`]，
+/// 每完成一步就推一个事件；非流式调用（`/chat`、MCP、`llm_eval`）传
+/// [`StreamSink::disabled`]，所有推送静默丢弃，返回值与旧行为完全一致。
+///
+/// 客户端中途断开时 [`StreamSink::is_closed`] 为 true，后续步骤不再执行——
+/// 用户关了页面还继续烧 9 次 LLM 调用没有意义。
 #[allow(clippy::too_many_arguments)]
 pub async fn run_diagnosis(
     registry: &Registry,
@@ -198,8 +206,29 @@ pub async fn run_diagnosis(
     payload: &serde_json::Value,
     // RAG 可达性（T7.9）：决定开方步「有没有典籍出处可引」
     rag: &crate::rag_health::SharedRagStatus,
+    // 流式推送句柄（非流式传 `StreamSink::disabled()`，见函数文档）
+    sink: &StreamSink,
 ) -> Result<Diagnosis> {
     let order = resolve_order(res);
+
+    // 步骤计划先发（P0 的关键一帧）：`resolve_order` 是纯函数，不碰 LLM，
+    // 故这一帧在请求到达的**毫秒级**内就能出去。前端据此立刻渲染
+    // 「望→闻→问→切→辨证→安全门→治疗」的骨架，把感知延迟从「几分钟」
+    // 压到「一瞬间」——总耗时没变，但用户从第一秒就知道在等什么、还要等多久。
+    sink.emit(
+        stream::EV_HELLO,
+        json!({
+            "plan": order
+                .iter()
+                .enumerate()
+                .map(|(i, c)| stream::plan_item(i, *c, phase_name(*c)))
+                .collect::<Vec<_>>(),
+            "total": order.len(),
+            // 「我读到的表现」：规则抽取，零 LLM 成本，与 plan 同一帧出去。
+            // 见 [`understood_symptoms`]——让用户能在开跑之前就核对。
+            "understood": understood_symptoms(res, messages),
+        }),
+    );
 
     let mut steps = Vec::new();
     let mut failures = Vec::new();
@@ -229,9 +258,31 @@ pub async fn run_diagnosis(
     // 红旗判定是关键词匹配（纯函数、零延迟），故可以先进预检：
     // 命中就没必要再跑四诊与辨证，只让安全门产出可读警示后立即返回。
     let safety_enabled = order.contains(&Capability::Safety);
-    let red_flag_prehit = safety_enabled && blocking_red_flag(res, &corpus).is_some();
-    if red_flag_prehit {
+    // 类型交给推断：`blocking_red_flag` 返回 `Option<&RedFlag>`，
+    // 不必在这里再写一遍资源模型的路径。
+    let prehit = if safety_enabled {
+        blocking_red_flag(res, &corpus)
+    } else {
+        None
+    };
+    let red_flag_prehit = prehit.is_some();
+    if let Some(rf) = prehit {
         tracing::warn!("安全门预检命中：跳过四诊与辨证，直接产出拦截结论");
+        // 立刻把拦截推给前端：这是纯关键词匹配的结果（零 LLM 成本），
+        // 用户在**第一秒**就看到「请立即就医」，而不是等 200 秒后才发现
+        // 这次问诊根本没有治疗建议。
+        //
+        // 与后面的 `blocked` 事件数据一致（同一份 `RedFlag`），
+        // 前端渲染同一条横幅，后到的覆盖先到的。
+        sink.emit(
+            stream::EV_RED_FLAG,
+            json!({
+                "slug": rf.slug,
+                "label": rf.label,
+                "severity": rf.severity,
+                "advice": rf.advice,
+            }),
+        );
     }
 
     // ---- Phase A：采集（望闻问切并行）----
@@ -239,6 +290,11 @@ pub async fn run_diagnosis(
     // 四诊之间互不依赖，串行跑等于把 4 次 LLM 往返的时间累加起来。
     // 并行后总耗时取决于最慢的一步。
     if !red_flag_prehit {
+        // 四诊同时起跑，故先把四步的 `step_start` 一起推，前端一次性点亮
+        // 四个「进行中」胶囊；完成事件随后乱序到达，按下标归位。
+        for cap in &collection {
+            emit_step_start(sink, &order, *cap);
+        }
         let outcomes = run_parallel(
             registry,
             cfg,
@@ -248,6 +304,8 @@ pub async fn run_diagnosis(
             &collection,
             messages,
             &base_payload,
+            sink,
+            &order,
         )
         .await;
         absorb(
@@ -259,6 +317,8 @@ pub async fn run_diagnosis(
             &mut blocked,
             res,
             &corpus,
+            sink,
+            &order,
         );
     }
 
@@ -267,6 +327,7 @@ pub async fn run_diagnosis(
     // 与 SafetyAgent 共用同一个 `blocking_red_flag` 判定（见 `absorb`）。
     // 预检命中时同样要跑：它不只是判定，还要产出患者读得懂的警示文案。
     if safety_enabled {
+        emit_step_start(sink, &order, Capability::Safety);
         if let Some(o) = run_step(
             registry,
             cfg,
@@ -276,6 +337,8 @@ pub async fn run_diagnosis(
             Capability::Safety,
             messages,
             &base_payload,
+            sink,
+            step_index(&order, Capability::Safety),
         )
         .await
         {
@@ -288,7 +351,22 @@ pub async fn run_diagnosis(
                 &mut blocked,
                 res,
                 &corpus,
+                sink,
+                &order,
             );
+            // 安全门确认拦截：把结构化拦截信息推给前端。
+            // 前端据此置顶拦截条，并把后续步骤胶囊灰显为「已跳过」。
+            if let Some(b) = &blocked {
+                sink.emit(
+                    stream::EV_BLOCKED,
+                    json!({
+                        "slug": b.slug,
+                        "label": b.label,
+                        "severity": b.severity,
+                        "advice": b.advice,
+                    }),
+                );
+            }
         }
     }
 
@@ -296,6 +374,10 @@ pub async fn run_diagnosis(
     // 已被安全门拦截时不再辨证：结论已定（转诊就医），再辨只是白跑一次 LLM。
     if blocked.is_none() {
         for cap in &diagnosis_phase {
+            if sink.is_closed() {
+                break;
+            }
+            emit_step_start(sink, &order, *cap);
             match run_step(
                 registry,
                 cfg,
@@ -305,6 +387,8 @@ pub async fn run_diagnosis(
                 *cap,
                 messages,
                 &base_payload,
+                sink,
+                step_index(&order, *cap),
             )
             .await
             {
@@ -317,6 +401,8 @@ pub async fn run_diagnosis(
                     &mut blocked,
                     res,
                     &corpus,
+                    sink,
+                    &order,
                 ),
                 None => continue,
             }
@@ -350,10 +436,24 @@ pub async fn run_diagnosis(
 
         if !conv.converged {
             awaiting_input = true;
-            loop_state = Some(conv);
-        } else {
-            loop_state = Some(conv);
         }
+        // 收敛状态一算出来就推：这是纯规则计算，不必等治疗期跑完。
+        // 前端据此立刻渲染「还差什么」的可点标签，用户可以在后面几步
+        // 还在跑的时候就开始准备补充——把串行等待变成并行的思考时间。
+        sink.emit(
+            stream::EV_LOOP,
+            json!({
+                "round": conv.round,
+                "converged": conv.converged,
+                "forced": conv.forced,
+                "confidence": conv.confidence,
+                "margin": conv.margin,
+                "coverage": conv.coverage,
+                "primary": conv.primary_slug,
+                "pending_questions": conv.pending_questions,
+            }),
+        );
+        loop_state = Some(conv);
     }
 
     // ---- 证候锁定（T7.1）：把辨证结论钉死，再交给治疗期各步 ----
@@ -368,9 +468,30 @@ pub async fn run_diagnosis(
     // 各步经 `resolve_syndrome` 读到的必然是同一结论。
     let (post_payload, syndrome_lock) = lock_syndrome(res, messages, &base_payload);
 
+    // ---- 结论可信度提示（H4 / H5）：算完就推，不等治疗期 ----
+    //
+    // 它只依赖 `syndrome_lock` 与 `loop_state`，两者此刻都已就绪，
+    // 原实现却把它放在全部步骤跑完之后才拼进正文——于是在流式下，
+    // 「这次结论不可信」这个最重要的信号要等 200 秒才出现。
+    // 提前到这里：用户在治疗建议出来**之前**就知道该打几分折扣。
+    let confidence_note = build_confidence_note(syndrome_lock.as_ref(), loop_state.as_ref());
+    if sink.is_enabled() {
+        sink.emit(
+            stream::EV_CONFIDENCE,
+            json!({
+                "low": confidence_note.is_some(),
+                "note": confidence_note,
+            }),
+        );
+    }
+
     // ---- Phase C：治疗（仅未被拦截且已收敛时执行）----
     if blocked.is_none() && !awaiting_input {
         for cap in &post_phase {
+            if sink.is_closed() {
+                break;
+            }
+            emit_step_start(sink, &order, *cap);
             match run_step(
                 registry,
                 cfg,
@@ -380,6 +501,8 @@ pub async fn run_diagnosis(
                 *cap,
                 messages,
                 &post_payload,
+                sink,
+                step_index(&order, *cap),
             )
             .await
             {
@@ -392,6 +515,8 @@ pub async fn run_diagnosis(
                     &mut blocked,
                     res,
                     &corpus,
+                    sink,
+                    &order,
                 ),
                 None => continue,
             }
@@ -413,6 +538,18 @@ pub async fn run_diagnosis(
                 format!("安全门拦截（{}·{}），未执行", b.label, b.severity),
             ));
         }
+        // 未执行步骤推给前端：把它们的胶囊灰显为「已跳过」，
+        // 用户一眼看出「不是没做，是刻意不做」。
+        sink.emit(
+            stream::EV_SKIPPED,
+            json!({
+                "reason": format!("安全门拦截（{}·{}），未执行", b.label, b.severity),
+                "capabilities": skipped
+                    .iter()
+                    .map(|(c, _)| json!({"capability": c.slug(), "zh": c.zh()}))
+                    .collect::<Vec<_>>(),
+            }),
+        );
     }
 
     let mut final_text = steps
@@ -431,12 +568,11 @@ pub async fn run_diagnosis(
         final_text = format!("{final_text}\n\n{notes}");
     }
 
-    // 结论可信度提示（H4 / H5）：置顶于正文，且**先于**安全门拦截拼接，
-    // 让更紧急的拦截信息留在最顶部。
+    // 置顶于正文，且**先于**安全门拦截拼接，让更紧急的拦截信息留在最顶部。
     //
     // 它是「这份报告能信到什么程度」的唯一可见线索——此前未定证、
     // 低置信度、强制放行三种情形全部静默，读报告的人无从分辨。
-    let confidence_note = build_confidence_note(syndrome_lock.as_ref(), loop_state.as_ref());
+    // 注：`confidence_note` 已在证候锁定之后提前算好并推给前端（见上）。
     if let Some(note) = &confidence_note {
         final_text = format!("## ⚠️ 结论可信度提示\n{note}\n\n{final_text}");
     }
@@ -448,6 +584,11 @@ pub async fn run_diagnosis(
             b.label, b.advice, "已停止后续治疗建议，请及时就医。", final_text
         );
     }
+
+    // 结论正文（各步 Markdown 的汇总）单独推一帧：它是「完整报告」的主体，
+    // 与逐步推送的 `step_done` 重复但用途不同——前者供报告页整体渲染，
+    // 后者供问诊页逐步披露。
+    sink.emit(stream::EV_SUMMARY, json!({ "text": final_text }));
 
     Ok(Diagnosis {
         steps,
@@ -463,6 +604,23 @@ pub async fn run_diagnosis(
     })
 }
 
+/// 推一帧「步骤开始」事件
+///
+/// 前端据此把对应胶囊切成「进行中」。它是 `step_done` 的配对事件：
+/// 只有 `step_done` 的话，用户看到的仍是「一片灰 → 突然一片绿」，
+/// 不知道当前卡在哪一步。
+fn emit_step_start(sink: &StreamSink, order: &[Capability], cap: Capability) {
+    sink.emit(
+        stream::EV_STEP_START,
+        json!({
+            "index": step_index(order, cap),
+            "capability": cap.slug(),
+            "zh": cap.zh(),
+            "phase": phase_name(cap),
+        }),
+    );
+}
+
 /// 单个步骤的执行结果（成功与失败同构，便于并行后统一归并）
 struct StepOutcome {
     cap: Capability,
@@ -471,7 +629,63 @@ struct StepOutcome {
     structured: Option<serde_json::Value>,
 }
 
+/// 规则抽取的「系统读到的表现」（`understood` 字段，随 `hello` 首帧下发）
+///
+/// ## 为什么要在第一帧就给用户看这个
+///
+/// 一次问诊要 200–500 秒。如果系统把主诉读错了（漏了「怕冷」、把「口干」
+/// 当成「口苦」），用户要等几分钟看到结论才发现，整轮重来——
+/// 而核对的代价在开跑之前只有 1 秒。
+///
+/// 它同时是**可信度**的一部分：用户看见系统依据的是哪几条表现，
+/// 而不是面对一个无法追问的黑箱。
+///
+/// ## 为什么是规则而不是让模型总结
+///
+/// 模型总结要一次额外 LLM 调用（几十秒），且会**编**——
+/// 把没提到的症状也概括进去，那比不展示更糟。
+/// 这里直接复用 [`crate::agents::differentiation::assess`] 的证据链
+/// （命中的主症 / 次症 / 舌象 / 脉象片段），是确定性规则产物。
+///
+/// 取 `ranked`（含未达主症必备的候选）而非只看 `primary`：
+/// 信息不足时恰恰最需要让用户看见「读到了什么」。
+pub fn understood_symptoms(res: &ResourceBundle, messages: &[Message]) -> Vec<String> {
+    const MAX_TAGS: usize = 12;
+    // 只保留**患者原话里真的出现过**的词。
+    //
+    // `supporting` 里混着两类东西：一是原文命中的症状/舌象/脉象，
+    // 二是 `keywords.yaml` 的证据标签（形如「胃火炽盛证据」）。
+    // 后者是系统给语料贴的**推断标签**，不是用户说过的话——
+    // 把它摆在「我读到的表现」里，用户会以为自己说过，
+    // 那是把一个推断伪装成事实，比不展示更糟。
+    let corpus: String = crate::model::user_corpus(messages);
+
+    let mut out: Vec<String> = Vec::new();
+    for s in crate::agents::differentiation::assess(res, messages)
+        .ranked
+        .iter()
+        .take(3)
+    {
+        for tag in &s.supporting {
+            // 「舌象：舌红」「脉象：脉浮数」这类带前缀的，取冒号后面的实词核对
+            let term = tag.split('：').next_back().unwrap_or(tag.as_str());
+            if term.is_empty() || !corpus.contains(term) {
+                continue;
+            }
+            if !out.contains(tag) {
+                out.push(tag.clone());
+            }
+        }
+    }
+    out.truncate(MAX_TAGS);
+    out
+}
+
 /// 执行一步；agent 未注册时返回 `None`（配置里写了但没实现，跳过即可）
+///
+/// `sink` 与 `index` 用于 token 级流式：把本步的增量出口挂进 agent 上下文，
+/// agent 内部的 LLM 调用才能边生成边推。`sink` 为空实现时（非流式调用）
+/// `with_delta` 拿到 None，行为与改动前完全一致。
 #[allow(clippy::too_many_arguments)]
 async fn run_step(
     registry: &Registry,
@@ -482,14 +696,24 @@ async fn run_step(
     cap: Capability,
     messages: &[Message],
     payload: &serde_json::Value,
+    sink: &StreamSink,
+    index: usize,
 ) -> Option<StepOutcome> {
     let agent = registry.get(cap)?;
+    let delta = if sink.is_enabled() {
+        Some(crate::stream::DeltaSink::new(sink.clone(), index, cap))
+    } else {
+        None
+    };
     let ctx = crate::agents::AgentContext::new(
         std::sync::Arc::new(cfg.clone()),
         std::sync::Arc::new(res.clone()),
         llm.clone(),
         std::sync::Arc::new(skills.clone()),
-    );
+    )
+    .with_delta(delta)
+    // RAG 不可用时撤掉 `tcm-rag`：它必然返回错误，却要多花一整轮 LLM
+    .with_rag_down(crate::rag_health::rag_down(payload));
     let started = Instant::now();
     // 单步失败只记录、不中断：已完成步骤的成本不应被后续失败浪费掉
     let result = agent.run(&ctx, messages, payload).await;
@@ -544,10 +768,17 @@ async fn run_parallel(
     caps: &[Capability],
     messages: &[Message],
     payload: &serde_json::Value,
+    sink: &StreamSink,
+    order: &[Capability],
 ) -> Vec<StepOutcome> {
     let futs: Vec<_> = caps
         .iter()
-        .map(|cap| run_step(registry, cfg, res, llm, skills, *cap, messages, payload))
+        .map(|cap| {
+            let idx = step_index(order, *cap);
+            run_step(
+                registry, cfg, res, llm, skills, *cap, messages, payload, sink, idx,
+            )
+        })
         .collect();
     // 结果按输入顺序返回（join_all 保序），故埋点顺序稳定
     futures::future::join_all(futs)
@@ -557,7 +788,10 @@ async fn run_parallel(
         .collect()
 }
 
-/// 把一批步骤结果并入累加器
+/// 把一批步骤结果并入累加器，并逐步推送流式事件
+///
+/// `order` 用于算步骤下标（见 [`step_index`]：并行步骤的到达顺序是乱的，
+/// 事件里必须带固定下标，前端才能归位渲染）。
 #[allow(clippy::too_many_arguments)]
 fn absorb(
     outcomes: Vec<StepOutcome>,
@@ -568,12 +802,29 @@ fn absorb(
     blocked: &mut Option<Blocked>,
     res: &ResourceBundle,
     corpus: &str,
+    sink: &StreamSink,
+    order: &[Capability],
 ) {
     for o in outcomes {
+        let idx = step_index(order, o.cap);
+        let trace = o.trace.clone();
         traces.push(o.trace);
         match o.result {
             Ok(out) => {
-                steps.push((o.cap, out));
+                steps.push((o.cap, out.clone()));
+                // 正文与结构化结果一并推送：结构化是**确定性**产出的
+                // （T4.1），前端拿到就能插卡片，不必从 Markdown 里反解析。
+                sink.emit(
+                    stream::EV_STEP_DONE,
+                    json!({
+                        "index": idx,
+                        "capability": o.cap.slug(),
+                        "zh": o.cap.zh(),
+                        "text": out,
+                        "trace": trace,
+                        "structured": o.structured,
+                    }),
+                );
                 if let Some(v) = o.structured {
                     structured.push((o.cap, v));
                 }
@@ -595,7 +846,19 @@ fn absorb(
                     }
                 }
             }
-            Err(e) => failures.push((o.cap, e.to_string())),
+            Err(e) => {
+                let msg = e.to_string();
+                sink.emit(
+                    stream::EV_STEP_FAIL,
+                    json!({
+                        "index": idx,
+                        "capability": o.cap.slug(),
+                        "zh": o.cap.zh(),
+                        "error": msg,
+                    }),
+                );
+                failures.push((o.cap, msg));
+            }
         }
     }
 }
@@ -614,12 +877,32 @@ fn absorb(
 /// 计入。急危重症通常由患者主动陈述，且漏判一侧还有 SafetyAgent 的 LLM 复核兜底；
 /// 而误判一侧是「健康用户永远拿不到方案」，两害相权取后者。
 pub fn safety_corpus(messages: &[Message]) -> String {
-    messages
-        .iter()
-        .filter(|m| m.role == "user")
-        .map(|m| m.content.clone())
-        .collect::<Vec<_>>()
-        .join("\n")
+    crate::model::user_corpus(messages)
+}
+
+/// 阶段名（流式 `hello.plan` 用）
+///
+/// 安全门不属于任何一段（它有独立阶段，先于辨证执行，见 [`split_phases`]），
+/// 故单独给一个名字，前端据此把它渲染成「关卡」而不是并列的一步。
+fn phase_name(cap: Capability) -> &'static str {
+    if cap == Capability::Safety {
+        "safety"
+    } else {
+        match phase_of(cap) {
+            0 => "collection",
+            1 => "diagnosis",
+            _ => "treatment",
+        }
+    }
+}
+
+/// 步骤在执行顺序中的固定下标。
+///
+/// 采集期是**并行**执行的，四步几乎同时完成，事件的**到达顺序是乱的**。
+/// 每个事件都带上这里算出的下标，前端按下标归位渲染，而不是按到达顺序，
+/// 否则四诊卡片会在界面上乱跳。
+fn step_index(order: &[Capability], cap: Capability) -> usize {
+    order.iter().position(|c| *c == cap).unwrap_or(usize::MAX)
 }
 
 /// 阶段编号：0 采集 / 1 辨证 / 2 治疗
@@ -885,7 +1168,9 @@ pub async fn run_single(
             std::sync::Arc::new(res.clone()),
             llm.clone(),
             std::sync::Arc::new(skills.clone()),
-        );
+        )
+        // 与 `run_step` 同源：单步调用也撤掉必然失败的 `tcm-rag`
+        .with_rag_down(crate::rag_health::rag_down(payload));
         let started = Instant::now();
         let out = agent.run(&ctx, messages, payload).await?;
         let elapsed = started.elapsed().as_millis();

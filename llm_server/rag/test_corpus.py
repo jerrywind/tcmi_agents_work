@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -242,6 +243,117 @@ class TestIndex(unittest.TestCase):
             self.assertEqual(s["books"], 2)
             self.assertTrue(s["postings"] > 0)
             self.assertTrue(s["chars"] > 0)
+
+
+class TestPathPortability(unittest.TestCase):
+    """索引跨机器/进容器的路径可移植性。
+
+    真实部署：索引在宿主 Windows 上构建（`docs.path` 存 `D:\\...`），随后整个
+    `rag_data` 挂载进 Linux 容器。容器里记录路径必然失效，必须能按
+    「语料根目录 + 文件名」回退读原文——否则「检索命中一本好书」会退化成
+    一行 FileNotFoundError，694 部典籍等于没进 RAG 流程。
+    """
+
+    def test_search_falls_back_to_corpus_dir_when_recorded_path_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            corpus = root / "corpus"
+            corpus.mkdir()
+            (corpus / "000-测试本草.txt").write_bytes(BOOK_A.encode("gb18030"))
+            db = root / "index.sqlite3"
+            with CorpusIndex(db) as idx:
+                idx.build(corpus)
+
+            # 模拟「换机器/进容器」：原语料目录整个移走，原绝对路径全部失效；
+            # 索引文件不动（相当于被拷进容器），书在另一个挂载点。
+            moved = root / "corpus_moved"
+            corpus.rename(moved)
+            self.assertFalse(corpus.exists(), "前置：原语料目录应已不存在")
+
+            with CorpusIndex(db, corpus_dir=moved) as idx:
+                hits = idx.search("甘草 味甘平 五脏六腑寒热邪气", top_k=3)
+                self.assertTrue(hits, "路径失效后应按文件名回退，仍能检索到内容")
+                self.assertEqual(hits[0].book, "测试本草")
+                self.assertIn("甘草", hits[0].text)
+
+    def test_search_falls_back_to_db_parent_when_corpus_dir_not_given(self):
+        """没显式传语料目录时，自动从索引库所在目录向上找（/data/rag/_index 的父目录）。"""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            corpus = root / "rag_data"
+            corpus.mkdir()
+            (corpus / "000-测试本草.txt").write_bytes(BOOK_A.encode("gb18030"))
+            # 索引库放在「语料根 / _index /」下，与真实布局（rag_data/_index/）一致
+            idx_dir = corpus / "_index"
+            idx_dir.mkdir()
+            db = idx_dir / "corpus.sqlite3"
+            with CorpusIndex(db) as idx:
+                idx.build(corpus)
+
+            # 让记录路径失效：把整棵树挪走再挂到另一个根
+            relocated = root / "relocated"
+            corpus.rename(relocated)
+            new_idx_dir = relocated / "_index"
+            moved_db = new_idx_dir / "corpus.sqlite3"
+            self.assertTrue(moved_db.exists(), "索引文件随目录移动")
+
+            # 不传 corpus_dir：db.parent.parent == relocated，恰好是新的语料根
+            with CorpusIndex(moved_db) as idx:
+                hits = idx.search("麻黄 发表出汗 止咳逆上气", top_k=3)
+                self.assertTrue(hits)
+                self.assertIn("麻黄", hits[0].text)
+
+    def test_search_falls_back_for_windows_recorded_paths(self):
+        """宿主是 Windows、检索机是 Linux 容器时的关键场景。
+
+        `docs.path` 记录为 `D:\\...\\rag_data\\013-本草纲目.txt`，容器里 POSIX 的
+        Path 不认反斜杠；回退必须能从中剥出「文件名」而不是整串路径。
+        """
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            corpus = root / "texts"
+            corpus.mkdir()
+            book = corpus / "000-测试本草.txt"
+            book.write_bytes(BOOK_A.encode("gb18030"))
+            db = root / "idx.sqlite3"
+            with CorpusIndex(db) as idx:
+                idx.build(corpus)
+
+            # 把索引里的 path 改写成「假想的宿主 Windows 绝对路径」
+            win_path = f"Z:\\home\\tcm\\rag_data\\{book.name}"
+            conn = sqlite3.connect(db)
+            conn.execute("UPDATE docs SET path=? WHERE title=?", (win_path, "测试本草"))
+            conn.commit()
+            conn.close()
+
+            with CorpusIndex(db, corpus_dir=corpus) as idx:
+                hits = idx.search("甘草 味甘平", top_k=3)
+                self.assertTrue(hits, "Windows 记录路径 + Linux 布局也应回退命中")
+                self.assertEqual(hits[0].book, "测试本草")
+                self.assertIn("甘草", hits[0].text)
+
+    def test_missing_book_is_skipped_not_fatal(self):
+        """个别书原文缺失只跳过该本，其余命中照常返回。"""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            corpus = root / "corpus"
+            corpus.mkdir()
+            (corpus / "000-测试本草.txt").write_bytes(BOOK_A.encode("gb18030"))
+            (corpus / "001-测试方书.txt").write_bytes(BOOK_B.encode("gb18030"))
+            db = root / "index.sqlite3"
+            with CorpusIndex(db) as idx:
+                idx.build(corpus)
+
+            moved = root / "corpus_moved"
+            moved.mkdir()
+            # 只搬走方书：本草书的记录路径仍存在，方书需要回退才能读到
+            (corpus / "001-测试方书.txt").rename(moved / "001-测试方书.txt")
+            (corpus / "000-测试本草.txt").unlink()  # 本草原文彻底删掉
+
+            with CorpusIndex(db, corpus_dir=moved) as idx:
+                hits = idx.search("桂枝汤主之 恶寒", top_k=3)
+                self.assertTrue(hits, "缺了一本不该让整个查询失败")
+                self.assertTrue(all(h.book == "测试方书" for h in hits))
 
 
 class TestEval(unittest.TestCase):

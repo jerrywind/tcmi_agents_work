@@ -4,17 +4,14 @@ page, body {
   color: #2c3e34;
 }
 
-.btn-primary {
-  background: #2a6f4e;
-  color: #fff;
-  border-radius: 16px;
-  padding: 20px 0;
-  text-align: center;
-  font-size: 32px;
-
-  &.disabled { opacity: 0.5; }
+// 多端一致的基础重置：小程序与 H5 默认都是 content-box，
+// 而带 padding 的容器里塞 width:100% 的子元素时，两种盒子模型结果不同。
+// 小程序 wxss 对 `*` 选择器支持不稳，故显式列出常用元素而不是通配。
+page, view, text, input, textarea, scroll-view, button {
+  box-sizing: border-box;
 }
 
+/* ---------- 通用容器 ---------- */
 .card {
   background: #fff;
   border-radius: 20px;
@@ -30,6 +27,252 @@ page, body {
   color: #2a6f4e;
 }
 
+// 卡片内的说明文字：主说明与次级说明，与 .card-title 配套
+.card-note {
+  display: block;
+  margin-top: 16px;
+  font-size: 24px;
+  line-height: 1.6;
+  color: #7a8c83;
+}
+
+.card-subnote {
+  display: block;
+  margin-top: 16px;
+  font-size: 22px;
+  line-height: 1.6;
+  color: #97a8a0;
+}
+
+.card-alert {
+  border: 2px solid #e0a44c;
+  background: #fffaf2;
+}
+
+/* ---------- 报告内容件（报告页与存证回查页共用） ---------- */
+// 回查视图渲染的是同一份结果，共用这组样式才能保证
+// 「同一份报告，两处观感一致」——此前两页各写一份，改一处就漏一处。
+.sub-title {
+  font-size: 20px;
+  color: #97a8a0;
+  font-weight: 400;
+}
+
+.syndrome-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f2f0;
+
+  &:last-child { border-bottom: none; }
+}
+
+.syndrome-conf {
+  font-size: 24px;
+  color: #55655c;
+}
+
+.chain-block {
+  padding: 14px 0;
+  border-bottom: 1px dashed #e6ebe8;
+
+  &:last-child { border-bottom: none; }
+}
+
+.chain-name {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1d5c3e;
+  margin-bottom: 10px;
+}
+
+.chain-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.chain-label {
+  font-size: 22px;
+  padding: 3px 12px;
+  border-radius: 12px;
+  margin-right: 10px;
+  color: #fff;
+
+  &.sup { background: #2a6f4e; }
+  &.con { background: #b04a3a; }
+}
+
+.ev-tag {
+  font-size: 23px;
+  color: #44544b;
+  background: #eff4f1;
+  border: 1px solid #d8e3dc;
+  border-radius: 14px;
+  padding: 6px 14px;
+  margin: 4px 8px 4px 0;
+  display: inline-flex;
+  align-items: center;
+
+  &.con { background: #f7eeec; border-color: #ecd6d2; color: #9c4334; }
+}
+
+.rv-empty { font-size: 24px; color: #8aa198; }
+
+// 报告正文（结论摘要）：报告页与存证回查页渲染的是同一段文本，
+// 样式也只有一份才不会两处观感不一致。
+.report-summary {
+  display: block;
+  font-size: 27px;
+  line-height: 1.75;
+  color: #2c3e34;
+  word-break: break-all;
+}
+
+.ev-row {
+  display: flex;
+  align-items: baseline;
+  padding: 12px 0;
+}
+
+.ev-key {
+  width: 160px;
+  flex-shrink: 0;
+  font-size: 24px;
+  color: #2a6f4e;
+  font-weight: 600;
+}
+
+.ev-val {
+  flex: 1;
+  font-size: 24px;
+  color: #44544b;
+  word-break: break-all;
+}
+
+.disclaimer-card { background: #fbfbf7; }
+
+.disclaimer-text {
+  font-size: 22px;
+  color: #97a8a0;
+  line-height: 1.6;
+}
+
+/* ---------- 按钮 ---------- */
+.btn-primary {
+  background: #2a6f4e;
+  color: #fff;
+  border-radius: 16px;
+  padding: 20px 0;
+  text-align: center;
+  font-size: 32px;
+
+  &.disabled { opacity: 0.5; }
+}
+
+// 次级按钮：与 .btn-primary 成对出现（「继续追问 / 重新问诊」等）。
+// 此前各页各写一份同名类，加载顺序不同就会互相覆盖。
+.btn-ghost {
+  flex: 1;
+  text-align: center;
+  padding: 20px 0;
+  border-radius: 16px;
+  font-size: 28px;
+  color: #2a6f4e;
+  background: #fff;
+  border: 1px solid #cfe0d8;
+
+  &.disabled { opacity: 0.5; }
+}
+
+// 主/次按钮并排行（报告页底部、存证回查页）
+.report-actions {
+  display: flex;
+  gap: 20px;
+  margin: 30px 24px;
+}
+
+/* ---------- 档案表单（档案页与家庭档案页共用） ---------- */
+// 两页的字段完全一致，样式也必须只有一份：各页自写一份时，
+// 改一处漏一处就会出现「同一张表两页长不一样」。
+.form-row {
+  display: flex;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid #f0f2f0;
+
+  &:last-child { border-bottom: none; }
+
+  // 既往病史是多行输入，标签需要单独占一行
+  &.col {
+    flex-direction: column;
+    align-items: stretch;
+
+    .form-label {
+      width: auto;
+      margin-bottom: 14px;
+    }
+  }
+}
+
+// min-width 而非定宽：窄屏上长标签宁可把输入框挤窄，也不把文字截断
+.form-label {
+  min-width: 170px;
+  color: #55655c;
+  flex-shrink: 0;
+}
+
+// 「清除」入口：原生 picker 点开即点「确定」也会写入值，
+// 得给用户一个退回「未选择」的机会（与 NativeDatePicker 配套）
+.form-clear {
+  flex-shrink: 0;
+  margin-left: 16px;
+  padding: 10px 18px;
+  font-size: 24px;
+  color: #97a8a0;
+  border: 1px solid #dfe9e4;
+  border-radius: 24px;
+}
+
+.form-input {
+  flex: 1;
+  font-size: 28px;
+
+  &.placeholder { color: #b3c0ba; }
+}
+
+.history-input {
+  width: 100%;
+  min-height: 140px;
+  font-size: 28px;
+  line-height: 1.6;
+}
+
+.submit-wrap {
+  margin: 40px 24px;
+}
+
+.disclaimer {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 22px;
+  color: #97a8a0;
+}
+
+// 空态提示：家庭档案、技能列表、存证记录共用
+.empty-tip {
+  display: block;
+  text-align: center;
+  font-size: 26px;
+  color: #97a8a0;
+  line-height: 1.6;
+  padding: 40px 24px;
+}
+
 // 性别点选标签。刻意不用 Picker：Picker 打开后不滑直接点「确定」会写入
 // 定位值，等于替用户选了一个性别且没有任何提示。
 .gender-group {
@@ -39,8 +282,13 @@ page, body {
 }
 
 .gender-chip {
-  padding: 8px 26px;
-  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // 触控目标：性别是必填项，标签过矮时三个选项之间容易点错
+  min-height: 64px;
+  padding: 12px 26px;
+  border-radius: 32px;
   font-size: 26px;
   color: #55655c;
   background: #f3f7f5;
@@ -51,6 +299,29 @@ page, body {
     color: #fff;
     border-color: #2a6f4e;
   }
+}
+
+/* ---------- 错误边界兜底页 ---------- */
+.error-fallback {
+  padding: 80px 48px;
+  text-align: center;
+}
+
+.error-title {
+  display: block;
+  font-size: 34px;
+  font-weight: 600;
+  color: #c0392b;
+  margin-bottom: 16px;
+}
+
+.error-detail {
+  display: block;
+  font-size: 26px;
+  color: #7a8c83;
+  line-height: 1.6;
+  margin-bottom: 40px;
+  word-break: break-all;
 }
 
 /* ---------- Markdown 渲染（后端步骤输出为 Markdown，统一在这里排版） ---------- */
@@ -71,7 +342,8 @@ page, body {
   line-height: 1.75;
   margin: 8px 0;
   white-space: pre-wrap;
-  word-break: break-word;
+  // 小程序 wxss 不认 break-word，长串英文/URL 会横向溢出，故用 break-all
+  word-break: break-all;
 }
 
 .md-bold { font-weight: 700; }
@@ -95,7 +367,7 @@ page, body {
   margin: 6px 0;
   font-size: 27px;
   line-height: 1.7;
-  word-break: break-word;
+  word-break: break-all;
 }
 .md-li-mark {
   flex-shrink: 0;

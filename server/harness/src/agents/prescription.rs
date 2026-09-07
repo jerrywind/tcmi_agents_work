@@ -34,6 +34,12 @@ impl SubAgent for PrescriptionAgent {
         // 就出现「辨证脾胃湿热、开方龙胆泻肝汤」这种方证不对口。
         let syndrome_slug = crate::agents::resolve_syndrome(&ctx.resources, messages, payload);
 
+        // 典籍检索是否接通（T7.9）：`rag_available` 由编排器注入
+        // （见 `orchestrator::with_rag_status`）。单步调用不带此字段时按可用处理，
+        // 不改变既有行为。判定见 `rag_health::rag_down`（此处提前算，
+        // 因为下面拼 system 时要按它决定要不要提 `tcm-rag`）。
+        let rag_down = crate::rag_health::rag_down(payload);
+
         let mut rule_part = String::new();
         if let Some(slug) = &syndrome_slug {
             let formulas = crate::knowledge::find_formula(&ctx.resources, slug);
@@ -65,9 +71,18 @@ impl SubAgent for PrescriptionAgent {
                 }
                 rule_part.push_str(
                     "\n以上为本地方剂库的确定性结果：采用其中方剂时，组成须与上面记载\
-                     完全一致（不得凭记忆增减药味），确需加减须逐味说明理由。\n\
-                     请再用 tcm-rag 在方书中检索，补充更贴切或可备选的方剂，并说明取舍。\n",
+                     完全一致（不得凭记忆增减药味），确需加减须逐味说明理由。\n",
                 );
+                // RAG 不可用时 `tcm-rag` 已被撤下（见 `tools_for_llm`），
+                // 这里若还让模型去调它，等于指向一个不存在的工具——模型要么
+                // 凭空声称检索过，要么把力气花在找工具上。措辞必须跟着变。
+                if rag_down {
+                    rule_part.push_str("（本次典籍检索不可用，无需再尝试检索。）\n");
+                } else {
+                    rule_part.push_str(
+                        "请再用 tcm-rag 在方书中检索，补充更贴切或可备选的方剂，并说明取舍。\n",
+                    );
+                }
             }
         }
 
@@ -80,11 +95,6 @@ impl SubAgent for PrescriptionAgent {
         //
         // 辨证步早就是对的：它把规则结论经 `brief()` 放进 system，
         // 所以主证判得准。开方步把这个模式补上。
-        // 典籍检索是否接通（T7.9）：`rag_available` 由编排器注入
-        // （见 `orchestrator::with_rag_status`）。单步调用不带此字段时按可用处理，
-        // 不改变既有行为。
-        let rag_down = payload.get("rag_available").and_then(|v| v.as_bool()) == Some(false);
-
         // RAG 不可用时必须堵住「编出处」：模型不知道自己没查到，照样写
         // 「出自《xxx》」。真实验证里就把龙胆泻肝汤标成了出自《伤寒论》
         // （该方实出自《医方集解》）——读报告的人没有能力分辨这是编的。

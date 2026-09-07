@@ -10,6 +10,7 @@ use harness::agents::acupuncture::syndrome_block;
 use harness::agents::case_reference::infer_syndromes_hint;
 use harness::agents::convergence::{evaluate, LoopConfig};
 use harness::agents::differentiation::assess;
+use harness::agents::tools_for_llm;
 use harness::agents::{blocking_red_flag, detect_red_flags, is_blocking, resolve_syndrome};
 use harness::config::HarnessConfig;
 use harness::knowledge::{check_composition, find_formula};
@@ -19,6 +20,7 @@ use harness::orchestrator::{
     split_phases, with_rag_status, Blocked, Diagnosis, SyndromeLock, DISCLAIMER,
     LOCK_MIN_CONFIDENCE,
 };
+use harness::rag_health::rag_down;
 use harness::resources::load;
 use harness::resources::model::{Gender, ResourceBundle, Routing};
 use harness::skills::build_default_registry;
@@ -1313,6 +1315,61 @@ fn treatment_steps_share_formula_and_care_tools() {
         inspection.contains(&"tcm-kb".to_string()),
         "全局工具应对所有 capability 可见：{inspection:?}"
     );
+}
+
+// ---------------- RAG 不可用时撤掉 tcm-rag ----------------
+
+#[test]
+fn rag_down_drops_tcm_rag_from_llm_tools() {
+    let res = bundle();
+    let cfg = HarnessConfig::default();
+    let reg = build_default_registry(
+        &cfg,
+        &res,
+        reqwest::Client::new(),
+        std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+    );
+    let listed: Vec<harness::skills::Skill> = reg
+        .for_capability(Capability::Prescription)
+        .into_iter()
+        .cloned()
+        .collect();
+
+    // 前提：正常情况下它确实在清单里，否则下面两条断言都是空的
+    assert!(
+        listed.iter().any(|s| s.name == harness::skills::RAG_SKILL),
+        "RAG 可用时 tcm-rag 应可调用"
+    );
+
+    let kept = tools_for_llm(listed.clone(), false);
+    assert!(
+        kept.iter().any(|s| s.name == harness::skills::RAG_SKILL),
+        "RAG 可用时不得撤掉它——撤了就再也查不到典籍"
+    );
+
+    let dropped = tools_for_llm(listed, true);
+    assert!(
+        !dropped.iter().any(|s| s.name == harness::skills::RAG_SKILL),
+        "RAG 不可用时 tcm-rag 必然返回错误，却要多花一整轮 LLM：{:?}",
+        dropped.iter().map(|s| &s.name).collect::<Vec<_>>()
+    );
+    // 只撤它一个，别的工具不能受影响
+    assert!(
+        dropped.iter().any(|s| s.name == "tcm-formula"),
+        "撤 RAG 不该牵连方剂检索：{:?}",
+        dropped.iter().map(|s| &s.name).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn rag_down_predicate_treats_missing_field_as_available() {
+    // 缺字段按可用处理：`/agents` 与 MCP 的调用方未必传 `rag_available`，
+    // 不能因为缺字段就把技能撤掉（那会改变既有行为）。
+    assert!(!rag_down(&json!({})));
+    assert!(!rag_down(&json!({"rag_available": true})));
+    assert!(rag_down(&json!({"rag_available": false})));
+    // 字段类型不对（字符串）时同样按可用处理，避免误撤
+    assert!(!rag_down(&json!({"rag_available": "false"})));
 }
 
 #[tokio::test]

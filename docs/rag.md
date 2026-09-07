@@ -86,6 +86,7 @@
 | `RAG_SCORE_THRESHOLD` | `0.0` | 相似度阈值 |
 | `RAG_DATA_DIR` | `/data/rag` | 索引持久化目录 |
 | `RAG_CORPUS_DIR` | 无 | 预置语料目录（见下） |
+| `RAG_CORPUS_DB` | `/data/rag/corpus.sqlite3` | **典籍倒排索引库路径**（预建索引在 `rag_data/_index/corpus.sqlite3`，挂载后须指向它） |
 | `RAG_PORT` | `8080` | 服务端口 |
 
 ## HTTP API
@@ -172,6 +173,44 @@ rag_endpoint: "http://llm_server:8000/rag/retrieve/text"   # docker 同一网络
 
 Sub-Agent 在执行时若需检索药典、医案、舌象图谱等资料，可调用 RAG 服务获得相关上下文后
 再生成结论；无 RAG 服务时不影响问诊流程（参见 `docs/sub_agents.md`、`docs/skills.md`）。
+
+### 启用前提：语料必须挂进 llm_server 容器
+
+RAG 端点虽然一直挂在 llm_server 主应用上，但**语料（`rag_data/`）从未挂载进容器**，
+容器内的 `corpus_db` 默认是空路径 `/data/rag/corpus.sqlite3`，于是索引为 `None`、
+`tcm-rag` 永远检索不到任何典籍——链路空转。启用需要三件事齐备：
+
+1. **挂载语料卷**：把仓库 `rag_data/`（694 部 txt 原文 + `_index/corpus.sqlite3` 预建索引）
+   挂到容器 `/data/rag`。两处 compose 均已配好：
+   - 生产：`deploy/docker-compose.yml` 的 `llm_server` 服务（同时为 harness 的
+     `rag_endpoint` 提供可达的服务名 `llm_server`）；
+   - 本地联调：`llm_server/docker-compose.yml`。
+2. **环境变量**（与挂载配套，见上表）：
+   ```yaml
+   RAG_DATA_DIR: "/data/rag"
+   RAG_CORPUS_DIR: "/data/rag"            # 语料根：原文回读的候选目录
+   RAG_CORPUS_DB: "/data/rag/_index/corpus.sqlite3"
+   ```
+3. **预建索引**：`rag_data/_index/corpus.sqlite3` 由宿主机离线生成
+   （`corpus-build` + `corpus-classify`，约一分钟，命令见「典籍全文检索」小节），
+   无需在容器内重建。
+
+> 索引内 `docs.path` 记录的是**建库机的绝对路径**（宿主机 Windows 的 `D:\...`），
+> 容器里路径不同；`CorpusIndex` 已做路径可移植处理——记录路径失效时按
+> 「语料根目录 + 文件名」回退（`corpus.py::_resolve_text_path`），因此宿主机建的
+> 索引可直接跨机/进容器使用，个别原文缺失也只跳过该本、不中断检索。
+
+**验证**：llm_server 起来后看启动日志 `RAG 已挂载：corpus_db=... top_k=...`；
+`curl http://127.0.0.1:22010/rag/stats`（本地联调）应返回
+`"corpus": {"books": 696, "terms": ..., "postings": ...}` 而不是 `null`；
+再 `POST /rag/retrieve/text {"query": "半夏泻心汤 心下痞"}` 应能返回《类证治裁》等典籍片段
+（实测命中「心下痞，发热而呕，半夏泻心汤」）。
+harness 侧 `GET /health` 的 `rag.reachable` 应为 `true`（后台每 60s 探测一次）。
+
+> ⚠️ **验证时一律用 `127.0.0.1`，不要用 `localhost`**：Windows 上 `localhost`
+> 会先解析到 IPv6 `::1`，容器未监听时回落 IPv4 要等约 **21 秒**。
+> 这个延迟会把所有耗时测量污染掉（实测同一个请求：`localhost` 29.12s /
+> `127.0.0.1` 0.14s），足以让人得出完全错误的结论。
 
 ## 典籍全文检索（T4.3）
 
@@ -300,6 +339,34 @@ Python API：`CorpusIndex.search(query, tags=["儿科"])`。
   属正常；另一部分是因为「中医瑰宝苑」导出格式的典籍没有作者元数据，无从判定。
 - 规则按书名/作者匹配，语料元数据出错（作者张冠李戴、字段串位）会传导为误标；
   发现后可直接改 `taxonomy.py` 的规则表重跑，无需重建索引。
+
+## 检索耗时、预热与探活
+
+「平均 41ms」是 **CLI 在已预热样例上** 的数字，别直接拿来当线上预算。
+容器内实测（71MB 倒排库）：
+
+| 阶段 | 耗时 | 说明 |
+|---|---|---|
+| 预热后 / 重复查询 | 0.05–0.14s | 常态 |
+| 新查询首次检索 | ~3.5s | postings 冷读盘，同一查询再查即回落 |
+| embedding 端点不可达或不可解析 | ~8s/次 | **空向量库时本可完全避免** |
+
+由此做了两处改进，都是被「探活误报」逼出来的：
+
+1. **向量库为空时跳过 embedding**（`retriever.py`）：库里一条向量都没有，
+   嵌入结果无处可用；而离线部署的常态就是端点不可达，每请求白付数秒。
+   修完冷启动首查 **29.12s → 0.14s**。
+2. **启动后后台预热**（`RAGService.warmup`，在 `app/main.py` 的 lifespan 里
+   `asyncio.create_task`）。预热用的查询与 harness 探活的 `query` **必须是同一个
+   字符串**（`健康检查`，见 `retriever.py::WARMUP_QUERY` 与 `rag_health.rs::probe`）：
+   预热的页和探活要读的页不是一批的话，预热等于白做。
+
+harness 侧 `PROBE_TIMEOUT` 由 5s 放宽到 **30s**：5s 会把「慢」判成「挂」——
+每次部署重启后都有一分钟报「典籍不可用」，而服务其实是好的。探测是 60s 一轮的
+后台任务，放宽不会影响任何请求延迟。
+
+修复后实测：llm_server 监听后 **40ms** 即 `rag.reachable=true`；
+此前第一次探活必失败，要等满 60s 的第二轮才转 true。
 
 ## 运行测试
 
