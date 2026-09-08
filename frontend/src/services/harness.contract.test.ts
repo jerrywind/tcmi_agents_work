@@ -11,7 +11,7 @@
  *   不在自动化测试内（harness 无 MockProvider）。
  *
  * 本地运行：
- *   cd server/harness && ../target/debug/harness --listen 127.0.0.1:8011
+ *   cd server && docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 tcmi_server:local
  *   cd frontend && npx vitest run src/services/harness.contract.test.ts
  */
 import { describe, it, expect } from 'vitest'
@@ -20,12 +20,14 @@ import Taro from '@tarojs/taro'
 /**
  * 候选地址：**依次探测，取第一个通的**。
  *
+ * 当前 canonical 对外端口是 43301（tcmi_server 容器 -p 43301:43301）；
  * 此前只认 8011：本机该端口被占（或容器端口映射没起来）时，
  * 这 6 条契约会全部静默 skip——「会跳过的检查等于没有检查」。
- * 故允许 `VITE_API_BASE` 指定，并给常见高位端口兜底；全都连不上才 skip 且告警。
+ * 故允许 `VITE_API_BASE` 指定，并在 43301 之外给旧端口兜底；全都连不上才 skip 且告警。
  */
 const CANDIDATES = [
   process.env.VITE_API_BASE,
+  'http://127.0.0.1:43301',
   'http://127.0.0.1:8011',
   'http://127.0.0.1:18011',
 ].filter(Boolean) as string[]

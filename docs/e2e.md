@@ -60,23 +60,23 @@ cd tcm_work/e2e_tests
 .\run_full_chain_e2e.ps1 -SkipFrontend         # 只跑 pytest
 .\run_full_chain_e2e.ps1 -SkipBuild            # 复用已存在的镜像，不重新构建
 ```
-脚本流程：生成样例图片 → `docker build` harness 镜像（多阶段，镜像内编译）
-→ `docker run` 起容器（`:8011`）→ `/health` 探活 → 跑 pytest → 前端契约测试 → 删除容器。
+脚本流程：生成样例图片 → `docker build` tcmi_server 镜像（多阶段，镜像内编译）
+→ `docker run` 起容器（harness 对外 `:43301`，rrserver `:43302`）→ `/health` 探活 → 跑 pytest → 前端契约测试 → 删除容器。
 
 > **后端完全依赖 Docker**：脚本不再使用 `target/{debug,release}/harness.exe`
 > （宿主机 cargo 产物不作为交付/验证依据）。构建上下文为 workspace 根 `server/`。
-> 常用开关：`-SkipBuild` 跳过构建、`-ImageName` 指定镜像名（默认 `tcm-harness:e2e`）。
+> 常用开关：`-SkipBuild` 跳过构建、`-ImageName` 指定镜像名（默认 `tcmi_server:e2e`）。
 
 ### 3.2 分别运行
 ```powershell
-# 跨组件 pytest（先手动起 harness 容器在 :8011）
-$env:TCM_HARNESS_BASE = "http://127.0.0.1:8011"
+# 跨组件 pytest（先手动起 harness 容器在 :43301）
+$env:TCM_HARNESS_BASE = "http://127.0.0.1:43301"
 cd e2e_tests
 python -m pytest -q                        # 不含 rrserver
 python -m pytest -q -k rrserver            # 只跑 rrserver
 
-# 前端契约测试（先起 harness 在 :8011）
-$env:VITE_API_BASE = "http://127.0.0.1:8011"
+# 前端契约测试（先起 harness 在 :43301）
+$env:VITE_API_BASE = "http://127.0.0.1:43301"
 cd frontend && npx vitest run src/services/harness.contract.test.ts
 ```
 
@@ -113,13 +113,13 @@ $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'   # 若服务端开启了鉴权
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `TCM_HARNESS_BASE` | `http://127.0.0.1:8011` | harness 地址（编排脚本自动设置） |
+| `TCM_HARNESS_BASE` | `http://127.0.0.1:43301` | harness 地址（编排脚本自动设置） |
 | `TCM_LLM_BASE` | `http://localhost:8000` | llm_server 网关地址（`conftest.py`） |
-| `TCM_RRSERVER_SERVER_BASE` | `http://localhost:8088` | rrserver 云端中继 |
+| `TCM_RRSERVER_SERVER_BASE` | `http://localhost:43302` | rrserver 云端中继（tcmi_server 容器内 43302） |
 | `TCM_RRSERVER_CLIENT_BASE` | `http://localhost:9000` | rrserver 家庭端 client |
 | `TCM_FRONTEND_BASE` | `http://localhost:10086` | 前端 H5 dev server |
 | `TCM_RRSERVER_BIN` | — | rrserver 二进制路径（`-WithRrserver` 时用，缺省按 `server/rrserver/target/**` 查找） |
-| `VITE_API_BASE` | `http://127.0.0.1:8011` | 前端契约测试指向的后端地址（编排脚本自动设置） |
+| `VITE_API_BASE` | `http://127.0.0.1:43301` | 前端契约测试指向的后端地址（编排脚本自动设置） |
 | `TCM_E2E_HEALTH_TIMEOUT` / `TCM_E2E_HTTP_TIMEOUT` | `60` / `30` | 健康等待与请求超时（秒） |
 - `HARNESS_LLM_BASE_URL` / `HARNESS_LLM_API_KEY` / `HARNESS_MODEL`：harness 连接 LLM 用
   （前缀是 `HARNESS_`；无 LLM 时仅只读端点可用）。

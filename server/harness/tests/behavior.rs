@@ -17,8 +17,8 @@ use harness::knowledge::{check_composition, find_formula};
 use harness::model::{Capability, Message};
 use harness::orchestrator::{
     build_confidence_note, diagnosis_payload, lock_syndrome, resolve_order, safety_corpus,
-    split_phases, with_rag_status, Blocked, Diagnosis, SyndromeLock, DISCLAIMER,
-    LOCK_MIN_CONFIDENCE,
+    split_phases, trim_followup_order, with_rag_status, Blocked, Diagnosis, SyndromeLock,
+    DISCLAIMER, LOCK_MIN_CONFIDENCE,
 };
 use harness::rag_health::rag_down;
 use harness::resources::load;
@@ -69,6 +69,51 @@ fn medium_red_flag_does_not_block() {
 fn no_red_flag_when_text_is_benign() {
     let res = bundle();
     assert!(detect_red_flags(&res, "近三天轻微咳嗽，痰白").is_empty());
+}
+
+// ---------------- 追问轮快速通道（followup） ----------------
+
+/// 追问轮不得重跑采集四诊与医案参考，但辨证期 / 治疗期 / 安全门原样保留。
+///
+/// 一条请求要是为节省 40–60% 轮耗而把辨证也裁了，性质就变了——那不是加速，
+/// 是换了条残缺流程。裁剪只动「整轮耗时大头、又不喂给下游」的两段
+/// （理由详见 `trim_followup_order` 的模块注释）。
+#[test]
+fn followup_trim_drops_collection_and_case_reference_only() {
+    let res = bundle();
+    let order = resolve_order(&res);
+    // 标准档默认含四诊与医案参考（先确认前提成立，否则断言等于在测空集）
+    for c in Capability::COLLECTION {
+        assert!(order.contains(&c), "标准档应含采集步骤 {c:?}");
+    }
+    assert!(
+        order.contains(&Capability::CaseReference),
+        "标准档应含医案参考"
+    );
+
+    let trimmed = trim_followup_order(&order);
+    for c in Capability::COLLECTION {
+        assert!(!trimmed.contains(&c), "追问轮不得重跑采集 {c:?}");
+    }
+    assert!(
+        !trimmed.contains(&Capability::CaseReference),
+        "追问轮不得重跑医案参考"
+    );
+    assert!(trimmed.contains(&Capability::Differentiation));
+    // 安全门是合规底线，任何加速都不许把它裁掉
+    assert!(
+        trimmed.contains(&Capability::Safety),
+        "快速通道不得裁剪安全门"
+    );
+    for c in order.iter().copied() {
+        if !Capability::COLLECTION.contains(&c) && c != Capability::CaseReference {
+            assert!(trimmed.contains(&c), "其余步骤应原样保留: {c:?}");
+        }
+    }
+    // 相对顺序保持不变（不是把步骤挪个位，只是去掉两段）
+    let pos = |cap: Capability| trimmed.iter().position(|c| *c == cap).unwrap();
+    assert!(pos(Capability::Differentiation) < pos(Capability::Safety));
+    assert!(pos(Capability::Safety) < pos(Capability::Strategy));
 }
 
 // ---------------- T2.3 / T2.5 技能归属 ----------------

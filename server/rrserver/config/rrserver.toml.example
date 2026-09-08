@@ -1,7 +1,7 @@
 # 云服务器端 rrserver 配置示例（保存为 config/rrserver.toml 后由 docker-compose 挂载）
 
-# 监听地址：仅对内网 nginx 暴露即可（docker 内部网络）
-listen = "127.0.0.1:8080"
+# 监听地址：仅对内网 nginx 暴露即可（docker 内部网络，43302）
+listen = "127.0.0.1:43302"
 
 # 外部可达的 WebSocket 基址：家庭端注册后会得到 {external_ws_base}/ws/<name>?token=...
 # 须与 nginx 暴露的 https 域名一致，且路径前缀与 location /rr/ 对应

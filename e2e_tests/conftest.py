@@ -27,7 +27,7 @@ import pytest
 # ---------- 各组件地址（可用环境变量覆盖） ----------
 BACKEND_BASE = os.getenv("TCM_BACKEND_BASE", "http://localhost:8000")
 LLM_BASE = os.getenv("TCM_LLM_BASE", "http://localhost:8000")
-RRSERVER_SERVER_BASE = os.getenv("TCM_RRSERVER_SERVER_BASE", "http://localhost:8088")
+RRSERVER_SERVER_BASE = os.getenv("TCM_RRSERVER_SERVER_BASE", "http://localhost:43302")
 RRSERVER_CLIENT_BASE = os.getenv("TCM_RRSERVER_CLIENT_BASE", "http://localhost:9000")
 FRONTEND_BASE = os.getenv("TCM_FRONTEND_BASE", "http://localhost:10086")
 

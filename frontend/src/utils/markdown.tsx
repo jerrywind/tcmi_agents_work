@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, memo, type ReactNode } from 'react'
 import { View, Text } from '@tarojs/components'
 
 /**
@@ -49,7 +49,12 @@ interface ListBuffer {
   items: string[]
 }
 
-export function Markdown({ text, className }: { text: string; className?: string }) {
+/**
+ * memo：流式链路每帧都会给同一段 text 反复渲染（打字机只改自家 state、
+ * publish 合并帧后 snap 引用替换），正文没变就不重新做整段解析。
+ * 一份结论几千字、逐行正则解析几十次/秒，正是低端机掉帧的来源。
+ */
+export const Markdown = memo(function Markdown({ text, className }: { text: string; className?: string }) {
   if (!text) return null
   const lines = text.split('\n')
   const blocks: ReactNode[] = []
@@ -140,4 +145,4 @@ export function Markdown({ text, className }: { text: string; className?: string
   flushList()
 
   return <View className={className}>{blocks}</View>
-}
+})

@@ -180,6 +180,52 @@ pub fn resolve_order(res: &ResourceBundle) -> Vec<Capability> {
     order
 }
 
+/// 当前请求是第几轮（`payload.round`，缺省按 1）
+fn payload_round(payload: &serde_json::Value) -> u8 {
+    payload
+        .get("round")
+        .and_then(|v| v.as_u64())
+        .map(|n| n.clamp(1, 255) as u8)
+        .unwrap_or(1)
+}
+
+/// 追问轮快速通道开关：`payload.followup == true` 且 `round >= 2`。
+///
+/// 单独一个布尔而不只靠 `round`：round 是「第几次追加消息」的通用语义，
+/// 别的调用方（脚本、MCP 客户端）也可能递增它却希望整条流程重跑；
+/// 快速通道是前端显式要求的加速行为，两者不该互相牵连。
+fn wants_followup(payload: &serde_json::Value) -> bool {
+    payload
+        .get("followup")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        && payload_round(payload) >= 2
+}
+
+/// 追问轮快速通道裁剪：**不再重跑采集四诊与医案参考**。
+///
+/// 一轮 `/chat` 会把 `routing.yaml` 里所有步骤串行跑完。第二轮用户往往只补充
+/// 几句话，望闻问切（4 次并行 LLM）与医案参考（1 次带 RAG 的 LLM）却要按原样
+/// 再来一遍——它们是**单轮耗时的大头**，产出却不喂给下游任何一步：
+/// - 各步之间不共享输出（见 `run_step`：每步只读 `messages` 与 `payload`），
+/// - 规则证据层（`assess` / `safety_corpus` / 收敛判定）只读患者原话
+///   （`user_corpus`，见 `tests/echo.rs`），不依赖四诊步骤的文本，
+/// - 辨证步的 LLM 需要的历史，由前端把上一轮助手的分步总结追加进 `messages`
+///   在每轮之间传递（harness 无状态，这一步本来就由调用方负责）。
+///
+/// 因此第二轮跳过这两段、直接从「辨证 → 安全门 → 治疗」继续，信息不丢，
+/// 却把一轮的 LLM 次数从约 9 次降到约 4 次。安全门是合规底线，不在此裁剪内。
+///
+/// 本函数是纯函数，只按配置流程裁剪，**不**判定是否启用——
+/// 是否启用由 `wants_followup`（payload 开关）决定，两者分离便于分别回归。
+pub fn trim_followup_order(order: &[Capability]) -> Vec<Capability> {
+    order
+        .iter()
+        .copied()
+        .filter(|c| !Capability::COLLECTION.contains(c) && *c != Capability::CaseReference)
+        .collect()
+}
+
 /// 执行一次完整诊断流程。
 ///
 /// `messages` 为截至当前的对话；`registry` 提供各 agent 实现，`skills` 提供工具。
@@ -209,7 +255,20 @@ pub async fn run_diagnosis(
     // 流式推送句柄（非流式传 `StreamSink::disabled()`，见函数文档）
     sink: &StreamSink,
 ) -> Result<Diagnosis> {
+    // 追问轮快速通道（`payload.followup == true` 且 `round >= 2`，见函数注释）：
+    // 裁剪掉的步骤不再执行，故必须在 hello 首帧（步骤计划）**之前**定稿。
     let order = resolve_order(res);
+    let order = if wants_followup(payload) {
+        let trimmed = trim_followup_order(&order);
+        tracing::info!(
+            steps = order.len(),
+            trimmed = trimmed.len(),
+            "追问轮快速通道：跳过采集四诊与医案参考"
+        );
+        trimmed
+    } else {
+        order
+    };
 
     // 步骤计划先发（P0 的关键一帧）：`resolve_order` 是纯函数，不碰 LLM，
     // 故这一帧在请求到达的**毫秒级**内就能出去。前端据此立刻渲染

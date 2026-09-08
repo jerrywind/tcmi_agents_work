@@ -25,7 +25,7 @@
 | `deploy/` | ✅ 可用 | nginx 统一入口 + compose 编排 |
 | **前端 ↔ harness 链路** | ✅ **已打通** | 旧 `api.ts` 已删除，6 个页面改用 `harness.ts` + `session.ts` 维护多轮 |
 | **技能 → 推理链路** | ✅ **已接线** | 13 个 Agent 全部走 `chat_with_tools`（T2.0 时是 7 个，后随流程拆分增补） |
-| **后端构建** | ✅ **Docker 化** | 两个 Dockerfile 改为多阶段、镜像内编译，不再依赖 WSL2 预编译 |
+| **后端构建** | ✅ **Docker 化** | 统一为单个 Dockerfile，多阶段、镜像内编译（一次产出 harness + rrserver），不再依赖 WSL2 预编译 |
 | **MCP Client** | ✅ 已接线 | `config.yaml` 的 `mcp_clients` 启动时挂载为 `mcp__*` 工具（T2.4） |
 | **MCP Server** | ✅ 已具备 | `POST /mcp` 对外暴露 7 个 `agent_*` 工具 + `run_agent` + `list_agent_capabilities`（T4.5） |
 | **可观测性** | ✅ 已具备 | `/chat` 与 `POST /agents` 逐步返回 `trace`（耗时/token/模型/工具/错误，T3.1） |

@@ -306,6 +306,19 @@ function streamUrl(): string {
 }
 
 /**
+ * 首帧看门狗窗口：连接发起后若这么久收不到**任何**事件，判定流式链路不通。
+ *
+ * `hello`（步骤计划）是后端 resolve_order 的纯函数产物，收到请求后毫秒级即发出，
+ * 所以只要连接是通的，正常不会超过几秒。45 秒只可能出现在：SSE 被中间层整体
+ * 缓冲、后端在读完请求体前就没起来、或链路被掐住——这些场景里用户看到的
+ * 只有一直走的秒表。触发后 abort 连接并报错，由上层（consult）走既有降级路径：
+ * 一步未收 → 自动改用非流式 `/chat`，用户不至于对着秒表白等 600 秒。
+ */
+export const FIRST_FRAME_TIMEOUT_MS = 45_000
+
+const FIRST_FRAME_TIMEOUT_MSG = '流式通道 45 秒无响应，已切换普通模式'
+
+/**
  * 发起一次流式问诊。
  *
  * H5 走 `fetch` + `ReadableStream`；小程序走 `Taro.request` 的
@@ -321,7 +334,15 @@ export function streamChat(p: StreamChatParams): StreamHandle {
 function streamChatH5(p: StreamChatParams): StreamHandle {
   const controller = new AbortController()
   let closed = false
+  let firstFrameTimer: ReturnType<typeof setTimeout> | null = null
+  const clearFirstFrameTimer = () => {
+    if (firstFrameTimer) {
+      clearTimeout(firstFrameTimer)
+      firstFrameTimer = null
+    }
+  }
   const finish = (err?: Error) => {
+    clearFirstFrameTimer()
     if (closed) return
     closed = true
     if (err) p.onError?.(err)
@@ -329,6 +350,18 @@ function streamChatH5(p: StreamChatParams): StreamHandle {
   }
 
   const run = async () => {
+    // 看门狗先于 fetch 启动：覆盖「请求体上传中 / 后端无响应 / 帧被缓冲」整段。
+    // 收到任意一帧即视为链路通，在事件循环里清除。
+    firstFrameTimer = setTimeout(() => {
+      clearFirstFrameTimer()
+      if (closed) return
+      try {
+        controller.abort()
+      } catch {
+        // 已结束的流再 abort 会抛，忽略
+      }
+      finish(new Error(FIRST_FRAME_TIMEOUT_MSG))
+    }, FIRST_FRAME_TIMEOUT_MS)
     try {
       const res = await fetch(streamUrl(), {
         method: 'POST',
@@ -347,6 +380,8 @@ function streamChatH5(p: StreamChatParams): StreamHandle {
         if (done) break
         if (!value) continue
         for (const ev of feedBytes(buf, value)) {
+          // 有事件到达即链路通畅：关掉首帧看门狗
+          clearFirstFrameTimer()
           if (ev.event === EVENTS.DONE || ev.event === EVENTS.ERROR) {
             p.onEvent(ev)
             finish(ev.event === EVENTS.ERROR ? new Error(ev.data?.message || '问诊失败') : undefined)

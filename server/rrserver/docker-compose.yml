@@ -1,23 +1,26 @@
-# 云端部署：rrserver（中继）。
+# 单独启动 rrserver（中继）的开发 / 调试编排。
 #
-# 注意：本 compose 只启动 rrserver 自身（不含 nginx）。nginx 反代 / TLS 已统一
-# 抽到仓库根 deploy/ 目录（deploy/nginx/rrserver.conf + deploy/docker-compose.yml 的
-# nginx 服务）。rrserver 不暴露宿主机端口，只通过内部网络给 deploy 的 nginx 访问。
+# 注意：镜像用的是**统一后端镜像 tcmi_server** server/Dockerfile（内含 harness + rrserver
+# 两个二进制）。默认 entrypoint 会同时拉起两个进程，这里用 command 指定只跑 rrserver
+# 的某个子命令，故 healthcheck（探 43301 + 43302）对这几个服务不适用，已禁用。
 #
-# 生产统一编排：docker compose -f deploy/docker-compose.yml up -d --build
+# 生产编排：rrserver 已合并进 deploy/docker-compose.yml 的 tcmi_server 容器（同容器 43302）。
+# nginx 反代 / TLS 在仓库根 deploy/ 目录（deploy/nginx/rrserver.conf）。
 # 本文件仍可用于单独启动 rrserver（开发 / 调试），但需自行解决对外暴露与 TLS。
 services:
   rrserver:
-    # 上下文必须是 workspace 根（server/）：release 产物在 server/target/release/，
-    # 子 crate 没有独立 target/。上下文裁剪见 server/.dockerignore。
+    # 上下文必须是 workspace 根（server/）：统一 Dockerfile 位于 server/Dockerfile，
+    # 两个 crate 共享编译缓存。上下文裁剪见 server/.dockerignore。
     build:
       context: ..
-      dockerfile: rrserver/Dockerfile
-    image: tcm-rrserver:local
+      dockerfile: Dockerfile
+    image: tcmi_server:local
     restart: unless-stopped
-    # 容器内监听 0.0.0.0:8080，供同网络下的 nginx 访问（默认 127.0.0.1 仅本容器回环，nginx 无法连通）。
+    # 容器内监听 0.0.0.0:43302，供同网络下的 nginx 访问（默认 127.0.0.1 仅本容器回环，nginx 无法连通）。
     # 镜像本身以非 root 用户（uid 10001）运行。
-    command: ["server", "--listen", "0.0.0.0:8080", "--config", "/etc/rrserver.toml"]
+    command: ["rrserver", "server", "--listen", "0.0.0.0:43302", "--config", "/etc/rrserver.toml"]
+    healthcheck:
+      disable: true
     volumes:
       - ./config/rrserver.toml:/etc/rrserver.toml:ro
 
@@ -29,11 +32,14 @@ services:
   client:
     build:
       context: ..
-      dockerfile: rrserver/Dockerfile
-    image: tcm-rrserver:local
+      dockerfile: Dockerfile
+    image: tcmi_server:local
     restart: unless-stopped
     profiles: ["optional"]
+    healthcheck:
+      disable: true
     command:
+      - "rrserver"
       - "client"
       - "--server"
       - "https://<你的域名>/rr"
@@ -51,11 +57,13 @@ services:
   llm-server:
     build:
       context: ..
-      dockerfile: rrserver/Dockerfile
-    image: tcm-rrserver:local
+      dockerfile: Dockerfile
+    image: tcmi_server:local
     restart: unless-stopped
     profiles: ["optional"]
-    command: ["llm-server", "--config", "/etc/llm_server.toml"]
+    healthcheck:
+      disable: true
+    command: ["rrserver", "llm-server", "--config", "/etc/llm_server.toml"]
     volumes:
       - ./config/llm_server.toml:/etc/llm_server.toml:ro
-    # 若 backend 为 command 模式需在容器内访问宿主 GPU / 模型目录，按需追加 devices / volumes。
+    # 若 tcmi_server 为 command 模式需在容器内访问宿主 GPU / 模型目录，按需追加 devices / volumes。

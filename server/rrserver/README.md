@@ -11,7 +11,7 @@
   │  llm_server         │           │  nginx (TLS终端/反代 /rr/)  │
   │  127.0.0.1:8080     │           │       │                     │
   │       ▲             │  主动出站  │       ▼                     │
-  │  rrserver client    │ ─WS隧道──▶ │  rrserver (127.0.0.1:8080) │
+  │  rrserver client    │ ─WS隧道──▶ │  rrserver (127.0.0.1:43302)│
   │  (本二进制 client)  │  (控制+数据)│  注册 /api/register        │
   └─────────────────────┘           │  隧道 /t/<name>/...         │
                                      └────────────────────────────┘
@@ -129,34 +129,39 @@ glibc 向前兼容），构建机无需 Rust 工具链，也**不使用**本地 
 
 ```bash
 cd server                                   # 构建上下文必须是 workspace 根
-docker build -f rrserver/Dockerfile -t rrserver:local .
+docker build -t tcmi_server:local .         # 统一镜像：harness + rrserver 一起产出
 ```
 
 > 为什么上下文是 `server/`：rrserver 与 harness 同属一个 Cargo workspace，
 > 依赖清单与源码都要进上下文。
+>
+> 为什么不再有 `rrserver/Dockerfile`：rrserver 与 harness 合并为**同一个镜像 / 容器**
+> （`server/Dockerfile`，镜像名 `tcmi_server`）。生产由 `deploy/docker-compose.yml` 的
+> `tcmi_server` 容器同时跑 harness(43301) 与 rrserver server(43302)；下面三个子命令仍可在同一镜像上单跑。
 
 TLS 全部走 **rustls**，运行时不需要系统 OpenSSL，镜像内仅装 `ca-certificates`，
 并以**非 root 用户**（`uid 10001`）运行。
 
-三个子命令都基于同一个镜像，靠 `command` 区分：
+三个子命令都基于同一个镜像，靠 `command`（镜像入口为 `entrypoint.sh`，传参即按参数执行）区分。
+只跑 rrserver 时加 `--no-healthcheck`——镜像健康检查会同时探 43301 与 43302：
 
 ```bash
-# 1) 云端中继（默认 command；也可 docker compose up）
-docker run --rm -p 8080:8080 \
+# 1) 云端中继（也可 docker compose up）
+docker run --rm --no-healthcheck -p 43302:43302 \
   -v "$PWD/config/rrserver.toml:/etc/rrserver.toml:ro" \
-  rrserver:local server --listen 0.0.0.0:8080 --config /etc/rrserver.toml
+  tcmi_server:local rrserver server --listen 0.0.0.0:43302 --config /etc/rrserver.toml
 
 # 2) 家庭端隧道客户端（把本地 llm 注册到云端；--local 指向宿主上的模型服务）
-docker run --rm \
+docker run --rm --no-healthcheck \
   -e RR_DOMAIN=https://<你的域名>/rr -e HOME_TOKEN=<token> \
   --add-host host.docker.internal:host-gateway \
-  rrserver:local client --server "$RR_DOMAIN" --name home \
+  tcmi_server:local rrserver client --server "$RR_DOMAIN" --name home \
   --token "$HOME_TOKEN" --local http://host.docker.internal:8080
 
 # 3) 模型部署包装（deploy + 注册一键完成）
-docker run --rm \
+docker run --rm --no-healthcheck \
   -v "$PWD/config/llm_server.toml:/etc/llm_server.toml:ro" \
-  rrserver:local llm-server --config /etc/llm_server.toml
+  tcmi_server:local rrserver llm-server --config /etc/llm_server.toml
 ```
 
 `docker-compose.yml` 默认只启动 `rrserver`（云端中继）。
@@ -221,7 +226,7 @@ curl -k https://localhost/rr/healthz   # 期望输出 ok
    docker compose -f ../deploy/docker-compose.yml up -d --build
    ```
    检查：`curl https://<你的域名>/rr/healthz` 应返回 `ok`。
-   > rrserver 容器内在 `0.0.0.0:8080` 监听，仅供同网络下的 nginx 访问（不暴露宿主机端口）；
+   > rrserver 容器内在 `0.0.0.0:43302` 监听，仅供同网络下的 nginx 访问（不暴露宿主机端口）；
    > 配置通过 `./config/rrserver.toml` 挂载到 `/etc/rrserver.toml`。
    > nginx 配置位于 `deploy/nginx/rrserver.conf`，证书位于 `deploy/certs/`。
 
@@ -279,9 +284,9 @@ export HARNESS_LLM_API_KEY=sk-xxx
 harness 也可不经独立 client 进程、直接内置隧道暴露自身：
 
 ```powershell
-docker run -d --name tcm-harness-8011 -p 8011:8011 `
+docker run -d --name tcmi_server-tunnel -p 43301:43301 `
   -e HARNESS_TUNNEL_SERVER=wss://<域名>/rr -e HARNESS_TUNNEL_NAME=tcm `
-  -e HARNESS_TUNNEL_TOKEN=<TOKEN> tcm-harness:local
+  -e HARNESS_TUNNEL_TOKEN=<TOKEN> tcmi_server:local
 # 完整变量表见 docs/deployment.md 3.2
 ```
 
@@ -289,7 +294,7 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 
 | 位置 | 项 | 说明 |
 |---|---|---|
-| server `--listen` | 监听地址 | 默认 `127.0.0.1:8080`（仅内网） |
+| server `--listen` | 监听地址 | 二进制默认 `127.0.0.1:8080`；容器/编排统一传 `0.0.0.0:43302`（见上） |
 | config `external_ws_base` | 外部 WS 基址 | 家庭端拼接 `ws_url` 用，如 `wss://rr.example.com/rr` |
 | config `[[tunnels]]` | name/token | 允许的隧道鉴权对，可多个 |
 | client `--server` | 云端基址 | 如 `https://rr.example.com/rr` |

@@ -105,19 +105,19 @@ pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Sen
 
 ```bash
 # 列出（返回技能的 name / description / owner；无归属约束时展示为"全局"）
-curl http://localhost:8011/skills
+curl http://localhost:43301/skills
 
 # 只看某个 capability 用得到的工具（专属 + 全局 + mcp__*）
-curl 'http://localhost:8011/skills?owner=prescription'  # 也可用中文名 owner=开方
+curl 'http://localhost:43301/skills?owner=prescription'  # 也可用中文名 owner=开方
 # 多归属的工具会把全部归属步骤列出来，如 tcm-formula 的 owner 为「用药、开方、治疗」
 
 # 执行（arguments 见上表）
-curl -X POST http://localhost:8011/skills \
+curl -X POST http://localhost:43301/skills \
   -H 'Content-Type: application/json' \
   -d '{"name":"tcm-kb","arguments":{"query":"脾胃湿热"}}'
 # -> {"result":{"name":"脾胃湿热","pathogenesis":"..."}}
 
-curl -X POST http://localhost:8011/skills \
+curl -X POST http://localhost:43301/skills \
   -H 'Content-Type: application/json' \
   -d '{"name":"tcm-diet","arguments":{"syndrome":"脾胃湿热"}}'
 ```

@@ -1,7 +1,7 @@
 # harness 运行配置
 # 运维可调：端口、LLM 网关地址；中医一般无需修改本文件。
 # 全部字段均可用同名大写环境变量覆盖（前缀 HARNESS_），见 docs/development.md。
-listen: "0.0.0.0:8011"          # 监听地址
+listen: "0.0.0.0:43301"          # 监听地址（对外通信端口；容器内由 entrypoint / HARNESS_LISTEN 覆盖）
 llm_base_url: "http://localhost:11223/v1"  # 上游 LLM 网关（lmstudio / llm_server）
 llm_api_key: ""                  # 若网关开启 Key 校验则填写
 model: "google/gemma-4-12b-qat" # 默认模型

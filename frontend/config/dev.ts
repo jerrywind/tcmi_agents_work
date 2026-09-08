@@ -11,13 +11,13 @@ export default {
       // （生产环境同理，见 deploy/nginx/frontend.conf 的 `gzip off`。）
       compress: false,
       proxy: {
-        // harness（Rust 后端）监听 8011；其端点无 /api 前缀，故代理时剥离。
-        // `HARNESS_DEV_PORT` 可临时改指向：本机 8011 被占（或容器端口映射没起来）
+        // harness（Rust 后端 tcmi_server）对外监听 43301；其端点无 /api 前缀，故代理时剥离。
+        // `HARNESS_DEV_PORT` 可临时改指向：本机 43301 被占（或容器端口映射没起来）
         // 时不必改代码，起服务时带一下即可。
         '/api': {
           target: process.env.HARNESS_DEV_PORT
             ? `http://127.0.0.1:${process.env.HARNESS_DEV_PORT}`
-            : 'http://127.0.0.1:8011',
+            : 'http://127.0.0.1:43301',
           changeOrigin: true,
           pathRewrite: { '^/api': '' }
         }

@@ -1,9 +1,9 @@
 # 云服务器端 rrserver 配置（docker-compose 默认挂载此文件）。
 # 生产部署请务必把下面两个 token 改成强随机值，并通过私密渠道分发给家庭端。
 
-# 监听地址：容器内仅对同网络下的 nginx 暴露即可（docker 内部网络）。
+# 监听地址：容器内仅对同网络下的 nginx 暴露即可（docker 内部网络，43302）。
 # 注意必须是 0.0.0.0（或留空由 --listen 覆盖），127.0.0.1 时 nginx 跨容器无法连通。
-listen = "0.0.0.0:8080"
+listen = "0.0.0.0:43302"
 
 # 外部可达的 WebSocket 基址：家庭端注册后得到 {external_ws_base}/ws/<name>?token=...
 # 须与 nginx 暴露的 https 域名 + /rr 前缀一致。

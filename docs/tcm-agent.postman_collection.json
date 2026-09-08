@@ -1,11 +1,11 @@
 {
   "info": {
     "name": "harness 中医智能问诊 API",
-    "description": "harness（Rust 后端）的 REST API 集合。\n\n注意：\n- baseUrl 默认直连 harness :8011；若经 nginx，改为 https://<域名>/api（nginx 会剥离 /api 前缀）。\n- harness 是**无状态**服务，没有会话 id，多轮问诊由调用方维护 messages 数组。\n- 所有错误以 HTTP 200 + {\"error\": \"...\"} 返回，务必检查 error 字段。\n- /chat 与 POST /agents 需要真实 LLM（LM Studio 或 llm_server 网关），无 mock 兜底。",
+    "description": "harness（Rust 后端）的 REST API 集合。\n\n注意：\n- baseUrl 默认直连 harness :43301；若经 nginx，改为 https://<域名>/api（nginx 会剥离 /api 前缀）。\n- harness 是**无状态**服务，没有会话 id，多轮问诊由调用方维护 messages 数组。\n- 所有错误以 HTTP 200 + {\"error\": \"...\"} 返回，务必检查 error 字段。\n- /chat 与 POST /agents 需要真实 LLM（LM Studio 或 llm_server 网关），无 mock 兜底。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8011", "type": "string" },
+    { "key": "baseUrl", "value": "http://localhost:43301", "type": "string" },
     { "key": "capability", "value": "differentiation", "type": "string" },
     { "key": "skill", "value": "tcm-kb", "type": "string" }
   ],

@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-  构建后端 Docker 镜像（harness / rrserver）。
+  构建统一后端 Docker 镜像（harness + rrserver 同一镜像）。
 
-.DESCRIPTION
-  后端**完全依赖 Docker** 构建：编译在两个多阶段 Dockerfile 内完成，
+  .DESCRIPTION
+  后端**完全依赖 Docker** 构建：编译在统一的多阶段 Dockerfile（server/Dockerfile）
+  内完成，一次编译出 harness 与 rrserver 两个二进制，
   **不使用宿主机或 WSL2 的本地 cargo 产物**。
 
   本脚本此前负责「在 WSL2 里预编译 Linux 二进制再拷回 server/target/release/」，
@@ -15,7 +16,7 @@
     2) 再复制真实源码，只重编本 workspace 的 crate
 
 .PARAMETER Tag
-  镜像标签，默认 local（产出 tcm-harness:local / tcm-rrserver:local）。
+  镜像标签，默认 local（产出 tcmi_server:local，内含 harness + rrserver）。
 
 .PARAMETER NoCache
   忽略 Docker 层缓存，全量重建。
@@ -62,20 +63,19 @@ if (-not $SkipTests) {
 # 且 harness 依赖 rrserver 的 lib，两者源码都要进上下文。
 Push-Location $ServerDir
 try {
-  foreach ($crate in @('harness', 'rrserver')) {
-    $image = "tcm-${crate}:${Tag}"
-    Write-Host "[build] docker build $image ..." -ForegroundColor Yellow
+  # 统一镜像 tcmi_server：一个 Dockerfile 同时产出 harness 与 rrserver 两个二进制
+  $image = "tcmi_server:${Tag}"
+  Write-Host "[build] docker build $image ..." -ForegroundColor Yellow
 
-    $dockerArgs = @('build', '-f', "${crate}/Dockerfile", '-t', $image)
-    if ($NoCache) { $dockerArgs += '--no-cache' }
-    $dockerArgs += '.'
+  $dockerArgs = @('build', '-t', $image)
+  if ($NoCache) { $dockerArgs += '--no-cache' }
+  $dockerArgs += '.'
 
-    & docker @dockerArgs
-    if ($LASTEXITCODE -ne 0) {
-      throw "docker build 失败：$crate（exit $LASTEXITCODE）"
-    }
-    Write-Host "[build] OK $image" -ForegroundColor Green
+  & docker @dockerArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "docker build 失败：$image（exit $LASTEXITCODE）"
   }
+  Write-Host "[build] OK $image" -ForegroundColor Green
 } finally {
   Pop-Location
 }

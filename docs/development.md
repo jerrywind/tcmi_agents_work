@@ -60,10 +60,11 @@ tcm_work/
 
 ```powershell
 cd server
-docker build -f harness/Dockerfile -t tcm-harness:local .   # 多阶段，镜像内编译
-docker run -d --name tcm-harness-8011 -p 8011:8011 tcm-harness:local
+docker build -t tcmi_server:local .   # 多阶段，镜像内一次编译出 harness + rrserver
+docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 tcmi_server:local
 ```
 
+- 同一镜像同时跑 harness（43301，对外通信）与 rrserver 中继（43302），详见 `deployment.md` 第 3、5 节。
 - 想改 YAML 而不重建镜像：`-v "$PWD/harness/resources:/data/resources:ro"`，
   再 `POST /reload`（需 `hot_reload: true`）。
 - 改 Rust 代码 → 重新 `docker build`。测试与 lint 也在容器内跑（见 `testing.md`）。
@@ -80,9 +81,9 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 tcm-harness:local
 ```powershell
 $env:HARNESS_LLM_BASE_URL = "http://host.docker.internal:11223/v1"  # 容器内访问宿主机
 $env:HARNESS_LLM_API_KEY  = "<LM Studio 开启校验时必填>"
-docker run -d --name tcm-harness-8011 -p 8011:8011 `
+docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 `
   -e HARNESS_LLM_BASE_URL -e HARNESS_LLM_API_KEY -e HARNESS_MODEL `
-  tcm-harness:local
+  tcmi_server:local
 ```
 
 完整配置项见 `deployment.md` 3.2 与 `resources/config.yaml`。
@@ -91,13 +92,17 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 
 ## 5. rrserver（可选）
 
+rrserver 与 harness **同属一个镜像**（`server/Dockerfile`，镜像内一次编译出两个二进制）。
+统一镜像默认同时拉起两个进程；只跑 rrserver 的子命令时传参即可：
+
 ```powershell
 cd server
-docker build -f rrserver/Dockerfile -t tcm-rrserver:local .
+docker build -t tcmi_server:local .
+docker run --rm --no-healthcheck tcmi_server:local rrserver server --listen 0.0.0.0:43302 --config /etc/rrserver.toml
 ```
 
 启动与隧道配置见 `deployment.md` 第 5 节；本地一键也可用
-`server/rrserver/start_rrserver.ps1`（起 server `:8088` + client `:9000`）。
+`server/rrserver/start_rrserver.ps1`（直接跑本机二进制，非 Docker，仅本地调试）。
 调试探测：`curl https://rr.windblue.tech/healthz`（应返回 `ok`）。
 
 ---
@@ -113,7 +118,7 @@ npm run dev:weapp     # 微信小程序（需微信开发者工具）
 
 - 契约客户端 `src/services/harness.ts`；多轮 `messages` 由 `src/services/session.ts`
   在前端维护（harness 无服务端会话）。
-- 跨端差异由 Taro 适配：H5 走 devServer 代理（`/api` → harness:8011），小程序直连后端地址。
+- 跨端差异由 Taro 适配：H5 走 devServer 代理（`/api` → harness 对外 43301），小程序直连后端地址。
 - 类型检查：`npx tsc --noEmit`。
 - ⚠️ **不要用 Taro 原生 `<Picker mode='date'>` 做出生日期**：Taro 4 在 H5 端把它实现成
   Stencil 自定义元素 `<taro-picker-core>` 的 **transform 轮盘**，在手机浏览器上有两个修不掉的问题——
@@ -155,8 +160,8 @@ npm run dev:weapp     # 微信小程序（需微信开发者工具）
 | `GET /reports` 返回 `enabled: false` | 报告持久化默认关闭，需配 `HARNESS_STORE_DIR`。 |
 | harness 隧道连不上（WS 404） | 直连 rrserver 时 `external_ws_base` 不应带 `/rr` 前缀。 |
 | llm_server `/healthz` = `degraded` | 上游 LM Studio 未开或 `LMSTUDIO_BASE_URL` 不通，属预期降级。 |
-| 镜像构建失败 | 两个 Dockerfile 都在镜像内编译，需能访问 crates.io；构建上下文必须是 workspace 根 `server/`。 |
-| 前端连不上后端 | 检查 `VITE_API_BASE` / `config/dev.ts` 的 apiBase 是否指向 `:8011`（经 nginx 为 `/api`），以及容器是否在跑。 |
+| 镜像构建失败 | 统一 Dockerfile 在镜像内编译，需能访问 crates.io；构建上下文必须是 workspace 根 `server/`。 |
+| 前端连不上后端 | 检查 `VITE_API_BASE` / `config/dev.ts` 的 apiBase 是否指向 `:43301`（经 nginx 为 `/api`），以及容器是否在跑。 |
 | 改了 ps1 脚本后中文变乱码 | Windows PowerShell 5.1 按 ANSI 读取无 BOM 的脚本：含中文的 `.ps1` **必须存为 UTF-8 with BOM**。 |
 | 视觉识别无独立服务 | 视觉与文本共用 `google/gemma-4-12b-qat` 多模态端点。 |
 | 出生日期选择器在手机浏览器里背景跟着滚、月/日显示留空白 | Taro 4 的 `<Picker mode='date'>` 在 H5 是 Stencil transform 轮盘，触摸冒泡到 document 致背景滚动、transform 重绘留空白，应用层无法修复。已替换为自建三列滚动选择器 `src/components/BirthDatePicker.tsx`（逻辑在 `src/utils/birthdate.ts`，含单测），跨端可用，**不要再换回 Taro 原生日期 Picker**。 |

@@ -1,3 +1,4 @@
+import Taro from '@tarojs/taro'
 import type { DiagnosisResult, HarnessMessage } from './harness'
 import type { PatientProfile } from '../types'
 
@@ -8,14 +9,104 @@ import type { PatientProfile } from '../types'
  * 多轮问诊必须由调用方维护完整的 `messages` 数组。
  * 本模块即在 `index → consult → report` 之间共享这份状态。
  *
- * 有意**不做持久化**：harness 侧没有会话可以恢复，
- * 落地到 Storage 反而会让用户以为刷新后能续诊。
+ * ## 本地快照（为什么现在要落 Storage）
+ *
+ * 一次标准档 `/chat` 要跑 200–530 秒。若刷新/切后台/被系统回收后全部状态
+ * 丢失，用户就白等一整轮——这是「用户侧最贵的一次等待」。这里把会话进度
+ * 落到本地 Storage：
+ *
+ * - **已有完整结论**（`result` 非空）：连历史一起恢复。刷新后仍能看到上一份
+ *   报告，并能继续追问，相当于刷新没有发生。
+ * - **进行中被打断**（无 `result`）：harness 无状态、无法续跑，若把半截
+ *   messages 留下，用户重新填主诉会 append 出「两遍主诉」。所以只保留档案，
+ *   让首诊表单干净可用。
+ *
+ * 图片 data URL（舌苔/手相，单张可达数 MB）**不落盘**：超出 localStorage
+ * 配额只会让快照变成例外。刷新后图片槽为空，重新上传即可（本就选填）。
  */
 let messages: HarnessMessage[] = []
 let profile: PatientProfile | null = null
 let payload: Record<string, any> = {}
 let result: DiagnosisResult | null = null
 let round = 1
+
+// ---------------------------------------------------------------- 本地快照
+
+export const SESSION_KEY = 'tcm_consult_session_v1'
+
+interface PersistedSession {
+  profile: PatientProfile | null
+  payload: Record<string, any>
+  round: number
+  messages: HarnessMessage[]
+  result: DiagnosisResult | null
+}
+
+/** hydrate 后的一次性提示（见 `consumeSessionNotice`） */
+let recoveredNotice: 'restored' | 'interrupted' | null = null
+
+/** 尽力写；失败静默——快照只是「刷新别白等」的增强，不能拖垮主流程 */
+function persist(): void {
+  try {
+    const snap: PersistedSession = { profile, payload, round, messages, result }
+    Taro.setStorageSync(SESSION_KEY, JSON.stringify(snap))
+  } catch {
+    // 忽略：配额满 / 隐私模式 / 序列化失败都不该中断问诊
+  }
+}
+
+function clearPersisted(): void {
+  try {
+    Taro.removeStorageSync(SESSION_KEY)
+  } catch {
+    // 忽略
+  }
+}
+
+/**
+ * 模块加载时恢复上次会话。
+ *
+ * 只在 `result` 完整存在时才恢复消息与轮次；否则视为「中断会话」作废，
+ * 仅回填档案与 payload（规则详见文件头注释）。
+ */
+function hydrate(): void {
+  let raw: unknown = null
+  try {
+    raw = Taro.getStorageSync(SESSION_KEY)
+  } catch {
+    return
+  }
+  let s: PersistedSession | null = null
+  if (typeof raw === 'string') {
+    try {
+      s = JSON.parse(raw) as PersistedSession
+    } catch {
+      return
+    }
+  }
+  if (!s || typeof s !== 'object' || !s.profile) return
+  profile = s.profile
+  payload = s.payload && typeof s.payload === 'object' ? s.payload : { ...s.profile }
+  if (s.result && Array.isArray(s.messages) && s.messages.length > 0) {
+    result = s.result
+    messages = s.messages
+    round = Math.max(1, typeof s.round === 'number' ? s.round : 1)
+    recoveredNotice = 'restored'
+  } else {
+    messages = []
+    round = 1
+    recoveredNotice = 'interrupted'
+  }
+}
+
+hydrate()
+
+/** 消费一次 hydrate 提示：`restored`（恢复了上次结论）或 `interrupted`（上次未完成已作废）。 */
+export function consumeSessionNotice(): 'restored' | 'interrupted' | null {
+  const n = recoveredNotice
+  recoveredNotice = null
+  return n
+}
 
 /** 开启一次新问诊：重置历史，并写入体质档案作为 payload。 */
 export function startSession(p: PatientProfile): void {
@@ -24,6 +115,7 @@ export function startSession(p: PatientProfile): void {
   messages = []
   result = null
   round = 1
+  persist()
 }
 
 /**
@@ -51,6 +143,7 @@ export function getPayload(): Record<string, any> {
  */
 export function advanceRound(): void {
   round += 1
+  persist()
 }
 
 export function getRound(): number {
@@ -64,6 +157,7 @@ export function getMessages(): HarnessMessage[] {
 /** 追加一条对话（user 的追问，或 user 的初始主诉）。 */
 export function pushMessage(m: HarnessMessage): void {
   messages = [...messages, m]
+  persist()
 }
 
 /**
@@ -74,6 +168,7 @@ export function pushMessage(m: HarnessMessage): void {
  */
 export function resetMessages(): void {
   messages = []
+  persist()
 }
 
 /** 会话快照：`pushMessage` / `advanceRound` 之前的消息数与轮次。 */
@@ -103,6 +198,7 @@ export function snapshotSession(): SessionSnapshot {
 export function rollbackSession(s: SessionSnapshot): void {
   messages = messages.slice(0, Math.max(0, s.messages))
   round = Math.max(1, s.round)
+  persist()
 }
 
 /**
@@ -112,6 +208,7 @@ export function rollbackSession(s: SessionSnapshot): void {
 export function setResult(r: DiagnosisResult): void {
   result = r
   messages = [...messages, { role: 'assistant', content: r.summary }]
+  persist()
 }
 
 export function getResult(): DiagnosisResult | null {
@@ -124,4 +221,5 @@ export function clearSession(): void {
   payload = {}
   result = null
   round = 1
+  clearPersisted()
 }

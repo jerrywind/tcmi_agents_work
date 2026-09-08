@@ -42,7 +42,7 @@ export const SUPPORTS_FULL_CHAT = !IS_WEAPP
 
 export const HARNESS_BASE_URL = IS_H5
   ? ''
-  : envVar('VITE_API_BASE') || 'http://127.0.0.1:8011'
+  : envVar('VITE_API_BASE') || 'http://127.0.0.1:43301'
 
 // 经 nginx / devServer 代理时端点带 /api 前缀（由网关剥离后转发到 harness）；
 // 直连 harness 时无前缀（小程序直连场景）。

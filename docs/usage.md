@@ -43,7 +43,7 @@
 
 ## 2. REST API 接入（接入方）
 
-Base URL（开发）：`http://localhost:8011`
+Base URL（开发）：`http://localhost:43301`
 （生产经 nginx 时为 `https://<域名>/api`，nginx 会剥离 `/api` 前缀后转发）
 
 > **harness 是无状态服务**：不保存问诊会话，没有会话 id，也没有
@@ -53,7 +53,7 @@ Base URL（开发）：`http://localhost:8011`
 
 ### 2.1 健康检查
 ```bash
-curl http://localhost:8011/health
+curl http://localhost:43301/health
 # -> {"status":"ok","rag":{"configured":false}}
 #    {"status":"ok","rag":{"reachable":true,"endpoint":"...","since_last_ok_secs":0}}
 #    {"status":"ok","rag":{"reachable":false,"endpoint":"...","last_error":"连接失败：..."}}
@@ -75,7 +75,7 @@ curl http://localhost:8011/health
 
 ### 2.2 列出能力（Sub-Agent）
 ```bash
-curl http://localhost:8011/agents
+curl http://localhost:43301/agents
 # -> {"capabilities":["inspection","listening","inquiry","palpation",
 #     "differentiation","safety","treatment"],
 #     "names":["望诊","闻诊","问诊","切诊","辨证","安全门","治疗"]}
@@ -83,7 +83,7 @@ curl http://localhost:8011/agents
 
 ### 2.3 完整诊断流程（推荐）
 ```bash
-curl -X POST http://localhost:8011/chat \
+curl -X POST http://localhost:43301/chat \
   -H 'Content-Type: application/json' \
   -d '{
     "messages": [
@@ -188,7 +188,7 @@ curl -X POST http://localhost:8011/chat \
 
 ### 2.4 单步调用某个 Sub-Agent
 ```bash
-curl -X POST http://localhost:8011/agents \
+curl -X POST http://localhost:43301/agents \
   -H 'Content-Type: application/json' \
   -d '{
     "capability": "differentiation",
@@ -209,9 +209,9 @@ curl -X POST http://localhost:8011/agents \
 
 ### 2.5 技能（SKILL）
 ```bash
-curl http://localhost:8011/skills                # 列出全部技能及归属（owner）
-curl 'http://localhost:8011/skills?owner=treatment'   # 只看治疗步用得到的工具
-curl -X POST http://localhost:8011/skills \
+curl http://localhost:43301/skills                # 列出全部技能及归属（owner）
+curl 'http://localhost:43301/skills?owner=treatment'   # 只看治疗步用得到的工具
+curl -X POST http://localhost:43301/skills \
   -H 'Content-Type: application/json' \
   -d '{"name":"tcm-kb","arguments":{"query":"脾胃湿热"}}'
 # -> {"result":{"name":"脾胃湿热","pathogenesis":"..."}}
@@ -242,7 +242,7 @@ curl -X POST http://localhost:8011/skills \
 
 ### 2.6 热重载 YAML 资源
 ```bash
-curl -X POST http://localhost:8011/reload   # -> {"ok":true}
+curl -X POST http://localhost:43301/reload   # -> {"ok":true}
 ```
 需 `resources/config.yaml` 中 `hot_reload: true`。改完证候/方剂/问诊等 YAML 后调用即可，
 无需重启（详见 [`deployment.md`](./deployment.md) 3.4）。
@@ -251,7 +251,7 @@ curl -X POST http://localhost:8011/reload   # -> {"ok":true}
 ### 2.7 MCP 端点（供外部 MCP 客户端接入）
 
 ```bash
-curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
+curl -X POST http://localhost:43301/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 # -> {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"agent_inspection",...}, ...]}}
 ```
@@ -267,8 +267,8 @@ curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
 `config.yaml` 的 `store_dir`）后，每次 `/chat` 落盘一份报告快照。
 
 ```bash
-curl http://localhost:8011/reports          # -> {"reports":[{id,created_at,partial,blocked,steps,primary_syndrome}],"enabled":true}
-curl http://localhost:8011/reports/20260830-101500-a1b2c3   # -> 完整快照（含 messages/payload/result）
+curl http://localhost:43301/reports          # -> {"reports":[{id,created_at,partial,blocked,steps,primary_syndrome}],"enabled":true}
+curl http://localhost:43301/reports/20260830-101500-a1b2c3   # -> 完整快照（含 messages/payload/result）
 ```
 
 - `/chat` 响应会多出 `report_id`（未启用时为 `null`）；
@@ -318,9 +318,9 @@ $env:HARNESS_LLM_API_KEY  = "<LM Studio → Developer → Server Settings 中的
 $env:HARNESS_MODEL        = "google/gemma-4-12b-qat"
 
 cd server
-docker build -f harness/Dockerfile -t tcm-harness:local .
-docker run -d --name tcm-harness-8011 -p 8011:8011 `
-  -e HARNESS_LLM_BASE_URL -e HARNESS_LLM_API_KEY -e HARNESS_MODEL tcm-harness:local
+docker build -t tcmi_server:local .
+docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 `
+  -e HARNESS_LLM_BASE_URL -e HARNESS_LLM_API_KEY -e HARNESS_MODEL tcmi_server:local
 ```
 
 等价于编辑 `server/harness/resources/config.yaml`：

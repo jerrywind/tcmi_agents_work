@@ -14,3 +14,12 @@
   font-size: 28px;
   background: #f3f7f5;
 }
+
+// 「查看上次问诊报告」的恢复入口：比普通入口更显眼，提示一次等了几分钟的结果还在
+.resume-entry {
+  margin-bottom: 34px;
+  border-color: #2a6f4e;
+  color: #1d5c40;
+  font-weight: 600;
+  background: #e9f3ee;
+}

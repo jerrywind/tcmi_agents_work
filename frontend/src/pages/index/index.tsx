@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import Taro, { useRouter } from '@tarojs/taro'
 import { View, Text, Input, Textarea } from '@tarojs/components'
 import { getMember } from '../../services/members'
-import { getProfile, startSession } from '../../services/session'
+import { getProfile, getResult, startSession } from '../../services/session'
 import {
   EMPTY_PROFILE_FORM, GENDER_OPTIONS, buildProfile, toProfileForm, todayISO,
   validateProfileForm,
@@ -33,6 +33,9 @@ export default function ProfilePage() {
   })
   // 出生日期选择器的最晚可选日期（今天）；最早在组件里写死 1900
   const [maxDate] = useState(todayISO())
+  // 刷新/返回后如果还留着一次完整问诊的结论，给一个入口——否则那份
+  // 200–530 秒等出来的报告就再也找不到了，只能白白重新问一遍
+  const [prevResult] = useState(getResult)
 
   // 从家庭档案进入时，用本地成员档案覆盖预填
   useEffect(() => {
@@ -101,6 +104,12 @@ export default function ProfilePage() {
         <Text className='disclaimer'>本服务由 AI 提供健康参考，不构成医疗诊断</Text>
       </View>
 
+      {prevResult && (
+        <View className='skills-entry resume-entry'
+          onClick={() => Taro.navigateTo({ url: '/pages/report/index' })}>
+          查看上次问诊报告（可继续追问，不必重头再来）
+        </View>
+      )}
       <View className='skills-entry' onClick={() => Taro.navigateTo({ url: '/pages/family/index' })}>
         家庭档案 / 成员管理（仅存本机）
       </View>

@@ -302,7 +302,7 @@ H8 与 H3 是配套的——既要扩库减少库外情形，也要在库外时�
 
 ### 顺带修掉的既有问题
 
-- **`harness/Dockerfile` 漏拷 `rrserver/tests`**：`Cargo.toml` 的 `[[test]]` 指向
+- **统一 Dockerfile（原 `harness/Dockerfile`）漏拷 `rrserver/tests`**：`Cargo.toml` 的 `[[test]]` 指向
   `tests/integration.rs`，缺了它 `cargo test -p rrserver` 在镜像内直接报
   `can't find integration-test`——147 条 rrserver 测试在镜像里根本跑不起来。
   只拷了 `harness/tests` 却漏了同类的 rrserver，正是「按数据枚举所有同类调用点」。

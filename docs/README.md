@@ -9,7 +9,7 @@
 |---|---|---|---|
 | `README.md`（仓库根） | 所有人 | 项目是什么、怎么跑起来、文档在哪 | 架构图、端口表、快速开始、目录说明 |
 | `usage.md` | 使用者 / API 接入方 | 前端怎么用？REST API 怎么集成？ | 端点契约（含 `/chat`、`/mcp`、`/reports`）、payload 字段、切真实 LLM |
-| `deployment.md` | 运维 | 怎么部署四组件？端口/配置/网络？ | 端口映射、`HARNESS_*` 环境变量全表、compose 编排、上线检查清单 |
+| `deployment.md` | 运维 | 怎么部署（前端 / 统一后端容器 / llm_server / nginx）？端口/配置/网络？ | 端口映射、`HARNESS_*` 环境变量全表、compose 编排、上线检查清单 |
 | `development.md` | 开发者 | 本地怎么开发调试？常见坑？ | 目录结构、开发流程、FAQ |
 | `agent-protocol.md` | 架构 / 扩展者 | Sub-Agent 的接口与注册方式？ | `Capability`、SubAgent trait（`run` + `structured`）、编排规则、trace |
 | `sub_agents.md` | Agent 开发者 | 13 个 Agent 各管什么、怎么改？ | 各 Agent 的规则层 + LLM 层实现、资源维护入口 |
@@ -31,7 +31,7 @@
 1. **模型与降级事实** → [`llm_server.md`](./llm_server.md)：llm_server 是纯网关（不托管模型）；
    模型 `google/gemma-4-12b-qat`（文本+视觉共用）；LM Studio 默认 `:11223`；
    harness **无 MockProvider**。
-2. **端口** → [`deployment.md`](./deployment.md)「端口与地址」表（harness 为 `8011`）。
+2. **端口** → [`deployment.md`](./deployment.md)「端口与地址」表（harness 对外为 `43301`，rrserver 为 `43302`）。
 3. **REST API 端点契约** → [`usage.md`](./usage.md) 第 2 节。
 4. **Capability 标识（13 个无前缀 slug）** → [`agent-protocol.md`](./agent-protocol.md) 第 1 节。
 5. **13 个 Sub-Agent 的实现细节** → [`sub_agents.md`](./sub_agents.md)。

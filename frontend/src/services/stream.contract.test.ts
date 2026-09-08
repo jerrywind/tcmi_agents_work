@@ -20,10 +20,12 @@ import { describe, it, expect } from 'vitest'
  *
  * 只写死 8011 会闹乌龙：本机 8011 被别的进程占着、或容器端口映射没起来时，
  * 整套契约会静默 skip——「会跳过的检查等于没有检查」。
- * 故允许 `VITE_API_BASE` 指定，并给两个常见端口兜底；全都连不上才 skip 且告警。
+ * 故允许 `VITE_API_BASE` 指定，并先探测 canonical 对外端口 43301，再给旧端口兜底；
+ * 全都连不上才 skip 且告警。
  */
 const CANDIDATES = [
   process.env.VITE_API_BASE,
+  'http://127.0.0.1:43301',
   'http://127.0.0.1:8011',
   'http://127.0.0.1:18011',
 ].filter(Boolean) as string[]
@@ -58,7 +60,7 @@ const { streamChat } = await import('./stream')
 
 const up = BASE !== ''
 
-describe.skipIf(!up)('/chat/stream 事件序列契约（需本地 harness :8011）', () => {
+describe.skipIf(!up)('/chat/stream 事件序列契约（需本地 harness :43301）', () => {
   it('首帧是 hello 且带完整步骤计划，安全门必在计划里', async () => {
     const events: any[] = []
     let settled: (v: string[]) => void

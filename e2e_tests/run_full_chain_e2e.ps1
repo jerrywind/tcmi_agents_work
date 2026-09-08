@@ -24,7 +24,7 @@
   跳过前端契约测试。
 
 .PARAMETER ImageName
-  harness 镜像名，默认 tcm-harness:e2e。
+  harness 镜像名，默认 tcmi_server:e2e。
 
 .EXAMPLE
   .\run_full_chain_e2e.ps1                 # harness(镜像) + pytest + 前端契约
@@ -36,7 +36,7 @@ param(
   [switch]$WithRrserver,
   [switch]$SkipFrontend,
   [switch]$WithFrontend,
-  [string]$ImageName = 'tcm-harness:e2e'
+  [string]$ImageName = 'tcmi_server:e2e'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -45,8 +45,8 @@ $E2E  = $PSScriptRoot                              # tcm_work/e2e_tests
 $SERVER = Join-Path $ROOT 'server'                 # Cargo workspace 根（构建上下文）
 $FRONT = Join-Path $ROOT 'frontend'
 
-$HARNESS_PORT = 8011
-$CONTAINER = 'tcm-harness-e2e'
+$HARNESS_PORT = 43301
+$CONTAINER = 'tcmi_server-e2e'
 
 function Wait-Healthy {
   param($Url, $Timeout = 60)
@@ -72,7 +72,7 @@ python "$E2E/_make_sample_image.py"
 if (-not $SkipBuild) {
   Write-Host "`n[e2e] === 构建 harness 镜像 $ImageName ===" -ForegroundColor Yellow
   Push-Location $SERVER
-  docker build -f harness/Dockerfile -t $ImageName .
+  docker build -t $ImageName .
   $buildExit = $LASTEXITCODE
   Pop-Location
   if ($buildExit -ne 0) {
@@ -84,7 +84,7 @@ if (-not $SkipBuild) {
 # ---------- 2. 启动 harness 容器 ----------
 Write-Host "`n[e2e] === 启动 harness 容器（端口 $HARNESS_PORT）===" -ForegroundColor Yellow
 Stop-Container
-$runArgs = @('run','-d','--name',$CONTAINER,'-p',"$($HARNESS_PORT):8011")
+$runArgs = @('run','-d','--name',$CONTAINER,'-p',"$($HARNESS_PORT):43301")
 foreach ($k in @('HARNESS_LLM_BASE_URL','HARNESS_LLM_API_KEY','HARNESS_MODEL','HARNESS_RAG_ENDPOINT')) {
   $v = [Environment]::GetEnvironmentVariable($k)
   if ($v) { $runArgs += @('-e', "$k=$v") }

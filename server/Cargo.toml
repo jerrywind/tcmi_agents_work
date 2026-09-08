@@ -28,3 +28,11 @@ toml = "0.8"
 regex = "1"
 chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
+
+# 发布档优化：镜像里的二进制瘦身（只影响 `cargo build --release`，
+# 日常测试走 dev 档、不在此处，测试时长与行为均不受影响）。
+[profile.release]
+# 剥离符号表：无 debug 信息可留时，符号表是二进制的常见大头之一
+strip = "symbols"
+# 跨 crate 薄 LTO：链路级删除未用代码并共享内联，进一步压缩并略提性能
+lto = "thin"

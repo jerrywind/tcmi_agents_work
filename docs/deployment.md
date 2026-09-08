@@ -1,9 +1,11 @@
 # 部署文档（Deployment）
 
-四组件的部署：**前端 / harness / llm_server / rrserver**，以及端口、配置、网络与上线检查清单。
+部署：**前端 / 统一 Rust 后端容器（harness + rrserver 同一容器） / llm_server / nginx**，
+以及端口、配置、网络与上线检查清单。
 
-> **后端完全依赖 Docker**：harness 与 rrserver 的镜像都是多阶段构建（容器内编译），
-> 不使用宿主机 `cargo build` 产物，构建机无需 Rust 工具链。
+> **后端完全依赖 Docker**：统一镜像（`server/Dockerfile`）是多阶段构建（容器内编译），
+> 一次编译出 harness 与 rrserver 两个二进制，**不使用宿主机 `cargo build` 产物**，
+> 构建机无需 Rust 工具链。
 > 模型与降级事实见 [`llm_server.md`](./llm_server.md)：`llm_server` 是纯 LM Studio 网关
 > （**不托管模型**），模型 `google/gemma-4-12b-qat`，LM Studio 默认 `:11223`；
 > harness **无 MockProvider**，无 LLM 时只读端点可用、`/chat` 会失败。
@@ -16,15 +18,29 @@
 |---|---|---|
 | 前端 dev | 10086 | `npm run dev:h5` |
 | 前端生产（nginx） | 8080 | 静态产物托管 |
-| harness | 8011 | 容器内监听；nginx 以 `/api` 前缀对外并剥离后转发 |
+| harness | 43301 | **对外通信端口**（容器内监听，同 `tcmi_server` 容器）；nginx 以 `/api` 前缀对外并剥离后转发，也可直连宿主机 43301 |
 | llm_server | 8000 | `/healthz`、`/v1/*`（可选网关） |
 | LM Studio（宿主机） | 11223 | `http://localhost:11223/v1`；容器内用 `host.docker.internal` |
-| rrserver server | 容器内 8080（nginx 对外 8088） | `/healthz`、`/api/register`、`/api/heartbeat`、`/api/unregister`、`/api/services`、WS `/ws/<name>`、隧道 `/t/<name>/*` |
+| rrserver server | 43302（容器内） | **与 harness 同一个容器**（统一 Rust 镜像 `tcmi_server`）；nginx `/rr` 反代、443/WSS 对外 | `/healthz`、`/api/register`、`/api/heartbeat`、`/api/unregister`、`/api/services`、WS `/ws/<name>`、隧道 `/t/<name>/*` |
 | rrserver client | 9000 | 家庭端隧道客户端 |
 | RAG（可选） | 8080（`RAG_PORT`） | `llm_server/rag`，见 `rag.md` |
 
-> rrserver 对外入口统一为 `8088`（`deploy/nginx/rrserver.conf`），不是早期的 8080 直连。
+> rrserver 不直接暴露宿主机端口：对外统一走 nginx 的 `/rr`（443/WSS 终止），
+> 由 nginx 反代到容器内 43302。若单独跑 rrserver server（不经 nginx），
+> 再自行映射宿主机 43302（见 5.2）。
 > RAG 与前端生产都用 8080，但分属不同容器/网络，不冲突。
+>
+> **43301 与 43302 是同一个容器**（compose 服务名 `tcmi_server`）：两端口任一不通，
+> 容器健康检查即 `unhealthy`，nginx 的 `/api` 与 `/rr` 会同时受影响。
+>
+> ⚠️ **选端口时的坑（Windows）**：Windows 的 TCP 动态端口范围默认从 **1024** 起
+> （实测 `netsh int ipv4 show dynamicport tcp`：Start 1024 / 13977 个，即 1024–14000）。
+> 若把后端端口选在这个区间内，它**可能已被某条出站连接占用**——此时 `docker run -p <p>:<p>`
+> 不会报错，但**映射静默失效**（`docker ps` 里该端口不显示映射，宿主 curl 直接 Connection refused）。
+> 现在的 43301 / 43302 已在区间之外（此前 13301/13302 就在区间内，实测踩到过）。
+> 排查顺序：先看 `docker ps` 的 PORTS 列是否真有映射；若必须用区间内端口，用
+> `netsh int ipv4 add excludedportrange protocol=tcp startport=<p> numberofports=2`
+> 预留，或先映射到区间外的宿主端口（如 `-p 18012:43301`）。容器内部监听不受此影响。
 
 ---
 
@@ -38,33 +54,37 @@ npm run build:h5                     # 生产：产物在 dist/
 
 - `apiBase` 由 `config/dev.ts`（或 `process.env.VITE_API_BASE`）指定，指向 harness。
 - 生产静态托管与反代统一由 `deploy/` 的 nginx 完成：
-  - `nginx/frontend.conf`：托管 `dist/`（SPA 回退）+ 反代 `/api` 到 harness（剥离前缀）。
+  - `nginx/frontend.conf`：托管 `dist/`（SPA 回退）+ 反代 `/api` 到 `tcmi_server:43301`（剥离前缀）。
     harness 不落盘图片，无 `/uploads` 目录。
-  - `nginx/rrserver.conf`：TLS 终止 + 反代 `/rr` 到 rrserver。
+  - `nginx/rrserver.conf`：TLS 终止 + 反代 `/rr` 到 `tcmi_server:43302`（同容器内的 rrserver）。
 - 启动：`docker compose -f deploy/docker-compose.yml up -d --build`
 - 微信小程序：开发者工具导入 `frontend/`，走小程序审核发布流程（资质要求见第 7 节）。
 
 ---
 
-## 3. harness 部署（Rust 后端）
+## 3. 统一 Rust 后端部署（harness + rrserver 同一容器）
 
 ### 3.1 出镜像并运行
 
 ```powershell
 cd server                                    # 构建上下文必须是 workspace 根
-docker build -f harness/Dockerfile -t tcm-harness:local .
-docker run -d --name tcm-harness-8011 -p 8011:8011 `
+docker build -t tcmi_server:local .          # 统一镜像：harness + rrserver 两个二进制
+docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 `
   -e HARNESS_LLM_BASE_URL=http://host.docker.internal:11223/v1 `
   -e HARNESS_LLM_API_KEY=<LM Studio 令牌> `
-  tcm-harness:local
-# 验证：http://127.0.0.1:8011/health 返回 ok
+  tcmi_server:local
+# 验证：http://127.0.0.1:43301/health 返回 ok（43302 是同容器内的 rrserver 中继）
 ```
 
 一键出镜像（等价）：`pwsh scripts\build-release.ps1`。
 
 - **为什么构建上下文必须是 `server/`**：harness 与 rrserver 同属一个 Cargo workspace，
   且 harness 依赖 rrserver 的 lib，两者源码都要进上下文。
-- 镜像内默认 `--listen 0.0.0.0:8011 --resources /data/resources`；
+- **一个镜像跑两个进程**：镜像内 `/usr/local/bin/{harness,rrserver}`，
+  `entrypoint.sh` 默认同时拉起 harness(43301) 与 rrserver server(43302)；
+  任一进程退出则容器整体退出（交给 restart 策略一起重启），
+  避免「容器在跑但其中一个进程已死」。只跑 rrserver 其他子命令见第 5.2 节。
+- 镜像内默认 `--listen 0.0.0.0:43301 --resources /data/resources`；
   改 YAML 无需重建镜像——compose 已挂载 `resources:/data/resources:ro`，
   再 `POST /reload`（需 `hot_reload: true`）或重启即可。
 - 依赖层由 Docker 缓存复用（先复制清单 + 占位源码预编译依赖，再复制真实源码）。
@@ -78,7 +98,7 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `--config` | `resources/config.yaml` | 配置文件路径 |
-| `--listen` | `0.0.0.0:8011` | 监听地址 |
+| `--listen` | `0.0.0.0:43301` | 监听地址 |
 | `--resources` | `resources` | YAML 资源目录 |
 | `--tunnel-server` / `--tunnel-name` / `--tunnel-token` | 无 | 经 rrserver 隧道暴露本服务（见 5.3） |
 
@@ -86,7 +106,7 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `HARNESS_LISTEN` | `0.0.0.0:8011` | 监听地址 |
+| `HARNESS_LISTEN` | `0.0.0.0:43301` | 监听地址（对外通信端口） |
 | `HARNESS_LLM_BASE_URL` | `http://localhost:11223/v1` | LLM 端点：直连 LM Studio、经网关 `http://llm_server:8000/v1`、容器内直连宿主机 `host.docker.internal` |
 | `HARNESS_LLM_API_KEY` | 空 | 上游 Key（LM Studio 开启校验时必填） |
 | `HARNESS_MODEL` | `google/gemma-4-12b-qat` | 模型 |
@@ -101,13 +121,39 @@ docker run -d --name tcm-harness-8011 -p 8011:8011 `
 | `HARNESS_STORE_REDACT` | `true` | 落盘前脱敏（手机号/身份证/邮箱/长数字串） |
 | `HARNESS_STORE_LIST_LIMIT` | `20` | `GET /reports` 返回条数上限 |
 | `HARNESS_TUNNEL_SERVER` / `_NAME` / `_TOKEN` | 无 | 隧道（等价 `--tunnel-*`） |
+| `RR_LISTEN` | `0.0.0.0:43302` | **rrserver 中继**监听地址（由镜像入口 `entrypoint.sh` 读取，见 3.4） |
+| `RR_CONFIG` | `/etc/rrserver.toml` | **rrserver 中继**配置文件路径（同上） |
 
-> 变量名前缀是 **`HARNESS_`**（不是 `TCM_`）。
+> 变量名前缀：harness 是 **`HARNESS_`**（不是 `TCM_`）；rrserver 侧入口用的是 `RR_`（只这两个）。
 
 ### 3.3 改完 YAML 如何生效
 
 重启，或 `POST /reload`（需 `hot_reload: true`）。改完建议跑一遍确定性回归
 确认未破坏既有病例（Docker 内执行，见 [`testing.md`](./testing.md)）。
+
+### 3.4 同一容器内的两个进程（运维要点）
+
+镜像入口是 `server/entrypoint.sh`，行为如下：
+
+| 场景 | 命令 | 结果 |
+|---|---|---|
+| 默认（compose / `docker run` 不传参） | `docker run tcmi_server:local` | 同时拉起 `harness`(43301) 与 `rrserver server`(43302) |
+| 只跑 rrserver 子命令 | `docker run tcmi_server:local rrserver client ...` | 只跑该子命令（另见第 5.2 节） |
+| 只跑 harness | `docker run tcmi_server:local harness --listen ...` | 只跑 harness |
+
+要点：
+
+- **任一进程退出 → 容器整体退出**，由 `restart: unless-stopped` 把两个进程一起拉起，
+  不会留下「容器在跑、其中一个进程已死」的半死状态。
+- **健康检查同时探 43301 与 43302**（bash `/dev/tcp`，镜像内不装 curl）：
+  只跑 rrserver `client` / `llm-server` 子命令时，必须加 `--no-healthcheck`
+  （compose 里用 `healthcheck: { disable: true }`），否则会被误判 unhealthy。
+- **日志**：两个进程的 stdout 都在同一个容器的 `docker logs` 里，靠行前缀区分
+  （入口会打印各自的监听地址）。
+- **改 rrserver 配置**：compose 挂载 `server/rrserver/config/rrserver.toml` 覆盖
+  `/etc/rrserver.toml`，改完 `docker compose restart tcmi_server` 即可，无需重建镜像。
+- **端口不要冲突**：宿主机映射时 43301 与 43302 要分别映射（`-p 43301:43301 -p 43302:43302`）；
+  生产默认只映射 harness 43301（对外通信）；rrserver 43302 走 nginx `/rr`，不直连宿主机。
 
 ---
 
@@ -144,11 +190,16 @@ docker compose up --build                # 容器 :8000
 
 Rust 反向隧道：云端 **server**（中继） + 家庭端 **client**（建 WS 隧道，把本地 LLM 暴露到 `/t/<name>/*`）。
 
+> **与 harness 同镜像、生产同容器**：rrserver 的二进制随统一镜像 `tcmi_server:local`
+> 一起产出，`deploy/docker-compose.yml` 里它就在 tcmi_server 容器内监听 43302
+> （nginx `/rr` → `tcmi_server:43302`）。下面的命令用于**单独**跑 rrserver（开发 / 调试，
+> 或家庭端 client 跑在另一台机器上）。
+
 ### 5.1 构建
 
 ```powershell
 cd server
-docker build -f rrserver/Dockerfile -t tcm-rrserver:local .
+docker build -t tcmi_server:local .        # 与 harness 同一个镜像，无需单独构建
 ```
 
 镜像内编译（`rust:1.98-bookworm` 编译 → `ubuntu:24.04` 运行，glibc 向前兼容），
@@ -157,13 +208,14 @@ docker build -f rrserver/Dockerfile -t tcm-rrserver:local .
 ### 5.2 启动
 
 ```bash
-# 云端 server（容器内监听 8080，nginx 8088 对外）
-docker run -d --name rrserver -p 8088:8080 `
+# 云端 server（单独跑；容器内监听 43302，宿主机映射 43302 对外）
+# --no-healthcheck：镜像的健康检查会同时探 43301+43302，只跑 rrserver 时需要关掉
+docker run -d --name rrserver -p 43302:43302 --no-healthcheck `
   -v $PWD/rrserver/config/rrserver.toml:/etc/rrserver.toml:ro `
-  tcm-rrserver:local server --listen 0.0.0.0:8080 --config /etc/rrserver.toml
+  tcmi_server:local rrserver server --listen 0.0.0.0:43302 --config /etc/rrserver.toml
 
 # 家庭端 client（另一台机器）
-docker run -d --name rrclient tcm-rrserver:local client `
+docker run -d --name rrclient --no-healthcheck tcmi_server:local rrserver client `
   --server https://rr.windblue.tech --name home --token <TOKEN> `
   --local http://host.docker.internal:8900
 ```
@@ -180,9 +232,9 @@ docker run -d --name rrclient tcm-rrserver:local client `
 harness 内置隧道客户端，启动时提供 server + name 即可：
 
 ```powershell
-docker run -d --name tcm-harness-8011 -p 8011:8011 `
+docker run -d --name tcmi_server-tunnel -p 43301:43301 `
   -e HARNESS_TUNNEL_SERVER=ws://<云端 rrserver> -e HARNESS_TUNNEL_NAME=tcm `
-  -e HARNESS_TUNNEL_TOKEN=<TOKEN> tcm-harness:local
+  -e HARNESS_TUNNEL_TOKEN=<TOKEN> tcmi_server:local
 # 之后公网访问 https://<域名>/rr/t/tcm/* 即到达 harness
 ```
 
@@ -236,7 +288,8 @@ curl -s https://<域名>/rr/api/services | jq
 
 ### 5.5 防火墙与证书
 
-- 云端放通 `8088`（server 入口）、`443`（HTTPS/WSS，由 `deploy/` 的 nginx 前置 TLS）。
+- 云端放通 `43302`（单独跑 rrserver server 时的宿主机映射）、`443`（HTTPS/WSS，
+  由 `deploy/` 的 nginx 前置 TLS；生产按此即可，不必再直连后端端口）。
 - 证书：`deploy/certs/fullchain.pem` + `privkey.pem`（当前为自签名，仅内网可用；
   生产需换成可信证书）。缺失会导致 nginx 反复重启。
 - client 出站需可达 server 的 WSS 地址与家庭 LLM 端口。
@@ -245,8 +298,16 @@ curl -s https://<域名>/rr/api/services | jq
 
 ## 6. 全链路验证
 
+**部署后先看容器状态**（生产由 nginx 统一对外，后端端口不暴露到宿主机）：
+
+```bash
+docker compose -f deploy/docker-compose.yml ps
+# tcmi_server 应为 healthy（= 容器内 43301 与 43302 都通），nginx / llm_server 一并检查
+docker compose -f deploy/docker-compose.yml logs --tail=50 tcmi_server
+```
+
 - **健康探针**：harness `GET /health`（经 nginx 为 `/api/health`）；llm_server `GET /healthz`
-  （无上游→`degraded`）；rrserver `GET /healthz`（`ok`）；
+  （无上游→`degraded`）；rrserver `GET /healthz`（`ok`，经 nginx 为 `/rr/healthz`）；
   隧道通断 `GET /t/<name>/v1/models`，harness 隧道可用 `GET /t/tcm/skills` 验证；
   注册维护状态 `GET /api/services`（每条含 `hash` / `stale` / `heartbeat_age_secs`）。
 - **全链路 E2E**（用 stub，不需真实 LLM）：`e2e_tests/run_full_chain_e2e.ps1`，见 [`e2e.md`](./e2e.md)。

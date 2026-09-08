@@ -55,8 +55,8 @@ param(
   [switch]$NoStore,
   [switch]$BindStore,
   [switch]$SkipConvergence,
-  [string]$ImageName = 'tcm-harness:e2e',
-  [int]$Port = 8011
+  [string]$ImageName = 'tcmi_server:e2e',
+  [int]$Port = 43301
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,7 +64,7 @@ $ROOT   = Split-Path $PSScriptRoot -Parent          # tcm_work
 $SERVER = Join-Path $ROOT 'server'
 $SAMPLES = Join-Path $ROOT 'docs/samples'
 $STORE  = Join-Path $PSScriptRoot '_reports'        # 容器落盘目录（git 忽略）
-$CONTAINER = 'tcm-harness-manual'
+$CONTAINER = 'tcmi_server-manual'
 $BASE = "http://127.0.0.1:$Port"
 
 # ---------------- 用例 ----------------
@@ -127,7 +127,7 @@ Write-Host "[manual-e2e] LLM：$env:HARNESS_LLM_BASE_URL / 模型 $modelShort" -
 if (-not $SkipBuild) {
   Write-Host "`n[manual-e2e] === 构建镜像 $ImageName ===" -ForegroundColor Yellow
   Push-Location $SERVER
-  docker build -f harness/Dockerfile -t $ImageName .
+  docker build -t $ImageName .
   $code = $LASTEXITCODE
   Pop-Location
   if ($code -ne 0) { throw '镜像构建失败' }
@@ -140,7 +140,7 @@ Write-Host "`n[manual-e2e] === 启动 harness 容器（端口 $Port）===" -Fore
 # 在 $ErrorActionPreference='Stop' 下「容器不存在」也会被当成失败而中断脚本。
 & cmd /c "docker rm -f $CONTAINER >nul 2>&1" | Out-Null
 
-$run = @('run','-d','--name',$CONTAINER,'-p',"$($Port):8011",
+$run = @('run','-d','--name',$CONTAINER,'-p',"$($Port):43301",
          '--add-host','host.docker.internal:host-gateway',
          '-e',"HARNESS_LLM_BASE_URL=$env:HARNESS_LLM_BASE_URL",
          '-e',"HARNESS_MODEL=$env:HARNESS_MODEL")

@@ -25,7 +25,7 @@
                                       │ 经家庭算力上云（可选）
                                       ▼
                           ┌───────────────────────┐
-                          │  rrserver 反向隧道      │  云端 server :8088
+                          │  rrserver 反向隧道      │  云端 server :43302
                           │                        │  + 家庭端 client :9000
                           └───────────────────────┘
 ```
@@ -33,10 +33,10 @@
 | 组件 | 路径 | 角色 | 默认端口 |
 |---|---|---|---|
 | 前端 | `frontend/` | Taro 多端（H5 / 微信小程序），dev `:10086` | 10086 |
-| 后端 | `server/harness/` | Rust 编排 13 个 Sub-Agent（nginx 以 `/api` 前缀代理） | 8011 |
+| 后端 | `server/`（统一镜像 `tcmi_server`） | harness Rust 编排 13 个 Sub-Agent + rrserver 云端中继（同容器） | 43301 / 43302 |
 | LLM 网关 | `llm_server/` | 纯 LM Studio 网关 + Agent 中间层（**不托管模型**，可选） | 8000 |
 | 模型推理 | 宿主机 LM Studio | `http://localhost:11223/v1`，模型 `google/gemma-4-12b-qat` | 11223 |
-| 反向隧道 | `server/rrserver/` | Rust 中继：云端 server `:8088` + 家庭端 client `:9000` | 8088 / 9000 |
+| 反向隧道 | `server/rrserver/` | Rust 中继：云端 server `:43302` + 家庭端 client `:9000`（与 harness **同一镜像 / 容器**） | 43302 / 9000 |
 | 统一入口 | `deploy/` | 独立 nginx：静态托管 + 反代 `/api`、`/rr`（TLS 终止） | 80 / 443 / 8080 |
 
 harness 端点：`/health`、`/agents`(GET/POST)、`/chat`、`/skills`(GET/POST)、
@@ -45,7 +45,9 @@ harness 端点：`/health`、`/agents`(GET/POST)、`/chat`、`/skills`(GET/POST)
 ### 关键事实（各文档一致引用）
 
 - 🔒 **后端完全依赖 Docker**：harness 与 rrserver 的构建、运行、验证一律在 Docker 内完成，
-  **不使用宿主机 `cargo build` 产物**。镜像为多阶段构建（容器内编译），构建机无需 Rust 工具链。
+  **不使用宿主机 `cargo build` 产物**。两者由**同一个多阶段镜像 `tcmi_server`**
+  （`server/Dockerfile`，容器内编译）一次产出，并默认在**同一个容器**里运行
+  （harness `43301` 对外通信 / rrserver `43302` 中继），构建机无需 Rust 工具链。
 - **harness 无状态**：一次 `POST /chat` 串行跑完 `routing.yaml` 全部激活步骤即返回，
   **没有服务端多轮循环**——多轮由调用方累积 `messages`。报告持久化默认关闭。
 - **单步失败不中断**：返回已完成步骤 + `failures` + `partial`；全部失败才返回 `{"error"}`。
@@ -68,14 +70,16 @@ LM Studio（真实推理）。
 
 ```powershell
 # 1) 后端：Docker 内编译并出镜像（多阶段，无需本地 Rust）
+#    统一镜像 tcmi_server 内含 harness + rrserver 两个二进制，默认同容器启动：
+#    harness 43301（对外通信）/ rrserver 43302（中继）
 cd server
-docker build -f harness/Dockerfile -t tcm-harness:local .
-docker run -d --name tcm-harness-8011 -p 8011:8011 `
+docker build -t tcmi_server:local .
+docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 `
   -e HARNESS_LLM_BASE_URL=http://host.docker.internal:11223/v1 `
   -e HARNESS_LLM_API_KEY=<LM Studio 令牌> `
-  tcm-harness:local
+  tcmi_server:local
 
-# 2) 验证：http://127.0.0.1:8011/health 返回 {"status":"ok","rag":{...}}
+# 2) 验证：http://127.0.0.1:43301/health 返回 {"status":"ok","rag":{...}}
 #    容器内访问宿主机 LM Studio 用 host.docker.internal（不是 localhost）
 
 # 3) 前端

@@ -62,13 +62,13 @@ mcp_clients:                       # 启动时连接，逐个注册为 Skill
 
 - 连接失败：打日志并跳过，**不阻断启动**（与 `llm_server` 的 MCP 策略一致）；
 - 调用失败：`mcp_skill` 返回 `Err`，被 `chat_with_tools` 捕获为 `{"error": ...}` 回填，不击穿问诊流程；
-- 验证：`curl -X POST localhost:8011/skills -d '{"name":"mcp__kb__search_kb","arguments":{...}}'`。
+- 验证：`curl -X POST localhost:43301/skills -d '{"name":"mcp__kb__search_kb","arguments":{...}}'`。
 
 ---
 
 ## 3. Server 用法（已实现，T4.5）
 
-端点：`POST http://localhost:8011/mcp`（生产经 nginx 时为 `https://<域名>/api/mcp`）。
+端点：`POST http://localhost:43301/mcp`（生产经 nginx 时为 `https://<域名>/api/mcp`）。
 传输为 **Streamable HTTP**，JSON-RPC 2.0，与 client 侧同构、无第三方 SDK。
 
 | 方法 | 说明 |
@@ -98,11 +98,11 @@ mcp_clients:                       # 启动时连接，逐个注册为 Skill
 
 ```bash
 # 1) 列出工具
-curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
+curl -X POST http://localhost:43301/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
 # 2) 调辨证（需要真实 LLM）
-curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
+curl -X POST http://localhost:43301/mcp -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc":"2.0","id":2,"method":"tools/call",
     "params":{
@@ -116,7 +116,7 @@ curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
 #      "isError":false}}
 
 # 3) 查能力清单（不需要 LLM，可用来探活）
-curl -X POST http://localhost:8011/mcp -H 'Content-Type: application/json' \
+curl -X POST http://localhost:43301/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call",
        "params":{"name":"list_agent_capabilities","arguments":{}}}'
 ```

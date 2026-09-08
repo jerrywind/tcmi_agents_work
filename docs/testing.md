@@ -238,7 +238,7 @@ cd llm_server/rag && python -m unittest test_corpus
 |---|---|---|
 | `backend-test` | Docker 内 `cargo test --workspace` | 通过（含 93 条案例回归） |
 | `backend-lint` | Docker 内 `cargo fmt --check` + `clippy -D warnings` | 无告警 |
-| `backend-image` | `docker build` harness / rrserver（镜像内编译） | 构建成功 |
+| `backend-image` | `docker build` 统一后端镜像（harness + rrserver，镜像内编译） | 构建成功 |
 | `frontend` | `npm ci && npm run test` | 通过（契约测试自动 skip） |
 | `frontend-contract` | 起真实 harness 容器后跑契约测试 | 通过 |
 

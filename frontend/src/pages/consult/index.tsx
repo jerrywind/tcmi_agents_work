@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import Taro from '@tarojs/taro'
 import { View, Text, Input, Textarea, ScrollView, Image } from '@tarojs/components'
 import { CAPABILITY_ZH, chat, SUPPORTS_FULL_CHAT } from '../../services/harness'
 import { streamChat } from '../../services/stream'
 import type { StepState, StreamHandle } from '../../services/stream'
 import {
-  advanceRound, getMessages, getPayload, getProfile, getResult, pushMessage, resetMessages,
-  rollbackSession, setResult, snapshotSession,
+  advanceRound, consumeSessionNotice, getMessages, getPayload, getProfile, getResult,
+  pushMessage, resetMessages, rollbackSession, setResult, snapshotSession,
 } from '../../services/session'
 import { nearHints } from '../../utils/differentiation'
 import { applyStreamEvent, emptyAcc } from '../../utils/streamAcc'
@@ -26,7 +26,7 @@ import './index.scss'
  * 交互要点：点一下立即补齐全文（`flush`）。动画是给等待用的，
  * 如果用户想读完却被迫等动画，那就是帮倒忙。
  */
-function StreamCard({ title, text, stale }: { title: string; text: string; stale?: boolean }) {
+const StreamCard = memo(function StreamCard({ title, text, stale }: { title: string; text: string; stale?: boolean }) {
   // 上一轮占位**不做打字机**：它本来就已经完整，再逐字播一遍既慢又像新内容
   const { shown, flush } = useTypewriter(text, { disabled: stale })
   return (
@@ -37,7 +37,7 @@ function StreamCard({ title, text, stale }: { title: string; text: string; stale
       <Markdown className='stream-card-text' text={shown} />
     </View>
   )
-}
+})
 
 /**
  * 单张体征图片的选择/预览/清除槽。
@@ -167,6 +167,18 @@ function ConsultInner() {
    */
   const undoRef = useRef<(() => void) | null>(null)
 
+  // 刷新后从本地快照恢复：让用户明白「为什么一进来就有结果 / 表单为什么变干净」，
+  // 免得恢复出来的旧结论被当成「我还没问就有结论」而误判
+  useEffect(() => {
+    const n = consumeSessionNotice()
+    if (n === 'restored') {
+      // 只有恢复出的结论还在（用户没有先开启新会话把它清掉）才提示
+      if (getResult()) Taro.showToast({ title: '已恢复上次问诊结果，可继续追问', icon: 'none' })
+    } else if (n === 'interrupted') {
+      Taro.showToast({ title: '上次问诊未完成，已重置主诉，请重新描述', icon: 'none' })
+    }
+  }, [])
+
   // 秒表：让用户看见「时间在动」，比一个转圈更能说明没卡死
   useEffect(() => {
     if (!streaming) return
@@ -232,12 +244,30 @@ function ConsultInner() {
     const acc = emptyAcc()
     acc.keep = keep
     // `acc` 是唯一数据源，`snap` 只是给 React 渲染用的快照
-    const publish = () => setSnap({ ...acc })
+    //
+    // publish 按帧合并：后端 token 级流式每秒可能推几十个 step_delta，若每个事件都
+    // setState，React 会以事件频率做整树 reconciliation——步骤越多、正文越长，
+    // 低端机上打字机越卡。合并到下一帧只渲染一次：视觉上没有差别，主线程省一大截。
+    let rafToken: ReturnType<typeof setTimeout> | null = null
+    let finished = false
+    const scheduleFrame =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (cb: FrameRequestCallback) => setTimeout(() => cb(performance.now()), 16)
+    const publish = () => {
+      if (finished || rafToken !== null) return
+      rafToken = scheduleFrame(() => {
+        rafToken = null
+        if (!finished) setSnap({ ...acc })
+      }) as ReturnType<typeof setTimeout>
+    }
     setStreaming(true)
     setElapsed(0)
     publish()
 
     const finalize = () => {
+      // 收尾后不再刷 snap：最后半帧已并入 acc，结论由 result 渲染，跳过一次无害
+      finished = true
       const idxs = Object.keys(acc.texts).map(Number).sort((a, b) => a - b)
       const r: DiagnosisResult = {
         steps: idxs.map(i => ({
@@ -363,15 +393,21 @@ function ConsultInner() {
       rollbackSession(snapshot)
       setInput(text)
     }
-    // 上一轮各步正文作为占位：后端会把 10 步全部重跑，
-    // 没有它屏幕会先变空白再慢慢长出来（详见 StreamAcc.keep 的注释）
+    // 上一轮各步正文作为占位：没有它屏幕会先变空白再慢慢长出来
+    // （详见 StreamAcc.keep 的注释）。追问走后端快速通道（采集/医案不重跑），
+    // 仍在重跑的步（辨证与治疗期）先摆上一轮内容，新结果按 index 覆盖。
     const keep: Record<string, string> = {}
     for (const s of getResult()?.steps || []) {
       if (s.text) keep[s.capability] = s.text
     }
-    runStream({ ...getPayload(), images: collectedImages() }, err => {
+    // 快速通道：`followup` 让后端跳过采集四诊与医案参考（一轮省 40–60% 的 LLM
+    // 调用），并且**不再重发图片**——图片只在首诊的望诊步被消费，舌象/手相
+    // 的描述已在上一轮总结里进入 messages，再传一次 12MB 只拖慢首帧。
+    // 触发条件在服务端还有 `round >= 2` 复核，缺一不可。
+    const payload = { ...getPayload(), followup: true }
+    runStream(payload, err => {
       Taro.showToast({ title: `${err.message || '流式中断'}，改用普通模式`, icon: 'none' })
-      void runPlain({ ...getPayload(), images: collectedImages() }, onFail)
+      void runPlain(payload, onFail)
     }, keep)
   }
 

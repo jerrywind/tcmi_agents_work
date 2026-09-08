@@ -46,19 +46,17 @@ jobs:
     name: 后端镜像构建（多阶段，镜像内编译）
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        crate: [harness, rrserver]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: docker build ${{ matrix.crate }}
+      - name: docker build 统一后端镜像
+        # 统一镜像（server/Dockerfile）一次编译出 harness + rrserver 两个二进制，
+        # 故不再按 crate 拆成两个镜像。
         # 构建上下文必须是 workspace 根（server/）：两个 crate 共享 target/，
         # 且 harness 依赖 rrserver 的 lib。
         run: |
           cd server
-          docker build -f ${{ matrix.crate }}/Dockerfile -t tcm-${{ matrix.crate }}:ci .
+          docker build -t tcmi_server:ci .
 
   frontend:
     name: 前端单元（vitest）
@@ -87,14 +85,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build harness image
-        run: cd server && docker build -f harness/Dockerfile -t tcm-harness:ci .
-      - name: Run harness (只读端点无需 LLM)
-        run: docker run -d --name harness -p 8011:8011 tcm-harness:ci
+      - name: Build backend image
+        run: cd server && docker build -t tcmi_server:ci .
+      - name: Run backend (只读端点无需 LLM)
+        # 统一镜像 tcmi_server 会同时拉起 harness(43301) 与 rrserver(43302)
+        run: docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 tcmi_server:ci
       - name: Wait for /health
         run: |
           for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:8011/health && break
+            curl -sf http://127.0.0.1:43301/health && break
             sleep 1
           done
       - uses: actions/setup-node@v4
@@ -105,7 +104,10 @@ jobs:
       - name: Install deps
         run: cd frontend && npm ci
       - name: Run contract test against live harness
+        env:
+          # 让契约测试候选地址列表优先命中真实 harness（容器对外端口 43301）
+          VITE_API_BASE: http://127.0.0.1:43301
         run: cd frontend && npx vitest run src/services/harness.contract.test.ts
       - name: Tear down
         if: always()
-        run: docker rm -f harness
+        run: docker rm -f tcmi_server
