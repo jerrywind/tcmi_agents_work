@@ -16,14 +16,17 @@
 
 | 层级 | 位置 | 说明 |
 |---|---|---|
-| 单元 | `server/harness/src/**` 的 `#[cfg(test)]` | PPG 解析、配伍禁忌校验、证候/方剂检索、关键词证据匹配、技能注册与 owner 过滤 |
+| 单元 | `server/harness/src/**` 的 `#[cfg(test)]` | PPG 解析、配伍禁忌校验、证候/方剂检索、关键词证据匹配、技能注册与 owner 过滤、报告脱敏与存储、收敛判定 |
 | 集成 | `server/harness/tests/cases.rs` | **资源完整性护栏**：以 `cases.jsonl`（**合成基准**，真实覆盖面见 1.1）校验资源与纯函数链路（不依赖 LLM） |
-| 集成 | `server/harness/tests/behavior.rs` | **行为回归**：红旗中断判定、技能归属与多归属、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**；阶段 G 新增：**证候锁定与中文名归一化**、**方剂覆盖与药味比对**、**性别过滤**、**安全门先于收敛判定（阶段划分）**、**安全门语料只取患者陈述**、**RAG 状态注入**、**`/health` 的 `rag` 字段**（均不依赖 LLM） |
-| 评测 | `server/harness/tests/llm_eval.rs` | **LLM 质量评分**（T4.4）：以 `cases.jsonl` 跑真实辨证并自动评分；默认跳过，`HARNESS_EVAL=1` 才启用 |
+| 集成 | `server/harness/tests/behavior.rs` | **行为回归**（56 条）：红旗中断判定、技能归属与多归属、`owner` 过滤、埋点累加、`mcp_clients` 配置解析、`/chat` 响应契约、**结构化辨证（主证/兼证/置信度/矛盾证据）**、**MCP Server 端点**；阶段 G 新增：**证候锁定与中文名归一化**、**方剂覆盖与药味比对**、**性别过滤**、**安全门先于收敛判定（阶段划分）**、**安全门语料只取患者陈述**、**RAG 状态注入**、**`/health` 的 `rag` 字段**（均不依赖 LLM） |
+| 集成 | `server/harness/tests/golden.rs` | **黄金病例集**（4 条）：以 `golden_cases.jsonl`（21 条）断言**首位命中**与「库外不得出证」（H7） |
+| 集成 | `server/harness/tests/echo.rs` | **证据语料隔离**（6 条）：固定「做证据判定的地方必须只取 `user` 消息」这条铁律，防助手总结造成自我确认 |
+| 集成 | `server/harness/tests/stream.rs` | **流式累加语义**（8 条）：SSE 事件按 `index` 归位、重试作废已推 delta 等（L5/L7 的护栏） |
+| 评测 | `server/harness/tests/llm_eval.rs` | **LLM 质量评分**（T4.4）：以 `golden_cases.jsonl` 跑真实辨证，**规则层与正文层双向评分**；默认跳过，`HARNESS_EVAL=1` 才启用 |
 | 隧道 | `server/rrserver/tests/integration.rs` | rrserver 端到端：注册鉴权、**hash code 注册/心跳/探活/回收**、隧道转发、流式、CORS、断线重连、模型部署包装 |
 
-当前 **后端 200 个用例全绿**（harness 53：lib 9 + behavior 41 + cases 2 + llm_eval 1；
-rrserver 147：lib 107 + main 4 + 集成 36）。
+当前 **后端 233 个用例全绿**（harness 86：lib 9 + behavior 56 + cases 2 + golden 4 +
+echo 6 + stream 8 + llm_eval 1；rrserver 147：lib 111 + 集成 36）。
 
 ```powershell
 # 后端一律在 Docker 内跑，runner / 本机无需 Rust 工具链
@@ -75,6 +78,11 @@ docker run --rm -v "${PWD}/server:/build" -w /build rust:1.98-bookworm `
 > 需真实 LLM 的问诊链路（`/chat`）不在自动化测试内：harness 未提供 MockProvider，
 > 请连 LM Studio 后手工验证，或用下面的 LLM 评测集半自动打分。
 
+> 另有 `golden_cases.jsonl`（21 条人工构造的教科书式病例）由 `--test golden` 断言
+> **首位命中**与「库外不得出证」。它与 `cases.jsonl` 互补：后者守「数据没写漏」，
+> 前者守「打分公式别把降级路径改回必选其一」。
+> ⚠️ 两者**都是人工构造的**，守得住回归，守不住「证候库的症状本身就写错了」。
+
 ### 1.2 LLM 质量评测（`--test llm_eval`，T4.4）
 
 ```bash
@@ -86,15 +94,21 @@ docker run --rm -v "${PWD}/server:/build" -w /build \
   cargo test -p harness --test llm_eval -- --nocapture
 ```
 
-- 数据来源：`cases.jsonl` 中带期望证候的病例，**按语料去重**（原始文件里同一主诉
-  重复几十条，不去重会把评分带偏）；
-- 评分：期望证候名出现在辨证输出中即命中，按病例给部分分，另统计全中率；
-- 可调：`HARNESS_EVAL_LIMIT`（条数，默认 20）、`HARNESS_EVAL_TIMEOUT_SECS`
+- 数据来源：**`golden_cases.jsonl`**（J4 已由 `cases.jsonl` 改过来——后者是合成数据
+  且标签自相矛盾，评分又是 `正文.contains(期望值)`，期望值写 slug 时永远匹配不上中文正文，
+  跑出的分数既不能当质量指标也不能当回归信号）；
+- 评分：**规则层与正文层分开**。正例要求首位命中；库外负例要求「规则层不硬塞证 +
+  正文承认不知道」。规则层错 → 打分公式或证候库的问题；正文层错 → 提示词或模型遵循度的问题；
+- 可调：`HARNESS_EVAL_LIMIT`（条数，默认 50）、`HARNESS_EVAL_TIMEOUT_SECS`
   （单条超时，默认 120，超时计 0 分而非挂住整轮）、`HARNESS_EVAL_MIN_SCORE`
   （总分门槛，默认 0 = 只出报告）；
 - 产物：JSON 报告写到 `server/target/tmp/llm_eval_report.json`；
+- **健全性检查**：全部条目都执行失败时 **panic**（J4 之前 21 条全 401、分数 0，
+  而门槛默认 0 → 测试「通过」，等于没跑）；
 - 定位：**不作为 PR 门禁**（耗时与成本不可控、结果有随机性），
-  由 `.github/workflows/llm-eval.yml` 每晚跑，跑在能访问本地 LLM 的 self-hosted runner 上。
+  由 `.github/workflows/llm-eval.yml` 每晚跑，跑在能访问本地 LLM 的 self-hosted runner 上；
+- 首份基线（2026-09-03，20 条 / 542 秒）：`rule_score=1.0`、`llm_score=1.0`、`overall=1.0`。
+  ⚠️ **满分不代表准确**——病例与证候库同源，只能守住回归。
 
 ---
 
@@ -109,16 +123,30 @@ npx vitest run            # 单测（jsdom）
 - 页面组件（`src/pages/**`）依赖 Taro 运行时，由契约测试与真机验证覆盖，
   不计入单测覆盖率；可独立验证的纯逻辑（如证候摘要格式化）抽到 `src/utils/`。
 - 组件/逻辑单测用 `vitest + jsdom`，`@tarojs/taro` 由 `vitest.setup.ts` 全局 mock。
-- 测试文件：`src/services/harness.test.ts`（契约客户端）、
-  `src/services/harness.contract.test.ts`（**连真实 harness**，不可达自动 skip）、
-  `src/services/session.test.ts`（多轮状态：轮次递增、历史回灌、档案不丢）、
-  `src/utils/format.test.ts`。
-- 当前 **36 个用例全绿**（含 6 条契约：`/health`、`/agents`、`/skills`、
-  `POST /skills` 错误分支 + MCP 的 `tools/list`、`list_agent_capabilities`）。
+- 测试文件（11 个，共 **132 条**）：
+
+  | 文件 | 条数 | 覆盖 |
+  |---|---|---|
+  | `src/utils/profile.test.ts` | 30 | 档案表单校验、年龄派生、`buildOpeningMessages` |
+  | `src/utils/format.test.ts` | 21 | 文本格式化与 `stripMarkdown()`（J3） |
+  | `src/utils/birthdate.test.ts` | 14 | 出生日期换算（自建滚轮的纯逻辑） |
+  | `src/services/stream.test.ts` | 14 | SSE 客户端解析与降级 |
+  | `src/services/harness.test.ts` | 14 | 契约客户端（超时、错误体、URL 拼接） |
+  | `src/services/session.test.ts` | 13 | 多轮状态：轮次递增、历史回灌、快照回滚、档案不丢 |
+  | `src/utils/streamAcc.test.ts` | 7 | 流式累加器 `applyStreamEvent()`（L7） |
+  | `src/utils/useTypewriter.test.ts` | 6 | 打字机效果 |
+  | `src/services/harness.contract.test.ts` | 6 | **连真实 harness**：`/health`、`/agents`、`/skills`、`POST /skills` 错误分支 + MCP 的 `tools/list`、`list_agent_capabilities` |
+  | `src/utils/differentiation.test.ts` | 5 | `nearHints()`（I3） |
+  | `src/services/stream.contract.test.ts` | 2 | **连真实 harness** 的 `/chat/stream` |
+
+- 当前 **132 条用例全绿**（后端未起时 8 条契约自动 skip：`harness.contract` 6 条 +
+  `stream.contract` 2 条；本机起 harness 在 `43301` 后这 8 条会真跑）。
 
 > ⚠️ **契约测试在 CI 里是 skip 的**：后端不可达时 `describe.skipIf(!up)` 会跳过整组，
 > 于是后端契约漂移**不会**在 CI 报警——改 `/health` 返回格式、capability 从 7 个增到
-> 13 个，都是悄悄发生的。
+> 13 个，都是悄悄发生的。I4 已给它加了 5s 超时与 WARN（此前失败会静默返回 `false`，
+> 本文件在 CI 里长期「1 skipped」无人察觉），但**本机必须先起 harness（43301）才会真跑**，
+> `VITE_API_BASE` 可改地址。
 > **改了后端端点后，务必在本地起 harness 再跑一次 `npx vitest run`**（T7.11 即如此发现）。
 > 同理，改 `/chat` 相关行为后请连真实 LLM 跑一遍人工验收，见第 4 节。
 
@@ -131,7 +159,7 @@ npx vitest run            # 单测（jsdom）
 ```bash
 cd llm_server
 pip install -r requirements-dev.txt     # 仅测试需要，运行服务不需要
-python -m pytest tests -q               # 8 条
+python -m pytest tests -q               # 8 条（pytest.ini 的 testpaths 只收 tests/）
 ```
 
 | 文件 | 覆盖 |
@@ -146,9 +174,15 @@ python -m pytest tests -q               # 8 条
 
 ```bash
 cd llm_server/rag
-python -m unittest test_corpus -v     # 语料索引（12 条，纯离线）
+python -m unittest test_corpus -v     # 语料索引（20 条，纯离线）
 python -m unittest test_rag -v        # 检索服务（6 条，含网络降级路径）
+python -m unittest test_taxonomy -v   # 典籍四维分类（27 条，纯离线）
+python -m unittest test_api_scope -v  # 知识域 scope 编译语义（5 条，纯离线）
+# 另有 test_retriever.py（4 条）、test_config.py（3 条）；rag/ 合计 65 条
 ```
+
+> ⚠️ `rag/` 的 65 条**不在默认 pytest 收集范围**（`pytest.ini` 的 `testpaths = tests`），
+> 也不会被 CI 跑到，需显式指定路径。
 
 - `test_corpus.py` 覆盖：编码探测（**语料是 GB18030**，曾导致「索引建好却搜不到」）、
   书目元数据剥离、切分合并与硬切、建库/检索往返、同书限流、路径穿越防护、
@@ -176,9 +210,10 @@ python -m unittest test_rag -v        # 检索服务（6 条，含网络降级�
 - `test_llm_server_e2e.py`：llm_server 网关健康检查与透传（无上游→`degraded`/`503`）、
   `GET /rr/heartbeat` 探活端点、`/healthz` 的注册状态字段、
   **中继不可达时注册失败但服务照常可用**
-- 前端 `frontend/src/services/harness.contract.test.ts`（vitest，**默认开启**：
-  连真实 harness 校验 `/health`、`/agents`、`/skills`、`POST /skills` 错误分支；
-  后端不可达时自动 skip，`-SkipFrontend` 可关闭）
+- 前端 `frontend/src/services/harness.contract.test.ts` +
+  `stream.contract.test.ts`（vitest，**默认开启**，共 8 条：校验 `/health`、`/agents`、
+  `/skills`、`POST /skills` 错误分支、MCP 的 `tools/list` / `list_agent_capabilities`
+  与 `POST /chat/stream`；后端不可达时自动 skip，`-SkipFrontend` 可关闭）
 
 编排脚本用 `docker build` + `docker run` 起 harness（后端完全依赖 Docker，
 不使用宿主机 cargo 产物），详见 [`e2e.md`](./e2e.md)。
@@ -236,11 +271,14 @@ cd llm_server/rag && python -m unittest test_corpus
 
 | Job | 做什么 | 门禁 |
 |---|---|---|
-| `backend-test` | Docker 内 `cargo test --workspace` | 通过（含 93 条案例回归） |
+| `backend-test` | Docker 内 `cargo test --workspace`（233 条） | 通过 |
 | `backend-lint` | Docker 内 `cargo fmt --check` + `clippy -D warnings` | 无告警 |
 | `backend-image` | `docker build` 统一后端镜像（harness + rrserver，镜像内编译） | 构建成功 |
-| `frontend` | `npm ci && npm run test` | 通过（契约测试自动 skip） |
+| `frontend` | `npm ci && npm run test`（132 条） | 通过（**8 条契约自动 skip**：CI 无 harness） |
 | `frontend-contract` | 起真实 harness 容器后跑契约测试 | 通过 |
+
+> ⚠️ **CI 里没有任何 Python 测试**：`llm_server` 的 8 条 pytest 与 `rag/` 的 65 条
+> unittest 都不在 `test.yml` 里，改动这两处需本地手动跑。
 
 **nightly（`.github/workflows/llm-eval.yml`，非 PR 门禁）**
 

@@ -56,6 +56,9 @@ npm run build:h5                     # 生产：产物在 dist/
 - 生产静态托管与反代统一由 `deploy/` 的 nginx 完成：
   - `nginx/frontend.conf`：托管 `dist/`（SPA 回退）+ 反代 `/api` 到 `tcmi_server:43301`（剥离前缀）。
     harness 不落盘图片，无 `/uploads` 目录。
+    已为 SSE 配好三项必需设置（`proxy_buffering off` / `gzip off` /
+    `proxy_http_version 1.1`）与 `proxy_read/send_timeout 600s`——
+    **缺任一项 `POST /chat/stream` 都会被缓冲成一整包**，前端收不到增量。
   - `nginx/rrserver.conf`：TLS 终止 + 反代 `/rr` 到 `tcmi_server:43302`（同容器内的 rrserver）。
 - 启动：`docker compose -f deploy/docker-compose.yml up -d --build`
 - 微信小程序：开发者工具导入 `frontend/`，走小程序审核发布流程（资质要求见第 7 节）。
@@ -116,6 +119,7 @@ docker run -d --name tcmi_server -p 43301:43301 -p 43302:43302 `
 | `HARNESS_LLM_MAX_RETRIES` | `2` | LLM 重试次数（仅超时/连接失败/5xx/429） |
 | `HARNESS_LLM_RETRY_BACKOFF_MS` | `500` | 重试退避基数 |
 | `HARNESS_RAG_ENDPOINT` | 无 | 可选 RAG 检索端点，见 `rag.md` |
+| `HARNESS_LLM_STREAM` | `true` | 是否对上游开启 token 级流式（SSE）；上游不支持时自动退回整包解析并打 WARN |
 | `HARNESS_MCP_CLIENTS` | 无 | 外部 MCP server：`name=kb,url=http://host/mcp;name=...,url=...`，见 `mcp.md` |
 | `HARNESS_STORE_DIR` | 无 | **报告持久化目录；不设置则不落盘**（harness 保持无状态，见 `usage.md` 2.8） |
 | `HARNESS_STORE_REDACT` | `true` | 落盘前脱敏（手机号/身份证/邮箱/长数字串） |
@@ -176,7 +180,7 @@ docker compose up --build                # 容器 :8000
 > **顶层 compose 里的角色**：`deploy/docker-compose.yml` 已把 llm_server 作为
 > **典籍 RAG 数据面**纳入 `tcm-net`（harness 的 `rag_endpoint` 指向
 > `http://llm_server:8000/rag/retrieve/text`），并把宿主机 `rag_data/`
-> （694 部典籍原文 + `_index/corpus.sqlite3` 预建索引）挂到容器 `/data/rag`。
+> （694 部典籍 txt 原文 + `_index/corpus.sqlite3` 预建索引，索引覆盖 696 部）挂到容器 `/data/rag`。
 > 即使宿主机 LM Studio 未加载 embedding 模型，RAG 也会降级为零向量、
 > 以离线典籍索引继续工作，不会拖垮 harness。详见 [`rag.md`](./rag.md) 的
 > 「启用前提」一节。

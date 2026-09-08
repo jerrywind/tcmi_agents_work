@@ -227,7 +227,7 @@ harness 侧 `GET /health` 的 `rag.reachable` 应为 `true`（后台每 60s 探�
 
 ```bash
 cd llm_server
-# 建库（700 部 / 6618 万字，约 60s）
+# 建库（694 部 txt / 索引 696 部 / 6618 万字，约 60s）
 python -m rag corpus-build --dir ../rag_data --db ../rag_data/_index/corpus.sqlite3
 # 检索（平均 41ms）
 python -m rag corpus-search --db ../rag_data/_index/corpus.sqlite3 --query "半夏泻心汤 心下痞"
@@ -249,9 +249,13 @@ python -m rag eval --queries rag/eval/tcm_queries.jsonl \
 
 **评估判据是「原文原样是否被召回」而不是「出自哪本书」**：语料 694 部，
 同一张经方在多部典籍里都有论述，「该出自哪本」没有唯一答案，按书名打分会把
-正确答案判错。样例集 `eval/tcm_queries.jsonl`（24 条，每条标注应当出现的原文
-字样与依据），基线：**hit@5 95.8% / hit@1 95.8% / MRR 0.958 / 平均 41ms**，
-报告存 `eval/baseline.json`。
+正确答案判错。样例集 `eval/tcm_queries.jsonl`（**24 条**，每条标注应当出现的原文
+字样与依据），基线（`eval/baseline.json`，索引 696 部 / 196675 词 / 1817919 倒排项 /
+6618 万字）：**hit@5 95.8% / hit@1 95.8% / MRR 0.958 / 关键词覆盖 97.9% /
+平均 40.9ms / p95 122.7ms**。
+
+> 改了 `corpus.py` 的切分、加权或限流逻辑后，**必须重跑一次 `eval` 覆盖 `baseline.json`**，
+> 否则基线会一直是旧代码的分——它只是一条存档，不会自动更新。
 
 已知不足：带常见修饰词的复合查询（如「妊娠禁忌候 孕妇起居饮食宜忌」）会被
 高频词带偏，罕见的那个词反而排不上——纯字面检索的通病，根治要靠 embedding 重排。
@@ -373,11 +377,17 @@ harness 侧 `PROBE_TIMEOUT` 由 5s 放宽到 **30s**：5s 会把「慢」判成�
 ```bash
 cd llm_server/rag
 pip install numpy fastapi httpx     # 运行期/测试依赖
-python -m unittest test_rag -v       # 检索服务（文本/图像/图文、持久化、降级）
-python -m unittest test_corpus -v    # 典籍索引（切分/编码/建库/脱敏/评估/标签过滤，纯离线）
-python -m unittest test_api_scope -v # 知识域 scope 编译语义（纯离线，不依赖索引）
-python -m unittest test_taxonomy -v  # 典籍分类（四维多标签/繁体/作者流派/标签过滤，纯离线 27 条）
+python -m unittest test_corpus -v     # 典籍索引 20 条（切分/编码/建库/脱敏/评估/标签过滤，纯离线）
+python -m unittest test_taxonomy -v   # 典籍分类 27 条（四维多标签/繁体/作者流派/标签过滤）
+python -m unittest test_rag -v        # 检索服务 6 条（文本/图像/图文、持久化、降级）
+python -m unittest test_api_scope -v  # 知识域 scope 编译语义 5 条（纯离线，不依赖索引）
+python -m unittest test_retriever -v  # 检索器 4 条
+python -m unittest test_config -v     # 配置解析 3 条
+# 合计 65 条
 ```
+
+> ⚠️ 这 65 条**不在 `pytest.ini` 的 `testpaths`（`tests`）内，CI 也不跑**，
+> 需显式指定路径执行。
 
 > 测试无需模型服务：Embedding 与视觉端点不可达时会降级为零向量或关键字匹配，
 > 重点验证索引、检索与持久化逻辑。`test_corpus` 全程不联网。

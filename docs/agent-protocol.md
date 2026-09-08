@@ -10,18 +10,29 @@
 `src/model.rs` 中的 `Capability` 枚举，`serde(rename_all = "snake_case")`，
 **序列化为无前缀 slug**，用于 `resources/routing.yaml`、`POST /agents` 的 `capability` 字段。
 
-| slug | 枚举变体 | 子项 | `zh()` |
+| slug | 枚举变体 | 中文名 | 分期 |
 |---|---|---|---|
-| `inspection` | `Inspection` | 望诊 | 望诊 |
-| `listening` | `Listening` | 闻诊 | 闻诊 |
-| `inquiry` | `Inquiry` | 问诊 | 问诊 |
-| `palpation` | `Palpation` | 切诊 | 切诊 |
+| `inspection` | `Inspection` | 望诊 | 采集 |
+| `listening` | `Listening` | 闻诊 | 采集 |
+| `inquiry` | `Inquiry` | 问诊 | 采集 |
+| `palpation` | `Palpation` | 切诊 | 采集 |
+| `case_reference` | `CaseReference` | 医案参考 | 辨证 |
 | `differentiation` | `Differentiation` | 辨证 | 辨证 |
-| `safety` | `Safety` | 安全门 | 安全门 |
-| `treatment` | `Treatment` | 治疗 | 治疗 |
+| `safety` | `Safety` | 安全门 | 安全（固定排在采集之后、辨证之前） |
+| `strategy` | `Strategy` | 立法 | 治疗 |
+| `herbology` | `Herbology` | 用药 | 治疗 |
+| `prescription` | `Prescription` | 开方 | 治疗 |
+| `care` | `Care` | 调护 | 治疗（`full` 档） |
+| `acupuncture` | `Acupuncture` | 针灸 | 治疗（`full` 档） |
+| `treatment` | `Treatment` | 治疗（兼容旧流程） | 治疗（`compatible` 档） |
 
-解析：`Capability::from_slug(s) -> Option<Self>`，未知 slug 返回 `None`。
+解析：`Capability::from_slug(s) -> Option<Self>`（未知 slug 返回 `None`）、
+`Capability::from_name(s)`（接受 slug **或中文名**，如 `辨证`）。
 编排器对 `routing.yaml` 中无法解析的条目**静默跳过**（`filter_map`）。
+
+`Capability::ALL` 是**规范顺序**（望→闻→问→切→医案→辨证→安全门→立法→用药→开方→
+调护→针灸→治疗）：`GET /agents`、MCP 的 `tools/list` 都按它输出，
+否则依赖 `HashMap` 迭代顺序会让清单每次启动都变（T3.7 修过）。
 
 > 历史文档里出现过带命名空间的 `diagnosis.inspection` / `treatment.plan` 写法，
 > 那是原 Python backend 的协议层命名，**harness 不使用**，请勿按它拼 slug。
@@ -70,6 +81,10 @@ pub struct AgentContext {
   - **必须是确定性结果**（不依赖 LLM 输出）：否则无法写回归测试，
     也会让同一份输入产出不同结构。
 - **周期**：每次请求 `Registry::new()` 新建一个实例（无跨请求缓存）。
+- **流式**：`AgentContext` 可带 `delta: Option<DeltaSink>`；非空且 `config.llm_stream=true`
+  时，LLM 请求带 `stream: true` 并把增量推给 `POST /chat/stream` 的 SSE 连接。
+  **按响应的 `Content-Type` 决定解析方式**——上游忽略 `stream` 直接回 JSON 时退回整包解析，
+  否则会静默产出空正文。
 
 ### 2.1 请求/响应模型（`src/model.rs`）
 
@@ -78,7 +93,7 @@ pub struct AgentContext {
 | 类型 | 用途 |
 |---|---|
 | `Message { role, content }` | 对话消息（`role: user\|assistant\|system`） |
-| `Capability` | 能力枚举（7 个 slug） |
+| `Capability` | 能力枚举（13 个 slug） |
 | `AgentRequest { capability, messages, payload }` | `POST /agents` 的请求体 |
 
 > 2026-08-29 清理：原 `AgentResponse` / `SkillCall` / `SkillResult` /
@@ -112,22 +127,23 @@ impl Registry {
 
 ### 3.1 调整流程顺序
 
-编辑 `server/harness/resources/routing.yaml` 的 `active` 列表即可增删步骤，
-改完 `POST /reload`（需 `config.yaml` 中 `hot_reload: true`）或重启：
+编辑 `server/harness/resources/routing.yaml` 即可增删步骤，
+改完 `POST /reload`（需 `config.yaml` 中 `hot_reload: true`）或重启。
+推荐改**命名档位**再用 `active_profile` 切换：
 
 ```yaml
-active:
-  - inspection       # 望诊
-  - listening        # 闻诊
-  - inquiry          # 问诊
-  - palpation        # 切诊
-  - differentiation  # 辨证
-  - safety           # 安全门
-  - treatment        # 治疗
-default: inspection
+profiles:
+  compatible: [inspection, listening, inquiry, palpation, differentiation, safety, treatment]  # 7 步
+  standard:   [inspection, listening, inquiry, palpation, case_reference, differentiation,
+               safety, strategy, herbology, prescription]                                      # 10 步
+  full:       [inspection, listening, inquiry, palpation, case_reference, differentiation,
+               safety, strategy, herbology, prescription, care, acupuncture]                  # 12 步
+active_profile: standard
+active: []          # 直接列 slug；active_profile 留空时才生效
 ```
 
-> `default` 字段目前**未被代码读取**（`run_diagnosis` 直接按 `active` 顺序从头执行）。
+> `default` 字段已在 T3.4 删除：harness 无状态，一次 `/chat` 按档位从头跑完，
+> 没有「从某一步开始」的概念。
 
 ---
 
@@ -160,7 +176,7 @@ LLM 不可用时 `run` 返回 `Err`，`/chat` 报错。
 当前**没有该实现**，也没有配置项。替代方案：
 - 用 `POST /agents` 由调用方自行远程调用单个能力；
 - 或经 MCP 接入：harness 已内置 MCP Server（`POST /mcp`），
-  外部客户端可调用 7 个 `agent_*` 工具，见 [`mcp.md`](./mcp.md)。
+  外部客户端可调用 **13 个 `agent_*` 工具**（共 15 个），见 [`mcp.md`](./mcp.md)。
 
 ---
 

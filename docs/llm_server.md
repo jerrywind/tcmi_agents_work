@@ -54,6 +54,12 @@ docker compose up --build
 # 宿主机端口 22010 -> 容器 8000；容器经 host.docker.internal 访问宿主机 LM Studio
 ```
 
+> 顶层 `deploy/docker-compose.yml` 里本服务**不暴露宿主机端口**，只作为
+> **典籍 RAG 数据面**待在 `tcm-net` 内（harness 的 `rag_endpoint` 指向
+> `http://llm_server:8000/rag/retrieve/text`），并挂载宿主机 `rag_data/`：
+> `RAG_DATA_DIR=/data/rag`、`RAG_CORPUS_DIR=/data/rag`、
+> `RAG_CORPUS_DB=/data/rag/_index/corpus.sqlite3`。详见 [`rag.md`](./rag.md)。
+
 ### harness 接入
 
 | 场景 | `HARNESS_LLM_BASE_URL` |
@@ -77,6 +83,7 @@ docker compose up --build
 | `POST /v1/embeddings` | 透传 LM Studio（供 RAG 复用 embedding 模型） |
 | `POST /v1/agent/run` | 完整 Agent 接口（prompt 优化 + MCP 工具 + tool calling 循环） |
 | `GET /v1/agent/tools` | 查看当前可用工具（内置 + MCP） |
+| `/rag/*` | **典籍检索（数据面）**：`/rag/retrieve/text`、`/rag/retrieve/scope`、`/rag/stats`、`/rag/tags` 等，见 [`rag.md`](./rag.md) |
 
 ### Agent 接口示例
 
@@ -180,6 +187,10 @@ python -m rag serve
 - **`/healthz` 显示 `degraded`**：LM Studio 未启动或未加载模型，业务请求返回 503；
   此时 harness 的 `/chat` 会返回错误（无 MockProvider 兜底），只读端点仍可用。
 - **503 `upstream_unavailable`**：上游不可达时的统一错误码。
-- **流式（`stream: true`）**：网关暂不转发流式；harness 默认非流式调用，不受影响。
+- **流式（`stream: true`）**：网关**不转发**上游流式响应。
+  harness 的 `POST /chat/stream` 需要上游真的返回 SSE（由 `HARNESS_LLM_STREAM` 控制，默认开），
+  因此**用流式时请让 harness 直连 LM Studio**（`HARNESS_LLM_BASE_URL=http://...:11223/v1`），
+  不要经本网关——经网关会退回整包解析（harness 会打 WARN，不会静默产出空正文，
+  但前端就收不到增量了）。非流式的 `/chat` 不受影响。
 - **prompt 优化是否影响响应质量**：只做无损/低损压缩（合并/截断/裁剪最旧历史），
   可用 `ENABLE_PROMPT_OPTIMIZE=false` 关闭。

@@ -64,6 +64,7 @@ pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Sen
 | `palpation` | `tcm-palpation` + 3 个全局 |
 | `differentiation` | `tcm-reference` + 3 个全局 |
 | `safety` | `tcm-safety` + 3 个全局 |
+| `case_reference`（医案参考） | 3 个全局（靶点由规则层给出，检索靠 `tcm-rag`） |
 | `strategy`（立法） | 3 个全局（治则取自 `syndromes.yaml` 的 `principles`，无需专属工具） |
 | `herbology`（用药） | `tcm-formula` + 3 个全局 |
 | `prescription`（开方） | `tcm-formula` + 3 个全局 |
@@ -75,6 +76,10 @@ pub type SkillFn = Arc<dyn Fn(&Value) -> BoxFuture<'static, Result<Value>> + Sen
 >
 > 注意「立法」与「针灸」没有专属工具是**有意为之**：治则由证候库确定性给出、
 > 取穴高度依赖个案，硬塞工具反而会诱导模型走捷径。
+>
+> ⚠️ **`tcm-rag` 会被动态撤下**（L6）：后台探活判定典籍检索不可用时，它从上述清单里移除，
+> 避免为一次必然失败的调用付钱（实测开方步 −8.0s / −25%）。撤工具不等于撤告知——
+> T7.9 的「未连通典籍检索」披露仍然保留。
 
 ---
 
@@ -201,8 +206,8 @@ mcp_clients:
 2. **`GET /skills`、`GET /agents` 的顺序是刻意稳定的**：两者内部都用 `HashMap` 存储，
    直接遍历会得到**每次进程启动都可能不同**的顺序（Rust 的 HashMap 用随机化哈希）。
    `SkillRegistry::all()` 与 `for_capability()` 均已按名称排序、
-   `Registry::capabilities()` 已按
-   望→闻→问→切→辨证→安全门→立法→用药→开方→调护→针灸→治疗 的规范顺序输出，
+   `Registry::capabilities()` 已按 `Capability::ALL` 的规范顺序输出
+   （望→闻→问→切→**医案**→辨证→安全门→立法→用药→开方→调护→针灸→治疗），
    新增遍历时请勿绕过。
 
 ---

@@ -22,6 +22,18 @@ $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'
 前置：Docker（后端**完全依赖 Docker**，不使用宿主机 cargo 产物）。
 人工验收还需 LM Studio 已启动并加载 `google/gemma-4-12b-qat`。
 
+## 用例构成
+
+| 部分 | 条数 | 依赖 |
+|---|---|---|
+| `test_llm_server_e2e.py` | 7 | llm_server 已起（stub 上游） |
+| `test_rrserver_e2e.py` | 6 | `-WithRrserver` + rrserver 二进制 |
+| 前端契约 `harness.contract.test.ts` + `stream.contract.test.ts` | 8 | 本机 harness 在 `43301`（不可达自动 skip） |
+
+> `conftest.py` 里的 `backend_base` / `backend_client` fixture 与 `e2e_helpers.py`
+> 是**遗留代码**（面向已删除的旧 Python backend，读 `TCM_BACKEND_BASE`），
+> 现有用例均未引用——改动时别被它们误导。
+
 ## 运行期产物
 
 `images/`（样例图片）、`_reports/`（容器归档的报告）均由脚本生成，已 gitignore。

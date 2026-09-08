@@ -27,22 +27,28 @@ tcm_work/
 │   └── src/
 │       ├── pages/     index（建档）/ consult（问诊）/ report（报告）
 │       │              reports（存证记录）/ skills（技能）/ family（家庭档案）
-│       ├── services/  harness.ts（契约客户端）+ session.ts（前端多轮状态）
-│       └── utils/
+│       ├── services/  harness.ts（契约客户端）/ session.ts（前端多轮状态）
+│       │              stream.ts（SSE）/ members.ts（本机家庭档案）
+│       ├── components/ BirthDatePicker（自建日期滚轮）/ ErrorBoundary / SyndromeCard
+│       └── utils/     profile / format / birthdate / differentiation / streamAcc 等
 ├── server/            Rust workspace
 │   ├── harness/       诊断编排
 │   │   ├── src/       agents / orchestrator / knowledge / rag_health / skills
-│   │   │              mcp / http / resources / store / trace
+│   │   │              mcp / http / stream / resources / store / trace
 │   │   ├── resources/ 可改 YAML 数据
-│   │   ├── tests/     cases.rs（案例回归）/ behavior.rs（行为）/ llm_eval.rs（LLM 评分）
-│   │   └── cases.jsonl  病例基准（合成：5 种主诉 / 3 种证候组合，资源完整性护栏）
+│   │   ├── tests/     cases.rs（案例回归 2）/ behavior.rs（行为 56）/
+│   │   │              golden.rs（黄金病例 4）/ echo.rs（证据语料 6）/
+│   │   │              stream.rs（流式语义 8）/ llm_eval.rs（LLM 评分 1）
+│   │   ├── cases.jsonl        病例基准（合成：5 种主诉 / 3 种证候组合，资源完整性护栏）
+│   │   └── golden_cases.jsonl 黄金病例集（21 条，断言首位命中与库外不出证）
 │   └── rrserver/      反向隧道：server + client + llmsrv
 ├── llm_server/        纯 LM Studio 网关（Python，可选）；rag/ 为其检索子组件
 ├── deploy/            nginx 配置 + certs + docker-compose
 ├── docs/              文档（索引见 docs/README.md）；samples/ 为真实 LLM 验收样例
 ├── scripts/           build-release.ps1（出镜像）/ cleanup.ps1（清理）
 ├── e2e_tests/         全链路 E2E + 人工验收脚本
-└── rag_data/          中医典籍语料（700 部，**不入库**，见 docs/rag.md）
+├── README.md          中文入口（README.en.md 为英文版，两份须同步）
+└── rag_data/          中医典籍语料（694 部 txt，**不入库**，见 docs/rag.md）
 ```
 
 产物目录（均已被 `.gitignore` 覆盖）：`server/target/`、`frontend/dist/`、
@@ -117,7 +123,11 @@ npm run dev:weapp     # 微信小程序（需微信开发者工具）
 ```
 
 - 契约客户端 `src/services/harness.ts`；多轮 `messages` 由 `src/services/session.ts`
-  在前端维护（harness 无服务端会话）。
+  在前端维护（harness 无服务端会话，**`payload.round` 必须递增**，否则轮次兜底永不触发）。
+- 流式：`src/services/stream.ts`（H5 用 fetch 流，小程序用 `enableChunked`）；
+  累加逻辑抽成纯函数 `src/utils/streamAcc.ts::applyStreamEvent()`（有单测），
+  页面只负责渲染。**收到 `step_retry` 必须清空该步已累积的 delta**，否则重试会拼出两份正文。
+- 请求超时 600s（小程序 `wx.request` 上限约 60s，见 FAQ）。
 - 跨端差异由 Taro 适配：H5 走 devServer 代理（`/api` → harness 对外 43301），小程序直连后端地址。
 - 类型检查：`npx tsc --noEmit`。
 - ⚠️ **不要用 Taro 原生 `<Picker mode='date'>` 做出生日期**：Taro 4 在 H5 端把它实现成
@@ -164,4 +174,8 @@ npm run dev:weapp     # 微信小程序（需微信开发者工具）
 | 前端连不上后端 | 检查 `VITE_API_BASE` / `config/dev.ts` 的 apiBase 是否指向 `:43301`（经 nginx 为 `/api`），以及容器是否在跑。 |
 | 改了 ps1 脚本后中文变乱码 | Windows PowerShell 5.1 按 ANSI 读取无 BOM 的脚本：含中文的 `.ps1` **必须存为 UTF-8 with BOM**。 |
 | 视觉识别无独立服务 | 视觉与文本共用 `google/gemma-4-12b-qat` 多模态端点。 |
+| 流式没有增量，整包一次性返回 | 反代没配 SSE 三件套（`proxy_buffering off` / `gzip off` / `proxy_http_version 1.1`）；或上游不支持 SSE（harness 会自动退回整包解析并打 WARN），用 `HARNESS_LLM_STREAM=false` 可显式关闭。 |
+| 小程序端完整问诊跑不完 | `wx.request` 超时上限约 60 秒，前端设再大也不生效；需改成分步请求或「提交任务 + 轮询」（后端接口形态改造，见 `plan.md`）。 |
+| 用了 `localhost` 后请求莫名慢 20 秒 | Windows 上 `localhost` 先解析 IPv6 `::1`，未监听时回落 IPv4 要等约 21 秒。**验证一律用 `127.0.0.1`**。 |
+| 改了 README 忘了同步英文版 | `README.md` 与 `README.en.md` 章节号与关键数字必须一致，见 `README.md` 第 7 节。 |
 | 出生日期选择器在手机浏览器里背景跟着滚、月/日显示留空白 | Taro 4 的 `<Picker mode='date'>` 在 H5 是 Stencil transform 轮盘，触摸冒泡到 document 致背景滚动、transform 重绘留空白，应用层无法修复。已替换为自建三列滚动选择器 `src/components/BirthDatePicker.tsx`（逻辑在 `src/utils/birthdate.ts`，含单测），跨端可用，**不要再换回 Taro 原生日期 Picker**。 |

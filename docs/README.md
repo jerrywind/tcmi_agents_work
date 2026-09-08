@@ -7,13 +7,14 @@
 
 | 文档 | 面向角色 | 回答的核心问题 | 权威内容（不重复，引用它） |
 |---|---|---|---|
-| `README.md`（仓库根） | 所有人 | 项目是什么、怎么跑起来、文档在哪 | 架构图、端口表、快速开始、目录说明 |
-| `usage.md` | 使用者 / API 接入方 | 前端怎么用？REST API 怎么集成？ | 端点契约（含 `/chat`、`/mcp`、`/reports`）、payload 字段、切真实 LLM |
+| `README.md`（仓库根，中文） | 所有人 | 项目是什么、怎么跑起来、文档在哪 | 架构图、端口表、快速开始、目录说明、i18n 约定 |
+| `README.en.md`（仓库根，英文） | 英文读者 | 同上（英文） | 与中文 README **同章节号、同关键数字**，改一处须同步另一处 |
+| `usage.md` | 使用者 / API 接入方 | 前端怎么用？REST API 怎么集成？ | 端点契约（含 `/chat`、`/chat/stream`、`/mcp`、`/reports`）、payload 字段、切真实 LLM |
 | `deployment.md` | 运维 | 怎么部署（前端 / 统一后端容器 / llm_server / nginx）？端口/配置/网络？ | 端口映射、`HARNESS_*` 环境变量全表、compose 编排、上线检查清单 |
 | `development.md` | 开发者 | 本地怎么开发调试？常见坑？ | 目录结构、开发流程、FAQ |
 | `agent-protocol.md` | 架构 / 扩展者 | Sub-Agent 的接口与注册方式？ | `Capability`、SubAgent trait（`run` + `structured`）、编排规则、trace |
 | `sub_agents.md` | Agent 开发者 | 13 个 Agent 各管什么、怎么改？ | 各 Agent 的规则层 + LLM 层实现、资源维护入口 |
-| `skills.md` | 技能开发者 | 11 个技能的入参与扩展方式？ | 技能清单、`Skill` 结构、多轮工具调用流程 |
+| `skills.md` | 技能开发者 | 11 个内置技能的入参与扩展方式？ | 技能清单、`Skill` 结构、多轮工具调用流程 |
 | `mcp.md` | 集成方 | MCP 怎么接进来、怎么暴露出去？ | client 挂载（`mcp_clients`）、Server 端 `/mcp` 工具表与错误约定 |
 | `llm_server.md` | 网关运维 | llm_server 是什么、怎么跑？ | 网关架构、API、配置项 |
 | `rag.md` | RAG 运维 | 可选 RAG 服务怎么用？典籍怎么检索？ | 三类向量检索、HTTP API、**典籍全文检索与跑分**（T4.3） |
@@ -41,10 +42,12 @@
    [`development.md`](./development.md) 第 2 节。
 9. **`HARNESS_*` 环境变量全表** → [`deployment.md`](./deployment.md) 3.2。
 10. **评测基线 / 测试数量** → [`testing.md`](./testing.md)。
+11. **i18n / 文档语言约定** → 根 `README.md` 第 7 节（中英两份 README 同步规则）。
 
 ## 阅读路径
 
 - **我想跑起来看看**：根 `README.md` 第 2 节 → `deployment.md` → `usage.md`
+- **我是英文读者**：根 `README.en.md`（`docs/` 暂为中文，其第 3 节有英文速查表）
 - **我要改中医数据（不改代码）**：根 `README.md`「流程与数据分离」→ `sub_agents.md`「维护入口」
 - **我要改 Agent / 加能力**：`agent-protocol.md` → `sub_agents.md` → `skills.md`
 - **我要接外部系统**：`mcp.md`（先看「现状一句话」：client 与 server 两个方向都已通）
@@ -55,3 +58,5 @@
 
 - 新增文档请在本表登记，并声明其「权威内容」，避免与既有文档重复。
 - 文档不得引用已删除的路径；若代码结构变化，请同步更新本表与对应权威文档。
+- **改了端口 / 用例数 / 资源条目数这类关键数字**，除本表与权威文档外，还要同步
+  根 `README.md` 与 `README.en.md`（两份章节号与数字必须一致）。

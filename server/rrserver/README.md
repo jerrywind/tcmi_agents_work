@@ -83,8 +83,7 @@
 ```
 rrserver/
 ├── Cargo.toml
-├── Dockerfile
-├── docker-compose.yml
+├── docker-compose.yml        # 仅本地起 rrserver（开发/调试）；生产走 deploy/
 ├── config/rrserver.toml.example
 ├── src/
 │   ├── main.rs        # CLI：server / client / llm-server 子命令 + TOML 配置
@@ -183,8 +182,12 @@ docker compose --profile optional up -d client
 docker compose --profile optional up -d llm-server
 ```
 
-> 构建上下文中的 `target/`、`.git`、`tests/`、`examples/` 已被 `.dockerignore` 排除，
-> 不会进入镜像，保证构建干净、镜像小巧。
+> 构建上下文只排除体积项：`server/.dockerignore` 排除 `**/target/`（常达数 GB，
+> 镜像内会重新编译）、`.git/` 与编辑器噪声。
+> ⚠️ **`tests/` 没有被排除，也不能排除**：`Cargo.toml` 的 `[[test]]` 指向
+> `tests/integration.rs`，缺了它 `cargo test -p rrserver` 在镜像内直接报
+> `can't find integration-test`——147 条测试根本跑不起来。
+> （统一 Dockerfile 曾只拷 `harness/tests` 而漏了 `rrserver/tests`，阶段 L 已修。）
 
 ### 本地联调（自签名证书）
 

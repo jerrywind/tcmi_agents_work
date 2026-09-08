@@ -36,6 +36,10 @@ $env:HARNESS_LLM_BASE_URL = "http://llm_server:8000/v1"  # Docker 同网络
 ```
 
 > 环境变量前缀是 **`HARNESS_`**（不是 `TCM_LLM_*`，那是已废弃的旧写法）。
+>
+> ⚠️ **用 harness 的流式输出时不要经本网关**：网关不转发上游 SSE，
+> `POST /chat/stream` 需要上游真的返回 SSE（由 `HARNESS_LLM_STREAM` 控制，默认开）。
+> 流式场景请让 harness 直连 LM Studio；非流式的 `/chat` 经网关不受影响。
 
 ## 目录
 
@@ -47,7 +51,13 @@ $env:HARNESS_LLM_BASE_URL = "http://llm_server:8000/v1"  # Docker 同网络
 | `app/mcp/` | MCP Client（Streamable HTTP，无第三方 SDK） |
 | `app/agent/loop.py` | ReAct 风格多步工具调用循环 |
 | `app/rrclient.py` | 向 rrserver 主动注册（换取 hash code）+ 周期心跳 + 优雅注销 |
-| `rag/` | **可选独立组件**，需单独启动：`python -m rag serve` |
+| `app/rag_router.py` | 把 RAG 路由并进主应用（端点即 `/rag/*`，见下） |
+| `rag/` | **典籍检索子组件**；随主服务挂载（`/rag/*`），也可单独 `python -m rag serve` |
+
+> **RAG 数据面**：顶层 `deploy/docker-compose.yml` 把本服务作为典籍 RAG 数据面纳入
+> `tcm-net`（harness 的 `rag_endpoint` → `http://llm_server:8000/rag/retrieve/text`），
+> 并挂载 `rag_data/`（694 部 txt + 预建索引，索引覆盖 696 部）到 `/data/rag`。
+> 见 [`docs/rag.md`](../docs/rag.md) 的「启用前提」。
 
 ## rrserver 注册与心跳（可选）
 

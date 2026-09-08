@@ -2,7 +2,13 @@
 
 > 对应 [`plan.md`](./plan.md) 的阶段路线图。状态约定：🔲 待办 / 🔧 进行中 / ✅ 已完成 / 🚫 阻塞。
 >
-> 最后更新：2026-09-07（最新一轮：阶段 L「流式输出与 RAG 数据面」L1–L5 ——
+> 最后更新：2026-09-08（本轮：阶段 M「文档同步与 i18n」——
+> 全量核对 `docs/` 与代码现状，修掉 8 处已漂移的事实（用例数、capability 数、
+> MCP 工具数、档案字段、辨证打分算法、方剂数量、流程档位、RAG 测试数），
+> 并为根 README 增加**中英双语**（`README.md` + `README.en.md`，同章节号同数字）。
+> 详见下方「阶段 M」。）
+>
+> 上一轮（2026-09-07）：阶段 L「流式输出与 RAG 数据面」L1–L5 ——
 > 两条线此前都**从未在真机上跑通过**：RAG 端点虽然挂在 llm_server 上，
 > 但语料没挂进容器、预建索引路径也没指过去，694 部典籍的检索整条链路空转；
 > 流式 SSE 则一次都没连过真实模型。本轮把两条线都跑到出结果，
@@ -25,6 +31,9 @@
 > 技能多归属、人群适配问诊、方剂库与药味校验、RAG 可达性可见、规则结论进 System Prompt。
 > 后端 200 全绿，T1.5 的四条审阅意见全部消除
 
+> 📌 阅读本表时注意：各轮「上一轮」里写的用例数（如 216 / 200 / 41）是**当时**的实测值，
+> 不是当前值。**当前基线见阶段 L/M：后端 233、前端 132。**
+
 ## ⚠️ 铁律
 
 **后端（`server/harness` 与 `server/rrserver`）完全依赖 Docker 构建、运行与验证，
@@ -35,7 +44,7 @@
 
 | # | 任务 | 验收 | 状态 |
 |---|---|---|---|
-| T1.0 | 修复前端测试基线：`vitest.setup.ts` 的 mock 必须是 `vi.fn()`（此前是普通 async 函数，导致 `vi.mocked(...).mockImplementation is not a function`）；`vitest.config.ts` 端口从废弃的 `:22000` 改为 `:8011` | `npm run test` 全绿 | ✅ 已完成（21/21） |
+| T1.0 | 修复前端测试基线：`vitest.setup.ts` 的 mock 必须是 `vi.fn()`（此前是普通 async 函数，导致 `vi.mocked(...).mockImplementation is not a function`）；`vitest.config.ts` 端口从废弃的 `:22000` 改为当时的 harness 端口（**注：8011 亦已废弃，现为 `43301`**） | `npm run test` 全绿 | ✅ 已完成（21/21） |
 | T1.1 | 下线旧契约 `services/api.ts`（所有端点在 harness 中不存在），5 个页面改接 `services/harness.ts` | 无页面引用已删除的 api.ts | ✅ 已完成 |
 | T1.2 | 前端维护多轮 `messages`（harness 无服务端循环），新增 `services/session.ts` | 页面可完成「追问 → 回答 → 再追问」 | ✅ 已完成 |
 | T1.3 | 前端解析 `steps[]` 分步渲染 + `summary` | 7 步可切换查看 | ✅ 已完成 |
@@ -50,7 +59,7 @@
 
 | # | 任务 | 验收 | 状态 |
 |---|---|---|---|
-| T2.0 | 7 个 Agent 改用 `chat_with_tools`（此前全调 `chat_completion`，9 个技能在推理中完全不生效）。**注：当时仅 7 个 Agent，现为 13 个，新增的均已走同一链路** | 各步 trace 可见工具调用 | ✅ 已完成 |
+| T2.0 | 7 个 Agent 改用 `chat_with_tools`（此前全调 `chat_completion`，技能在推理中完全不生效）。**注：当时仅 7 个 Agent / 9 个技能，现为 13 个 Agent / 11 个技能，新增的均已走同一链路** | 各步 trace 可见工具调用 | ✅ 已完成 |
 | T2.1 | 对齐 `tcm-rag` 与 RAG 服务契约：支持 `top_k`，数组响应统一包成 `{"result": [...]}` | 配置端点后返回结构化结果 | ✅ 已完成 |
 | T2.2 | 工具调用升级为多轮循环（此前仅「1 次带工具 + 1 次汇总」） | `max_tool_rounds` 可配（默认 3） | ✅ 已完成（`LlmCaller::chat_with_tools` 循环，达上限后转汇总调用） |
 | T2.3 | 为 `treatment` 补专属技能（`find_formula` / `find_care` 暴露为工具） | 治疗步可调用方剂工具 | ✅ 已完成（新增 `tcm-formula` / `tcm-care`，owner=treatment） |
@@ -77,7 +86,7 @@
 | T4.2 | 兼证呈现 | 报告可展示多证候并存 | ✅ 已完成（主证之外，置信度达标且证据量 ≥ 主证 60% 的候选列为 `concurrent`；前端报告页卡片化展示主证/兼证与证据链） |
 | T4.3 | RAG 语料建设与召回质量评估 | 有评估样例集 | ✅ 已完成（`llm_server/rag/corpus.py`：中文典籍切分 + bigram 倒排 + BM25 书级召回 + 片段重排，索引 700 部 / 6618 万字 / 建库 60s / 查询 41ms；`eval/tcm_queries.jsonl` 24 条人工样例 + `eval_rag.py` 评分；基线 **hit@5 95.8% / hit@1 95.8% / MRR 0.958 / 关键词覆盖 97.9%**，报告存 `eval/baseline.json`；`test_corpus.py` 12 条离线单测） |
 | T4.4 | LLM 评测集（用 `cases.jsonl` 自动评分），nightly 跑分 | nightly 产出质量分 | ✅ 已完成（`tests/llm_eval.rs`，`HARNESS_EVAL=1` 启用，默认跳过；`.github/workflows/llm-eval.yml` nightly + 手动触发，跑在 self-hosted runner 上） |
-| T4.5 | MCP Server：对外暴露 7 个 `agent_*` 工具 | MCP 客户端可调用 | ✅ 已完成（`POST /mcp`，`src/mcp/server.rs`；7 个 `agent_*` + `run_agent` + `list_agent_capabilities`） |
+| T4.5 | MCP Server：对外暴露 `agent_*` 工具 | MCP 客户端可调用 | ✅ 已完成（`POST /mcp`，`src/mcp/server.rs`。当时 capability 有 7 个，故是 7 个 `agent_*` + `run_agent` + `list_agent_capabilities`；**现在 capability 13 个，共 15 个工具**，由 `Capability::ALL` 自动生成） |
 
 ## 阶段 E：生产化（M5）
 
@@ -216,7 +225,8 @@ H8 与 H3 是配套的——既要扩库减少库外情形，也要在库外时�
 | I1 | **`acupuncture` 接入辨证结论与不确定性** | 未定证时不再一本正经开穴 | ✅ 已完成（治疗期 payload 此前被 `_payload` 整个忽略：拿不到辨证主证、感知不到未定证、连 RAG 可达性都不知道。现在经 `resolve_syndrome` 拿主证，注入主证 / 经络 / 病机 / 治则，并共用 `syndrome_uncertainty_note`。**针灸是有创操作**，未定证就给穴位处方，风险不比开错方小。`syndrome_block` 取 `&ResourceBundle` 而非 `&AgentContext`，就是为了能在 `behavior.rs` 里直接断言——否则漏网了也没人知道。2 条单测 + 真实 LLM 双向复验） |
 | I2 | **医案参考的检索靶点不得冒充结论** | `near` 与「未定证」不再自相矛盾 | ✅ 已完成（本步执行在辨证**之前**，靶点只能来自文本推断，措辞却没说清——模型会拿它当既成事实去检索相似医案。现在标注为「文本推断的初步方向，非正式辨证结论」，且 `syndrome_matched=false` 时不再给推断靶点。2 条单测） |
 | I3 | **前端展示 `near`：还差哪些表现就能定证** | 未定证时用户知道该补什么 | ✅ 已完成（`near` 是 H3 就产出的能力，但两处页面都没渲染——**前端不认的后端能力等于没做**。consult 页与 report 页均已展示；report 页此前在未定证时**完全不渲染辨证结构卡片**，连一句说明都没有。逻辑抽成 `utils/differentiation.ts` 的纯函数 `nearHints()`（两页共用），配 5 条单测——不这么做它就只能靠会 skip 的契约测试来守） |
-| I4 | **契约测试不再静默 skip** | 6 条真实契约能跑起来 | ✅ 已完成（`ping()` 没有超时，端口不通时会一直挂到 vitest 整体超时；失败也静默返回 `false`，于是本文件在 CI 里长期「1 skipped」而无人察觉。加了 5s 超时与 WARN 输出。⚠️ 它默认连 `127.0.0.1:8011`，**本机须先起 harness 才会真跑**，`VITE_API_BASE` 可改地址） |
+| I4 | **契约测试不再静默 skip** | 6 条真实契约能跑起来 | ✅ 已完成（`ping()` 没有超时，端口不通时会一直挂到 vitest 整体超时；失败也静默返回 `false`，于是本文件在 CI 里长期「1 skipped」而无人察觉。加了 5s 超时与 WARN 输出。⚠️ 它默认连 `127.0.0.1:43301`（`8011`/`18011` 为旧映射兜底），
+   **本机须先起 harness 才会真跑**，`VITE_API_BASE` 可改地址） |
 
 ### 阶段 I 真实 LLM 验收（2026-09-02，full 档 12 步含针灸）
 
@@ -294,11 +304,13 @@ H8 与 H3 是配套的——既要扩库减少库外情形，也要在库外时�
 | 流式全链路（脾胃湿热，预置证候直达治疗期） | 事件序列完整、逐步推送正常；**开方步 361s 全部耗在重试上**，客户端此前完全无感 → 已由 L5 修掉 |
 | 强制超时 1s（人为触发重试） | 42 帧 / 27.1s 走完，`step_retry` attempt=1、2 均按序到达，随后 `step_fail` → 下一步 → `summary` → `done` |
 
-**本轮基线**：后端 **229 全绿**（harness 82 + rrserver 147，`cargo fmt --check` + `clippy -D warnings` 通过）；
-前端 **127 全绿**（11 个文件，6 条契约测试真跑，`tsc --noEmit` 为 0）。
+**本轮基线**：后端 **233 全绿**（harness 86 + rrserver 147，`cargo fmt --check` + `clippy -D warnings` 通过）；
+前端 **132 全绿**（11 个文件，8 条契约测试需本机先起 harness 才真跑，`tsc --noEmit` 为 0）。
 
 > ⚠️ 与旧基线（后端 216 / 前端 78）的差异**不是回退**，是未提交的新测试累加
 > （`tests/stream.rs`、`tests/echo.rs`、`stream.contract.test.ts`、`useTypewriter` 等）。
+> 数字口径：`233` 与 `132` 为 2026-09-08 全量核对后的静态/实测值
+> （后端按 `#[test]` + `#[tokio::test]` 逐文件统计，前端为 `npx vitest run` 实测）。
 
 ### 顺带修掉的既有问题
 
@@ -314,6 +326,36 @@ H8 与 H3 是配套的——既要扩库减少库外情形，也要在库外时�
   这曾让我把 29s 错误地全归因于「索引冷读盘」。**验证脚本一律用 `127.0.0.1`**。
 - **陈旧的本地镜像会伪装成代码缺陷**：`tcm-llm-server:local` 是修复前构建的，
   容器内仍是旧 `config.py`，配了语料反而整条 RAG 静默降级。改完源码要**重建镜像**再验。
+
+## 阶段 M：文档同步与 i18n（2026-09-08）
+
+> 起因：代码已推进到阶段 L，而 `docs/` 里还留着阶段 D/G 时期写下的数字与描述。
+> 逐份核对后修掉 8 处**已经与代码不符**的事实——它们都是「读起来很合理、
+> 只有对一遍代码才发现是错的」：
+
+| # | 文档里的旧说法 | 现状 | 状态 |
+|---|---|---|---|
+| M1 | 后端「200 用例」（harness 53） | **233**（harness 86 + rrserver 147）；漏记 `echo.rs` 6 / `golden.rs` 4 / `stream.rs` 8，`behavior.rs` 41 → 56 | ✅ 已修正（`testing.md`、`plan.md`、`tasks.md`、根 README） |
+| M2 | 前端「36 用例」 | **132**（11 个文件；8 条契约需真机） | ✅ 已修正（同上） |
+| M3 | capability「7 个」、`GET /agents` 示例只列 7 个 | **13 个**（望闻问切 + 医案 + 辨证 + 安全门 + 立法/用药/开方/调护/针灸 + 治疗） | ✅ 已修正（`usage.md`、`agent-protocol.md`） |
+| M4 | MCP Server「7 个 `agent_*` 工具 / `tools/list` 返回 9」 | **13 个 `agent_*` + 2 = 15**（由 `Capability::ALL` 自动生成） | ✅ 已修正（`mcp.md`、`usage.md`） |
+| M5 | 档案页「常住地、身高、体重、年龄、性别 + 病情自述」 | **姓名（选填）/ 出生日期 / 性别 / 常住地 / 既往病史**；主诉在问诊页（阶段 K） | ✅ 已修正（`usage.md`） |
+| M6 | 辨证「症状命中 +1、主证 = 证据量最高者」 | 阶段 H 后为**主症 1.0 / 次症 0.4 + 去重 + 主症必备 + 孤证不立 + 库外 `primary=null`** | ✅ 已修正（`sub_agents.md`） |
+| M7 | 方剂「只有 7 首」、`routing.yaml` 的 `active` + `default` | **36 首**；档位改为 `profiles` + `active_profile`（`default` 已在 T3.4 删除） | ✅ 已修正（`sub_agents.md`、`usage.md`、`agent-protocol.md`） |
+| M8 | RAG「语料 12 + 检索 6 条单测」 | `rag/` **65 条**（含 `test_taxonomy` 27 / `test_api_scope` 5）；且不在 pytest 默认收集范围、CI 也不跑 | ✅ 已修正（`testing.md`、`rag.md`） |
+
+同时补齐了此前**完全没有文档**的能力：
+
+| # | 任务 | 状态 |
+|---|---|---|
+| M9 | `POST /chat/stream`（SSE）事件表与调用方约定，含「收到 `step_retry` 必须清空已推 delta」 | ✅ 已补（`usage.md` 2.3.2） |
+| M10 | 中英双语 README：`README.md` + `README.en.md` 同章节号同数字、顶部互链，并在根 README 第 7 节写明 i18n 约定 | ✅ 已完成 |
+| M11 | 标注历史遗留但未修的漂移（`e2e_tests/conftest.py` 的 `TCM_BACKEND_BASE` / `e2e_helpers.py` 面向已删除的旧 Python backend），避免后人被误导 | ✅ 已补（`e2e.md`） |
+
+> 教训与阶段 H/I 一脉相承：**文档里的数字会自己过期，而且不会报错**。
+> 「用例数」「capability 数」这类常量散落在多份文档里，改代码的人没有义务、
+> 也往往没有意识去同步它们。故在 `docs/README.md` 的维护约定里加了硬要求：
+> 改端口 / 用例数 / 资源条目数，必须同步根 README 的中英两版。
 
 ## 基础设施
 
@@ -393,7 +435,7 @@ T7.x 之间无依赖，可拆开提交
    而 `wx.request` 超时上限约 60 秒（J2），H5 已放宽到 600 秒但小程序无效。
    需要把 `/chat` 改成分步请求或「提交任务 + 轮询结果」，是后端接口形态的改造。
 7. **契约测试依赖本机 harness**：I4 已让它不再静默 skip（加了超时与 WARN），
-   但它默认连 `127.0.0.1:8011`，**CI 里仍会跳过**——那 6 条在 CI 中等于不存在。
+   但它默认连 `127.0.0.1:43301`，**CI 里仍会跳过**——那 8 条在 CI 中等于不存在。
    真正解决要在 CI 里起一个 harness 容器（`docker run` + `docker healthcheck` 等待就绪），
    或在 compose 里把前端测试与 harness 编排在一起。
 8. **提速的下一个杠杆是「输出长度」，但需要专业确认**：实测开方步一次生成
@@ -422,6 +464,14 @@ T7.x 之间无依赖，可拆开提交
    ⚠️ 若将来要进一步缩短停摆的发现时间，正确的方向是**给「首 token」单独设一个
    更短的超时**（而非缩短总超时），且阈值必须明显高于上表的 22.1s，否则冷启动时
    会误判成停摆、白白重试两遍。
+
+9. **`docs/` 仍只有中文**：根 README 已中英双语（`README.md` + `README.en.md`），
+   但 15 份详细文档未翻译。优先级低（团队内部中文协作），
+   但若要开源或对外合作，这是第一道门槛。
+10. **文档数字仍会继续漂移**：M1–M8 修的是今天的存量，
+   用例数 / capability 数 / 资源条目数这类常量会随每次改动再次过期，且**不会报错**。
+   缓解手段已写进 `docs/README.md` 的维护约定（改数字须同步中英两版 README），
+   彻底解决要靠 CI 校验（如脚本比对文档里的数字与实际统计）。
 
 ## 如何更新本表
 

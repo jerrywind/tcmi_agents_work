@@ -3,13 +3,14 @@
 MCP（Model Context Protocol）在本项目有两个方向：
 
 - **MCP Client**：把外部 MCP Server 的工具接进来，供 Sub-Agent 调用；
-- **MCP Server**：把本系统的 7 个中医能力暴露给外部 MCP 客户端（Claude Desktop / Cursor 等）。
+- **MCP Server**：把本系统的 13 个中医能力暴露给外部 MCP 客户端（Claude Desktop / Cursor 等）。
 
-> ## 现状一句话（2026-08-29 更新）
+> ## 现状一句话（2026-09-08 更新）
 > **两个方向都通了**：
 > - **Client**：`config.yaml` 声明 `mcp_clients` 即可把外部 MCP Server 的工具
 >   挂成 `mcp__<client>__<tool>` 技能，供全部 Sub-Agent 调用；
-> - **Server**：`POST /mcp`（`src/mcp/server.rs`）对外暴露 7 个 `agent_*` 工具，
+> - **Server**：`POST /mcp`（`src/mcp/server.rs`）对外暴露 **13 个 `agent_*` 工具**
+>   （每个 capability 一个）+ `run_agent` + `list_agent_capabilities`，共 **15 个**，
 >   外部 MCP 客户端（Claude Desktop / Cursor 等）可直接调用。
 >
 > 若只是自己集成，用 REST 端点（`/chat`、`/agents`、`/skills`）更直接，
@@ -75,24 +76,33 @@ mcp_clients:                       # 启动时连接，逐个注册为 Skill
 |---|---|
 | `initialize` | 返回 `protocolVersion` / `capabilities` / `serverInfo` |
 | `ping` | 空响应，健康检查 |
-| `tools/list` | 返回 9 个工具定义 |
+| `tools/list` | 返回 **15 个**工具定义（13 个 `agent_*` + `run_agent` + `list_agent_capabilities`） |
 | `tools/call` | 执行工具；无 `id` 的通知（`notifications/*`）不回包（204） |
 
 ### 3.1 暴露的工具
 
+13 个 `agent_*` 工具由 `Capability::ALL` 自动生成（`agent_<slug>`），与 capability 一一对应：
+
 | 工具名 | capability | 入参 | 产出 |
 |---|---|---|---|
-| `agent_inspection` | `inspection` | `messages` | 望诊结论 |
-| `agent_listening` | `listening` | `messages` | 闻诊证据 |
-| `agent_inquiry` | `inquiry` | `messages` | 下一个追问 |
-| `agent_palpation` | `palpation` | `messages` | 切诊证据 |
-| `agent_differentiation` | `differentiation` | `messages` | 主证/兼证与置信度（含 `structuredContent`） |
-| `agent_safety` | `safety` | `messages` | 红旗告警 |
-| `agent_treatment` | `treatment` | `messages` | 诊疗方案 |
+| `agent_inspection` | `inspection` | `messages`（+ 可选 `payload`） | 望诊结论 |
+| `agent_listening` | `listening` | 同上 | 闻诊证据 |
+| `agent_inquiry` | `inquiry` | 同上 | 下一个追问 |
+| `agent_palpation` | `palpation` | 同上 | 切诊证据 |
+| `agent_case_reference` | `case_reference` | 同上 | 相似古代医案参考 |
+| `agent_differentiation` | `differentiation` | 同上 | 主证/兼证与置信度（含 `structuredContent`） |
+| `agent_safety` | `safety` | 同上 | 红旗告警 |
+| `agent_strategy` | `strategy` | 同上 | 治则治法 |
+| `agent_herbology` | `herbology` | 同上 | 本草用药 |
+| `agent_prescription` | `prescription` | 同上 | 方剂与加减 |
+| `agent_care` | `care` | 同上 | 食疗与生活调摄 |
+| `agent_acupuncture` | `acupuncture` | 同上 | 针灸取穴与外治 |
+| `agent_treatment` | `treatment` | 同上 | 综合诊疗方案（兼容旧流程） |
 | `run_agent` | — | `{capability, messages, payload}` | 通用入口（capability 接受 slug 或中文名） |
 | `list_agent_capabilities` | — | — | 能力清单（纯查表，不需要 LLM） |
 
 无会话状态：每次调用自带完整 `messages`，调用方自行维护多轮。
+`tools/list` 的顺序即 `Capability::ALL` 的规范顺序，新增 capability 会自动多出一个工具。
 
 ### 3.2 调用示例
 

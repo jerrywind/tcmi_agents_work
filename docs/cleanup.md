@@ -9,7 +9,8 @@
 | 类别 | 位置 | 命名规则 | 生命周期 |
 |---|---|---|---|
 | 运行日志 | 仓库根 `*.log` / `*.err` / `*.out`（已 gitignore） | `tcm-YYYYMMDD-*.log` | 保留 7 天 |
-| 测试产物 | `.pytest_cache/`、`htmlcov/`、`e2e_tests/images/` | 框架默认 | CI 后清除 |
+| 测试产物 | `.pytest_cache/`、`htmlcov/`、`frontend/coverage/`、`e2e_tests/images/` | 框架默认 | CI 后清除 |
+| 一次性验证脚本 | 仓库根（如 `tmp_*` / `_verify_*` 前缀的 Playwright 脚本） | 见白名单前缀 | **用完即删** |
 | E2E 归档报告 | `e2e_tests/_reports/` | 报告 id 命名 | 用完即删（已 gitignore） |
 | LLM 评测报告 | `server/target/tmp/llm_eval_report.json` | 固定名 | 随 `target/` 清理 |
 | RAG 索引 | `rag_data/_index/*.sqlite3` | 固定名 | 语料变更后重建 |
@@ -39,6 +40,9 @@ Get-ChildItem *.log, *.err |
 ## 4. 规则
 
 1. 临时文件 **必须** 落在已被 `.gitignore` 覆盖的路径，禁止落入源码树。
+   一次性验证脚本（临时装的 Playwright 脚本、临时统计脚本等）**用完即删**，
+   白名单前缀见 `scripts/cleanup.ps1`（`_verify_*` / `_tmp_*` / `_gen_*` / `tmp_*` /
+   `temp_*` / `_scratch_*` / `_pyr*`）。
 2. 文件名带 `tmp_` / `debug_` 前缀，便于识别与批量清理。
 3. 测试不得依赖未被清理的临时状态；每个用例自创建、自清理
    （Windows 上未关闭的 sqlite 连接会让临时目录删不掉，记得 `close()`）。

@@ -15,9 +15,9 @@
 ```
 e2e_tests/
 ├── conftest.py                        # 各组件 base_url + 健康等待 + httpx fixtures
-├── e2e_helpers.py                     # 共享辅助
-├── test_rrserver_e2e.py               # rrserver 隧道：server+client 启动、token 鉴权、/t/<name> 转发、注册 hash / 心跳 / 注销与自动重连
-├── test_llm_server_e2e.py             # llm_server 网关：/healthz(degraded/ok)、/v1/models、chat 透传
+├── e2e_helpers.py                     # 共享辅助（**遗留**：面向已删除的旧 Python backend，当前用例集未使用）
+├── test_rrserver_e2e.py               # rrserver 隧道（6 条）：server+client 启动、token 鉴权、/t/<name> 转发、注册 hash / 心跳 / 注销与自动重连
+├── test_llm_server_e2e.py             # llm_server 网关（7 条）：/healthz(degraded/ok)、/v1/models、chat 透传、/rr/heartbeat、注册状态、中继不可达时仍可用
 ├── _make_sample_image.py              # 生成 1x1 样例 JPEG（素材）
 ├── run_full_chain_e2e.ps1             # 一键编排：起 harness → pytest → 前端契约测试
 ├── run_manual_e2e.ps1                 # 人工验收：连真实 LLM 跑问诊并归档样例（T1.5）
@@ -32,10 +32,10 @@ frontend/src/services/harness.contract.test.ts  # vitest：真实执行 harness.
 
 | 层 | 测试文件 | 验证点 | 依赖真实 LLM? |
 |---|---|---|---|
-| rrserver | `test_rrserver_e2e.py` | server/client 启动、token 鉴权、隧道把请求转发到本地 stub llm 并回传；注册签发 hash code、`/api/heartbeat` 报活与未知 hash 404、`/api/unregister` 后 client 自动重连恢复隧道 | 否（stub 充当本地 llm） |
-| llm_server | `test_llm_server_e2e.py` | 服务可达；无上游→`degraded` + `/v1/models` 503；有 stub 上游→`/v1/chat/completions` 透传 | 否（stub 充当 LM Studio） |
+| rrserver | `test_rrserver_e2e.py`（6 条） | server/client 启动、token 鉴权、隧道把请求转发到本地 stub llm 并回传；注册签发 hash code、`/api/heartbeat` 报活与未知 hash 404、`/api/unregister` 后 client 自动重连恢复隧道 | 否（stub 充当本地 llm） |
+| llm_server | `test_llm_server_e2e.py`（7 条） | 服务可达；无上游→`degraded` + `/v1/models` 503；有 stub 上游→`/v1/chat/completions` 透传；`/rr/heartbeat` 探活、`/healthz` 注册状态、中继不可达时注册失败但服务照常可用 | 否（stub 充当 LM Studio） |
 | harness | `run_full_chain_e2e.ps1` 启动后探活 | `/health` 可达（返回 `ok`） | 否（仅只读端点） |
-| 前端→后端 | `frontend/src/services/harness.contract.test.ts` | 真实执行 `harness.ts` 函数：`/health`、`/agents`、`/skills`、`POST /skills` 错误分支，以及 MCP 的 `tools/list`、`list_agent_capabilities`（**默认开启**） | 否 |
+| 前端→后端 | `harness.contract.test.ts`（6 条）+ `stream.contract.test.ts`（2 条） | 真实执行 `harness.ts` 函数：`/health`、`/agents`、`/skills`、`POST /skills` 错误分支，以及 MCP 的 `tools/list`、`list_agent_capabilities`、`POST /chat/stream`（**默认开启**） | 否 |
 
 > 前端契约用例会先探测 `/health`：后端不可达时整个 describe **自动 skip**，
 > 因此无 Docker 或后端未起时 `npm run test` 依旧全绿，不会误报失败。
@@ -113,7 +113,8 @@ $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'   # 若服务端开启了鉴权
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `TCM_HARNESS_BASE` | `http://127.0.0.1:43301` | harness 地址（编排脚本自动设置） |
+| `TCM_HARNESS_BASE` | `http://127.0.0.1:43301` | harness 地址（**编排脚本**自动设置，供前端契约测试用） |
+| `TCM_BACKEND_BASE` | `http://localhost:8000` | `conftest.py` 里 `backend_base` fixture 读的变量（**遗留**：指向已删除的旧 Python backend，当前两个 pytest 用例集均未使用该 fixture） |
 | `TCM_LLM_BASE` | `http://localhost:8000` | llm_server 网关地址（`conftest.py`） |
 | `TCM_RRSERVER_SERVER_BASE` | `http://localhost:43302` | rrserver 云端中继（tcmi_server 容器内 43302） |
 | `TCM_RRSERVER_CLIENT_BASE` | `http://localhost:9000` | rrserver 家庭端 client |
@@ -121,6 +122,11 @@ $env:HARNESS_LLM_API_KEY = '<LM Studio 令牌>'   # 若服务端开启了鉴权
 | `TCM_RRSERVER_BIN` | — | rrserver 二进制路径（`-WithRrserver` 时用，缺省按 `server/rrserver/target/**` 查找） |
 | `VITE_API_BASE` | `http://127.0.0.1:43301` | 前端契约测试指向的后端地址（编排脚本自动设置） |
 | `TCM_E2E_HEALTH_TIMEOUT` / `TCM_E2E_HTTP_TIMEOUT` | `60` / `30` | 健康等待与请求超时（秒） |
+
+> ⚠️ 变量名不一致是历史遗留：编排脚本设 `TCM_HARNESS_BASE`，`conftest.py` 读的是
+> `TCM_BACKEND_BASE`。由于 `backend_base` / `backend_client` 两个 fixture 与
+> `e2e_helpers.py`（面向旧 `/api/consultations`）都**没有被现有用例引用**，
+> 这个漂移目前不影响结果——但改这两个文件时别被它们误导。
 - `HARNESS_LLM_BASE_URL` / `HARNESS_LLM_API_KEY` / `HARNESS_MODEL`：harness 连接 LLM 用
   （前缀是 `HARNESS_`；无 LLM 时仅只读端点可用）。
 - `HARNESS_TUNNEL_SERVER` / `HARNESS_TUNNEL_NAME` / `HARNESS_TUNNEL_TOKEN`：harness 经
